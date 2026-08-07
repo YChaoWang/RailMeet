@@ -1,0 +1,45 @@
+{
+  "name": "railmeet",
+  "private": true,
+  "packageManager": "pnpm@10.8.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=@railmeet/web --filter=@railmeet/api --filter=@railmeet/worker --filter=@railmeet/config --filter=@railmeet/observability --filter=@railmeet/shared --filter=@railmeet/validation",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:integration": "pnpm --filter @railmeet/database test:integration",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "db:generate": "pnpm --filter @railmeet/database db:generate",
+    "db:migrate": "pnpm --filter @railmeet/database db:migrate",
+    "db:check": "pnpm --filter @railmeet/database db:check",
+    "db:studio": "pnpm --filter @railmeet/database db:studio"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^22.15.30",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.4.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2",
+    "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "cpu-features",
+      "protobufjs",
+      "ssh2"
+    ]
+  }
+}
