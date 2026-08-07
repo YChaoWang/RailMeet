@@ -3,10 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   apiEnvSchema,
   ConfigError,
+  OUTBOX_DEFAULTS,
+  minimumOutboxLeaseMs,
   parseWithSchema,
   toApiConfig,
   toWebConfig,
+  toWorkerConfig,
   webEnvSchema,
+  workerEnvSchema,
 } from './schema.js';
 
 const validShared = {
@@ -43,6 +47,72 @@ describe('apiEnvSchema', () => {
     expect(() =>
       parseWithSchema(apiEnvSchema, { ...validShared, LOG_LEVEL: 'verbose' }, 'API'),
     ).toThrow(ConfigError);
+  });
+});
+
+describe('workerEnvSchema outbox settings', () => {
+  it('applies outbox defaults', () => {
+    const env = parseWithSchema(workerEnvSchema, { ...validShared }, 'worker');
+    const config = toWorkerConfig(env);
+    expect(config.outbox).toEqual({
+      pollIntervalMs: OUTBOX_DEFAULTS.pollIntervalMs,
+      batchSize: OUTBOX_DEFAULTS.batchSize,
+      leaseMs: OUTBOX_DEFAULTS.leaseMs,
+      retryBaseMs: OUTBOX_DEFAULTS.retryBaseMs,
+      retryMaxMs: OUTBOX_DEFAULTS.retryMaxMs,
+      publishConcurrency: OUTBOX_DEFAULTS.publishConcurrency,
+      redisCommandTimeoutMs: OUTBOX_DEFAULTS.redisCommandTimeoutMs,
+    });
+  });
+
+  it('accepts overrides within bounds', () => {
+    const env = parseWithSchema(
+      workerEnvSchema,
+      {
+        ...validShared,
+        OUTBOX_POLL_INTERVAL_MS: '2000',
+        OUTBOX_BATCH_SIZE: '5',
+        OUTBOX_LEASE_MS: '60000',
+        OUTBOX_RETRY_BASE_MS: '500',
+        OUTBOX_RETRY_MAX_MS: '10000',
+        OUTBOX_PUBLISH_CONCURRENCY: '4',
+      },
+      'worker',
+    );
+    expect(toWorkerConfig(env).outbox.batchSize).toBe(5);
+    expect(toWorkerConfig(env).outbox.leaseMs).toBe(60_000);
+  });
+
+  it('rejects lease duration shorter than worst-case bounded-batch processing', () => {
+    expect(() =>
+      parseWithSchema(
+        workerEnvSchema,
+        {
+          ...validShared,
+          OUTBOX_BATCH_SIZE: '10',
+          OUTBOX_PUBLISH_CONCURRENCY: '1',
+          OUTBOX_LEASE_MS: '30000',
+        },
+        'worker',
+      ),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects unbounded batch sizes', () => {
+    expect(() =>
+      parseWithSchema(workerEnvSchema, { ...validShared, OUTBOX_BATCH_SIZE: '101' }, 'worker'),
+    ).toThrow(ConfigError);
+  });
+
+  it('computes minimum lease from batch waves and timeouts', () => {
+    expect(
+      minimumOutboxLeaseMs({
+        batchSize: 10,
+        publishConcurrency: 3,
+        redisCommandTimeoutMs: 5_000,
+        perEventSafetyMs: 2_000,
+      }),
+    ).toBe(28_000);
   });
 });
 

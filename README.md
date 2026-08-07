@@ -13,12 +13,14 @@ reliability, clear architecture, and incremental delivery.
 | [docs/architecture.md](./docs/architecture.md)               | Monorepo, packages, services, lifecycle |
 | [docs/domain.md](./docs/domain.md)                           | Domain model, time, validation          |
 | [docs/persistence-and-api.md](./docs/persistence-and-api.md) | Database, outbox, HTTP API              |
+| [docs/outbox-dispatch.md](./docs/outbox-dispatch.md)         | Dispatcher, BullMQ publish, retries     |
 
 ## Architecture (summary)
 
 ```text
 apps/web · apps/api · apps/worker
         ↑
+packages/queue (worker only)
 packages/validation · packages/database
         ↑
 packages/shared
@@ -26,7 +28,7 @@ packages/shared
 
 - **web** — UI only; talks to the API
 - **api** — validates requests, creates searches, returns status (thin handlers)
-- **worker** — background search work (not processing jobs yet)
+- **worker** — outbox → BullMQ dispatcher (no consumer yet)
 
 See [docs/architecture.md](./docs/architecture.md) for the full layout and dependency rules.
 
@@ -34,11 +36,12 @@ See [docs/architecture.md](./docs/architecture.md) for the full layout and depen
 
 - Canonical places + meeting-search aggregates in PostGIS
 - Transactional outbox (`meeting-search.requested`) on create
+- Worker dispatcher publishes unpublished events to BullMQ with deterministic job IDs
 - `POST/GET /api/v1/meeting-searches` with shared envelopes and request IDs
 - `/health`, Compose PostGIS + Redis, unit and integration tests
 
-`queued` means the search and outbox event are durably committed — not that a worker has
-started. There is no auth, journey results, BullMQ dispatch, Transitous, or ranking yet.
+`queued` means durably accepted in PostgreSQL, and after dispatch also waiting in BullMQ.
+There is no auth, journey results, BullMQ consumer, Transitous, or ranking yet.
 
 ## Local setup
 
@@ -101,22 +104,24 @@ No secrets are committed.
 
 ## Commands
 
-| Command                 | Description                                  |
-| ----------------------- | -------------------------------------------- |
-| `pnpm dev`              | Start web, api, worker, and watched packages |
-| `pnpm build`            | Build all packages and apps                  |
-| `pnpm lint`             | Lint all workspaces                          |
-| `pnpm typecheck`        | Type-check all workspaces                    |
-| `pnpm test`             | Unit/smoke tests (no Testcontainers)         |
-| `pnpm test:integration` | Database integration tests (Docker required) |
-| `pnpm format`           | Format with Prettier                         |
-| `pnpm format:check`     | Check formatting                             |
-| `pnpm docker:up`        | Start PostGIS and Redis                      |
-| `pnpm docker:down`      | Stop Compose services                        |
-| `pnpm db:generate`      | Generate SQL migrations from Drizzle schema  |
-| `pnpm db:migrate`       | Apply committed migrations                   |
-| `pnpm db:check`         | Check migration consistency                  |
-| `pnpm db:studio`        | Open Drizzle Studio                          |
+| Command                       | Description                                  |
+| ----------------------------- | -------------------------------------------- |
+| `pnpm dev`                    | Start web, api, worker, and watched packages |
+| `pnpm build`                  | Build all packages and apps                  |
+| `pnpm lint`                   | Lint all workspaces                          |
+| `pnpm typecheck`              | Type-check all workspaces                    |
+| `pnpm test`                   | Unit/smoke tests (no Testcontainers)         |
+| `pnpm test:integration`       | Database integration tests (Docker required) |
+| `pnpm test:integration:queue` | Outbox → BullMQ Redis integration tests      |
+| `pnpm worker:dev`             | Run the outbox dispatcher worker             |
+| `pnpm format`                 | Format with Prettier                         |
+| `pnpm format:check`           | Check formatting                             |
+| `pnpm docker:up`              | Start PostGIS and Redis                      |
+| `pnpm docker:down`            | Stop Compose services                        |
+| `pnpm db:generate`            | Generate SQL migrations from Drizzle schema  |
+| `pnpm db:migrate`             | Apply committed migrations                   |
+| `pnpm db:check`               | Check migration consistency                  |
+| `pnpm db:studio`              | Open Drizzle Studio                          |
 
 ## Testing
 
@@ -130,7 +135,7 @@ migrations against disposable PostGIS via Testcontainers.
 
 ## Current limitations
 
-- No BullMQ outbox dispatch or worker search workflow
+- No BullMQ job consumer or search status transition to `running`
 - No Transitous integration or journey evaluation
 - No ranking / candidate generation
 - No place seed/import pipeline
@@ -138,3 +143,4 @@ migrations against disposable PostGIS via Testcontainers.
 - No authentication or user ownership
 - No journey results, progress, cancellation, SSE, maps, or deployment config
 - `/ready` probe not yet implemented
+- BullMQ job retention is unbounded until a later retention + idempotency policy

@@ -19,9 +19,17 @@ services:
       retries: 10
 
   redis:
+    # Alpine multi-arch image (arm64 + amd64). Local durability via AOF + named volume.
+    # Production Redis provisioning (HA, auth, memory limits) is out of scope for Compose.
     image: redis:7-alpine
     container_name: railmeet-redis
     restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      - --maxmemory-policy
+      - noeviction
     ports:
       - '6379:6379'
     volumes:

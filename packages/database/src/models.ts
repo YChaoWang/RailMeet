@@ -101,4 +101,37 @@ export type OutboxEventRecord = {
   readonly payload: MeetingSearchRequestedPayload;
   readonly createdAt: Date;
   readonly publishedAt: Date | null;
+  readonly failureCount: number;
+  readonly nextAttemptAt: Date | null;
+  readonly leaseToken: string | null;
+  readonly leasedUntil: Date | null;
+  readonly lastErrorCode: string | null;
+  readonly deadLetteredAt: Date | null;
 };
+
+export type ClaimOutboxEventsCommand = {
+  readonly batchSize: number;
+  readonly leaseMs: number;
+  readonly leaseToken: string;
+};
+
+export type MarkOutboxPublishedCommand = {
+  readonly eventId: string;
+  readonly leaseToken: string;
+};
+
+export type MarkOutboxRetryCommand = {
+  readonly eventId: string;
+  readonly leaseToken: string;
+  readonly errorCode: string;
+  readonly nextAttemptDelayMs: number;
+};
+
+export type MarkOutboxDeadLetterCommand = {
+  readonly eventId: string;
+  readonly leaseToken: string;
+  readonly errorCode: string;
+};
+
+export type ConditionalOutboxUpdateResult =
+  { readonly outcome: 'updated' } | { readonly outcome: 'not_updated' };

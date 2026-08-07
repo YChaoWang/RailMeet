@@ -24,6 +24,11 @@
       "cache": false,
       "passThroughEnv": ["DOCKER_HOST", "TESTCONTAINERS_*"]
     },
+    "test:integration:queue": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "passThroughEnv": ["DOCKER_HOST", "TESTCONTAINERS_*"]
+    },
     "db:generate": {
       "cache": false
     },

@@ -214,8 +214,7 @@ const outboxAggregateTypeSqlList = OUTBOX_AGGREGATE_TYPES.map((value) => `'${val
 
 /**
  * Minimal transactional outbox.
- * Phase 4 inserts unpublished events in the same transaction as the aggregate.
- * Phase 5 will poll unpublished rows and dispatch to BullMQ — not implemented here.
+ * Search create writes unpublished events; the worker dispatcher claims and publishes them.
  *
  * Deletion policy: outbox rows for a meeting search cascade when the search is deleted.
  */
@@ -232,6 +231,12 @@ export const outboxEvents = pgTable(
     payload: jsonb('payload').$type<{ searchId: string }>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
+    failureCount: integer('failure_count').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true, mode: 'date' }),
+    leaseToken: uuid('lease_token'),
+    leasedUntil: timestamp('leased_until', { withTimezone: true, mode: 'date' }),
+    lastErrorCode: text('last_error_code'),
+    deadLetteredAt: timestamp('dead_lettered_at', { withTimezone: true, mode: 'date' }),
   },
   (table) => [
     unique('outbox_events_aggregate_event_uid').on(
@@ -242,6 +247,9 @@ export const outboxEvents = pgTable(
     index('outbox_events_unpublished_created_at_idx')
       .on(table.createdAt)
       .where(sql`${table.publishedAt} IS NULL`),
+    index('outbox_events_due_claim_idx')
+      .on(table.createdAt, table.id)
+      .where(sql`${table.publishedAt} IS NULL AND ${table.deadLetteredAt} IS NULL`),
     check(
       'outbox_events_event_type_chk',
       sql`${table.eventType} IN (${sql.raw(outboxEventTypeSqlList)})`,
@@ -265,6 +273,14 @@ export const outboxEvents = pgTable(
           ${table.aggregateType} = ${sql.raw(`'${MEETING_SEARCH_AGGREGATE_TYPE}'`)}
           AND ${table.payload} = jsonb_build_object('searchId', ${table.aggregateId}::text)
         )
+      )`,
+    ),
+    check('outbox_events_failure_count_chk', sql`${table.failureCount} >= 0`),
+    check(
+      'outbox_events_lease_pair_chk',
+      sql`(
+        (${table.leaseToken} IS NULL AND ${table.leasedUntil} IS NULL)
+        OR (${table.leaseToken} IS NOT NULL AND ${table.leasedUntil} IS NOT NULL)
       )`,
     ),
   ],

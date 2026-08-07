@@ -66,9 +66,9 @@ Initial event:
 Uniqueness on `(aggregate_type, aggregate_id, event_type)` prevents duplicate initial
 events. An index on unpublished `created_at` supports future polling.
 
-`queued` means the aggregate **and** outbox event are committed. It does **not** mean a
-BullMQ job exists, a worker has started, or journey results exist. Dispatch to BullMQ is
-not implemented yet; Redis remains unused by the application.
+`queued` means the aggregate **and** outbox event are committed. After the worker
+dispatcher publishes to BullMQ the search remains `queued` until a later consumer claims
+the job. See [outbox-dispatch.md](./outbox-dispatch.md).
 
 ## HTTP API
 

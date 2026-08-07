@@ -26,11 +26,16 @@ export {
 } from './outbox.js';
 
 export type {
+  ClaimOutboxEventsCommand,
+  ConditionalOutboxUpdateResult,
   ConditionalStatusUpdateResult,
   CreateMeetingSearchCommand,
   CreateMeetingSearchParticipantCommand,
   CreatePlaceCommand,
   GeoPoint,
+  MarkOutboxDeadLetterCommand,
+  MarkOutboxPublishedCommand,
+  MarkOutboxRetryCommand,
   MeetingSearchParticipantRecord,
   MeetingSearchRecord,
   OutboxEventRecord,

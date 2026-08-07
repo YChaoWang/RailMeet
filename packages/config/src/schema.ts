@@ -22,6 +22,47 @@ const redisUrlSchema = z
     message: 'Must be a Redis connection string (redis:// or rediss://)',
   });
 
+/** Defaults chosen so lease duration covers worst-case bounded-batch scheduling. */
+export const OUTBOX_DEFAULTS = {
+  pollIntervalMs: 1_000,
+  batchSize: 10,
+  leaseMs: 60_000,
+  retryBaseMs: 1_000,
+  retryMaxMs: 60_000,
+  publishConcurrency: 3,
+  redisCommandTimeoutMs: 5_000,
+  /** DB mark + scheduling margin per event wave. */
+  perEventSafetyMs: 2_000,
+} as const;
+
+/**
+ * Minimum lease duration so the last event in a claimed batch cannot outlive its lease
+ * while this dispatcher is still processing the batch with bounded concurrency.
+ *
+ * waves = ceil(batchSize / publishConcurrency)
+ * lease > waves × (redisCommandTimeout + perEventSafety)
+ */
+export function minimumOutboxLeaseMs(options: {
+  readonly batchSize: number;
+  readonly publishConcurrency: number;
+  readonly redisCommandTimeoutMs?: number;
+  readonly perEventSafetyMs?: number;
+}): number {
+  const concurrency = Math.max(1, options.publishConcurrency);
+  const waves = Math.ceil(Math.max(1, options.batchSize) / concurrency);
+  const perEvent =
+    (options.redisCommandTimeoutMs ?? OUTBOX_DEFAULTS.redisCommandTimeoutMs) +
+    (options.perEventSafetyMs ?? OUTBOX_DEFAULTS.perEventSafetyMs);
+  return waves * perEvent;
+}
+
+const positiveInt = (min: number, max: number, label: string) =>
+  z.coerce
+    .number({ invalid_type_error: `${label} must be a number` })
+    .int({ message: `${label} must be an integer` })
+    .min(min, { message: `${label} must be at least ${min}` })
+    .max(max, { message: `${label} must be at most ${max}` });
+
 export const sharedEnvSchema = z.object({
   NODE_ENV: nodeEnvSchema,
   LOG_LEVEL: logLevelSchema.default('info'),
@@ -36,7 +77,47 @@ export const apiEnvSchema = sharedEnvSchema.extend({
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
 });
 
-export const workerEnvSchema = sharedEnvSchema;
+export const workerEnvSchema = sharedEnvSchema
+  .extend({
+    OUTBOX_POLL_INTERVAL_MS: positiveInt(100, 60_000, 'OUTBOX_POLL_INTERVAL_MS').default(
+      OUTBOX_DEFAULTS.pollIntervalMs,
+    ),
+    OUTBOX_BATCH_SIZE: positiveInt(1, 100, 'OUTBOX_BATCH_SIZE').default(OUTBOX_DEFAULTS.batchSize),
+    OUTBOX_LEASE_MS: positiveInt(5_000, 300_000, 'OUTBOX_LEASE_MS').default(
+      OUTBOX_DEFAULTS.leaseMs,
+    ),
+    OUTBOX_RETRY_BASE_MS: positiveInt(100, 60_000, 'OUTBOX_RETRY_BASE_MS').default(
+      OUTBOX_DEFAULTS.retryBaseMs,
+    ),
+    OUTBOX_RETRY_MAX_MS: positiveInt(1_000, 3_600_000, 'OUTBOX_RETRY_MAX_MS').default(
+      OUTBOX_DEFAULTS.retryMaxMs,
+    ),
+    OUTBOX_PUBLISH_CONCURRENCY: positiveInt(1, 20, 'OUTBOX_PUBLISH_CONCURRENCY').default(
+      OUTBOX_DEFAULTS.publishConcurrency,
+    ),
+  })
+  .superRefine((env, ctx) => {
+    const minimumLease = minimumOutboxLeaseMs({
+      batchSize: env.OUTBOX_BATCH_SIZE,
+      publishConcurrency: env.OUTBOX_PUBLISH_CONCURRENCY,
+      redisCommandTimeoutMs: OUTBOX_DEFAULTS.redisCommandTimeoutMs,
+      perEventSafetyMs: OUTBOX_DEFAULTS.perEventSafetyMs,
+    });
+    if (env.OUTBOX_LEASE_MS <= minimumLease) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['OUTBOX_LEASE_MS'],
+        message: `OUTBOX_LEASE_MS must be greater than ${minimumLease} for batchSize=${env.OUTBOX_BATCH_SIZE} and publishConcurrency=${env.OUTBOX_PUBLISH_CONCURRENCY} (covers worst-case bounded-batch enqueue + mark time)`,
+      });
+    }
+    if (env.OUTBOX_RETRY_MAX_MS < env.OUTBOX_RETRY_BASE_MS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['OUTBOX_RETRY_MAX_MS'],
+        message: 'OUTBOX_RETRY_MAX_MS must be >= OUTBOX_RETRY_BASE_MS',
+      });
+    }
+  });
 
 export const webEnvSchema = z.object({
   NODE_ENV: nodeEnvSchema,
@@ -61,6 +142,16 @@ export type ApiConfig = {
   port: number;
 };
 
+export type OutboxDispatcherSettings = {
+  pollIntervalMs: number;
+  batchSize: number;
+  leaseMs: number;
+  retryBaseMs: number;
+  retryMaxMs: number;
+  publishConcurrency: number;
+  redisCommandTimeoutMs: number;
+};
+
 export type WorkerConfig = {
   nodeEnv: WorkerEnv['NODE_ENV'];
   logLevel: WorkerEnv['LOG_LEVEL'];
@@ -68,6 +159,7 @@ export type WorkerConfig = {
   redisUrl: string;
   apiBaseUrl: string;
   transitousBaseUrl: string;
+  outbox: OutboxDispatcherSettings;
 };
 
 export type WebConfig = {
@@ -127,6 +219,15 @@ export function toWorkerConfig(env: WorkerEnv): WorkerConfig {
     redisUrl: env.REDIS_URL,
     apiBaseUrl: env.API_BASE_URL,
     transitousBaseUrl: env.TRANSITOUS_BASE_URL,
+    outbox: {
+      pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
+      batchSize: env.OUTBOX_BATCH_SIZE,
+      leaseMs: env.OUTBOX_LEASE_MS,
+      retryBaseMs: env.OUTBOX_RETRY_BASE_MS,
+      retryMaxMs: env.OUTBOX_RETRY_MAX_MS,
+      publishConcurrency: env.OUTBOX_PUBLISH_CONCURRENCY,
+      redisCommandTimeoutMs: OUTBOX_DEFAULTS.redisCommandTimeoutMs,
+    },
   };
 }
 
