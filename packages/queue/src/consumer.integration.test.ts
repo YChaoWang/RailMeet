@@ -272,7 +272,8 @@ describe('meeting-search kickoff consumer integration', () => {
       startedAt.getTime(),
     );
     expect((await database.meetingSearches.findById(search.id))?.status).toBe('running');
-    expect(await countExtraOutboxForSearch(search.id)).toBe(1);
+    // kickoff now also schedules candidates-requested in the same transaction
+    expect(await countExtraOutboxForSearch(search.id)).toBe(2);
 
     await consumer.close(5_000);
     await publisher.close();
@@ -518,7 +519,7 @@ describe('meeting-search kickoff consumer integration', () => {
     const loaded = await database.meetingSearches.findById(search.id);
     expect(loaded?.status).toBe('running');
     expect(loaded?.startedAt).not.toBeNull();
-    expect(await countExtraOutboxForSearch(search.id)).toBe(1);
+    expect(await countExtraOutboxForSearch(search.id)).toBe(2);
 
     await consumerA.close(5_000);
     await consumerB.close(5_000);
@@ -585,7 +586,7 @@ describe('meeting-search kickoff consumer integration', () => {
     expect(loaded?.status).toBe('running');
     expect(startedAtAfterCommit).toBeTruthy();
     expect(loaded?.startedAt?.getTime()).toBe(startedAtAfterCommit!.getTime());
-    expect(await countExtraOutboxForSearch(search.id)).toBe(1);
+    expect(await countExtraOutboxForSearch(search.id)).toBe(2);
 
     await consumer.close(5_000);
     await queue.close();

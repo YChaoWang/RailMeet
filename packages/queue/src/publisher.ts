@@ -2,14 +2,18 @@ import { Queue } from 'bullmq';
 import type { Redis } from 'ioredis';
 
 import {
+  MEETING_SEARCH_CANDIDATES_QUEUE_NAME,
   MEETING_SEARCH_REQUESTED_JOB_NAME,
   MEETING_SEARCHES_QUEUE_NAME,
+  MEETING_SEARCH_ROUTING_QUEUE_NAME,
   type MeetingSearchRequestedJobData,
+  type OutboxMappedJobData,
 } from './contract.js';
 import {
   buildMeetingSearchJobOptions,
   type MeetingSearchJobRetentionOptions,
 } from './job-options.js';
+import type { MappedOutboxJob } from './map-event.js';
 
 export type PublishMeetingSearchRequestedInput = {
   readonly jobId: string;
@@ -19,20 +23,21 @@ export type PublishMeetingSearchRequestedInput = {
 export type PublishResult = 'added' | 'already_exists';
 
 /**
- * Infrastructure boundary for enqueueing meeting-search jobs.
+ * Infrastructure boundary for enqueueing outbox-mapped jobs.
  * Does not expose BullMQ types to callers.
  */
 export type MeetingSearchQueuePublisher = {
   publishMeetingSearchRequested: (
     input: PublishMeetingSearchRequestedInput,
   ) => Promise<PublishResult>;
+  publishMappedJob: (job: MappedOutboxJob) => Promise<PublishResult>;
   close: () => Promise<void>;
 };
 
 export type CreateMeetingSearchQueuePublisherOptions = {
   readonly connection: Redis;
   readonly jobOptions: MeetingSearchJobRetentionOptions;
-  /** Optional override for tests. */
+  /** Optional override for tests (kickoff queue only). */
   readonly queueName?: string;
 };
 
@@ -79,58 +84,81 @@ export class QueueTransientError extends Error {
 }
 
 /**
- * BullMQ Queue producer for meeting-search.requested jobs.
+ * BullMQ Queue producer for outbox-mapped jobs across kickoff/candidates/routing queues.
  *
  * Uses `queue.add()` with a deterministic job ID only — no check-then-add race.
- * An already-existing job ID is treated as successful delivery (at-least-once recovery).
- * New jobs use bounded retries and retention; Phase 5 retained jobs keep prior options.
  */
 export function createMeetingSearchQueuePublisher(
   options: CreateMeetingSearchQueuePublisherOptions,
 ): MeetingSearchQueuePublisher {
-  const queueName = options.queueName ?? MEETING_SEARCHES_QUEUE_NAME;
-  const queue = new Queue<MeetingSearchRequestedJobData>(queueName, {
-    connection: options.connection,
-    defaultJobOptions: buildMeetingSearchJobOptions(options.jobOptions),
-  });
+  const defaultJobOptions = buildMeetingSearchJobOptions(options.jobOptions);
+  const kickoffQueueName = options.queueName ?? MEETING_SEARCHES_QUEUE_NAME;
 
-  queue.on('error', () => undefined);
+  const queues = new Map<string, Queue<OutboxMappedJobData>>();
+
+  function getQueue(queueName: string): Queue<OutboxMappedJobData> {
+    const existing = queues.get(queueName);
+    if (existing) {
+      return existing;
+    }
+    const queue = new Queue<OutboxMappedJobData>(queueName, {
+      connection: options.connection,
+      defaultJobOptions,
+    });
+    queue.on('error', () => undefined);
+    queues.set(queueName, queue);
+    return queue;
+  }
+
+  // Ensure default queues exist for close() even if unused.
+  getQueue(kickoffQueueName);
+  getQueue(MEETING_SEARCH_CANDIDATES_QUEUE_NAME);
+  getQueue(MEETING_SEARCH_ROUTING_QUEUE_NAME);
 
   let closed = false;
 
+  async function publishMappedJob(job: MappedOutboxJob): Promise<PublishResult> {
+    try {
+      const queue = getQueue(job.queueName);
+      await queue.add(job.jobName, job.data, { jobId: job.jobId });
+      return 'added';
+    } catch (error) {
+      if (isDuplicateJobError(error)) {
+        return 'already_exists';
+      }
+      if (isTransientQueueError(error)) {
+        const code =
+          error &&
+          typeof error === 'object' &&
+          'code' in error &&
+          (error as { code: string }).code === 'ETIMEDOUT'
+            ? 'QUEUE_TIMEOUT'
+            : 'REDIS_UNAVAILABLE';
+        throw new QueueTransientError(code, 'Queue enqueue failed transiently', error);
+      }
+      throw new QueueTransientError('QUEUE_TRANSIENT_FAILURE', 'Queue enqueue failed', error);
+    }
+  }
+
   return {
     async publishMeetingSearchRequested(input) {
-      try {
-        await queue.add(MEETING_SEARCH_REQUESTED_JOB_NAME, input.data, {
-          jobId: input.jobId,
-        });
-        // BullMQ deduplicates custom job IDs atomically inside add(). A successful
-        // return means the deterministic job is present (new or already retained).
-        return 'added';
-      } catch (error) {
-        if (isDuplicateJobError(error)) {
-          return 'already_exists';
-        }
-        if (isTransientQueueError(error)) {
-          const code =
-            error &&
-            typeof error === 'object' &&
-            'code' in error &&
-            (error as { code: string }).code === 'ETIMEDOUT'
-              ? 'QUEUE_TIMEOUT'
-              : 'REDIS_UNAVAILABLE';
-          throw new QueueTransientError(code, 'Queue enqueue failed transiently', error);
-        }
-        throw new QueueTransientError('QUEUE_TRANSIENT_FAILURE', 'Queue enqueue failed', error);
-      }
+      return publishMappedJob({
+        queueName: kickoffQueueName,
+        jobName: MEETING_SEARCH_REQUESTED_JOB_NAME,
+        jobId: input.jobId,
+        data: input.data,
+      });
     },
+
+    publishMappedJob,
 
     async close() {
       if (closed) {
         return;
       }
       closed = true;
-      await queue.close();
+      await Promise.all([...queues.values()].map((queue) => queue.close()));
+      queues.clear();
     },
   };
 }

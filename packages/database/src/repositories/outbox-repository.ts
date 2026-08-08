@@ -1,11 +1,7 @@
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
-import {
-  isOutboxAggregateType,
-  isOutboxEventType,
-  type MeetingSearchRequestedPayload,
-} from '../outbox.js';
+import { isOutboxAggregateType, isOutboxEventType, type OutboxPayload } from '../outbox.js';
 import type {
   ClaimOutboxEventsCommand,
   ConditionalOutboxUpdateResult,
@@ -27,7 +23,7 @@ function mapOutboxEvent(row: typeof outboxEvents.$inferSelect): OutboxEventRecor
     throw new Error(`Unexpected outbox aggregate type from database: ${row.aggregateType}`);
   }
 
-  const payload = row.payload as MeetingSearchRequestedPayload;
+  const payload = row.payload as OutboxPayload;
   if (typeof payload.searchId !== 'string') {
     throw new Error('Outbox payload missing searchId');
   }
@@ -38,7 +34,8 @@ function mapOutboxEvent(row: typeof outboxEvents.$inferSelect): OutboxEventRecor
     aggregateType: row.aggregateType,
     aggregateId: row.aggregateId,
     schemaVersion: row.schemaVersion,
-    payload: { searchId: payload.searchId },
+    dedupeKey: row.dedupeKey,
+    payload,
     createdAt: row.createdAt,
     publishedAt: row.publishedAt ?? null,
     failureCount: row.failureCount,
@@ -126,6 +123,7 @@ export function createOutboxRepository(db: Db): OutboxRepository {
             o.aggregate_id,
             o.schema_version,
             o.payload,
+            o.dedupe_key,
             o.created_at,
             o.published_at,
             o.failure_count,
@@ -142,7 +140,8 @@ export function createOutboxRepository(db: Db): OutboxRepository {
           aggregate_type: string;
           aggregate_id: string;
           schema_version: number;
-          payload: { searchId: string };
+          payload: OutboxPayload;
+          dedupe_key: string;
           created_at: Date | string;
           published_at: Date | string | null;
           failure_count: number;
@@ -162,6 +161,7 @@ export function createOutboxRepository(db: Db): OutboxRepository {
           aggregateId: row.aggregate_id,
           schemaVersion: row.schema_version,
           payload: row.payload,
+          dedupeKey: row.dedupe_key,
           createdAt: new Date(row.created_at),
           publishedAt: row.published_at ? new Date(row.published_at) : null,
           failureCount: row.failure_count,

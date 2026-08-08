@@ -116,10 +116,7 @@ export function createOutboxDispatcher(deps: OutboxDispatcherDeps): OutboxDispat
     }
 
     try {
-      await deps.publisher.publishMeetingSearchRequested({
-        jobId: mapped.job.jobId,
-        data: mapped.job.data,
-      });
+      await deps.publisher.publishMappedJob(mapped.job);
       const published = await deps.outbox.markPublished({
         eventId: event.id,
         leaseToken,
@@ -127,7 +124,13 @@ export function createOutboxDispatcher(deps: OutboxDispatcherDeps): OutboxDispat
       if (published.outcome === 'updated') {
         stats.published += 1;
         deps.logger.info(
-          { eventId: event.id, searchId: mapped.job.data.searchId, jobId: mapped.job.jobId },
+          {
+            eventId: event.id,
+            searchId: mapped.job.data.searchId,
+            jobId: mapped.job.jobId,
+            queueName: mapped.job.queueName,
+            jobName: mapped.job.jobName,
+          },
           'Outbox event published to queue',
         );
       } else {

@@ -8,13 +8,14 @@ reliability, clear architecture, and incremental delivery.
 
 ## Docs
 
-| Doc                                                                        | Contents                                |
-| -------------------------------------------------------------------------- | --------------------------------------- |
-| [docs/architecture.md](./docs/architecture.md)                             | Monorepo, packages, services, lifecycle |
-| [docs/domain.md](./docs/domain.md)                                         | Domain model, time, validation          |
-| [docs/persistence-and-api.md](./docs/persistence-and-api.md)               | Database, outbox, HTTP API              |
-| [docs/outbox-dispatch.md](./docs/outbox-dispatch.md)                       | Dispatcher, BullMQ publish, retries     |
-| [docs/search-kickoff-and-routing.md](./docs/search-kickoff-and-routing.md) | Kickoff consumer, retention, Transitous |
+| Doc                                                                                                  | Contents                                |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| [docs/architecture.md](./docs/architecture.md)                                                       | Monorepo, packages, services, lifecycle |
+| [docs/domain.md](./docs/domain.md)                                                                   | Domain model, time, validation          |
+| [docs/persistence-and-api.md](./docs/persistence-and-api.md)                                         | Database, outbox, HTTP API              |
+| [docs/outbox-dispatch.md](./docs/outbox-dispatch.md)                                                 | Dispatcher, BullMQ publish, retries     |
+| [docs/search-kickoff-and-routing.md](./docs/search-kickoff-and-routing.md)                           | Kickoff consumer, retention, Transitous |
+| [docs/candidate-generation-and-routing-fanout.md](./docs/candidate-generation-and-routing-fanout.md) | Phase 7 candidates and journey fan-out  |
 
 ## Architecture (summary)
 
@@ -140,11 +141,11 @@ migrations against disposable PostGIS via Testcontainers.
 
 ## Current limitations
 
-- Kickoff leaves searches in `running`; candidate generation, ranking, journey persistence, and completion are Phase 7+
-- Transitous adapter exists for development/validation; kickoff does not call it and no destination is invented
+- Searches remain `running` after candidate generation and journey fan-out; ranking, destination selection, and completion are Phase 8
+- No public journey/result or progress APIs yet
 - No place seed/import pipeline
 - Parent-city “must be kind=city” is not DB-enforced
 - No authentication or user ownership
-- No journey results, progress, cancellation, SSE, maps, or deployment config
+- No cancellation, SSE, maps, or deployment config
 - `/ready` probe not yet implemented
-- Existing Phase 5 jobs retain their original unbounded retention options and may remain indefinitely unless explicitly cleaned up; Phase 6 does not automatically delete or migrate those jobs. Bounded retention applies only to newly produced jobs.
+- Existing Phase 5 jobs retain their original unbounded retention options and may remain indefinitely unless explicitly cleaned up; Phase 6/7 do not automatically delete or migrate those jobs. Bounded retention applies only to newly produced jobs.

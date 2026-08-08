@@ -9,6 +9,7 @@ import {
   type MeetingSearchRequestedJobData,
 } from './contract.js';
 import { validateMeetingSearchRequestedJob } from './job-validation.js';
+import { classifyConsumerError, createWorkerCloseHandle } from './worker-close.js';
 
 export type MeetingSearchKickoffTransition = 'started' | 'already_started' | 'already_terminal';
 
@@ -165,57 +166,18 @@ export function createMeetingSearchConsumer(
     );
   });
 
-  let closing = false;
-  let closePromise: Promise<void> | undefined;
+  const closeHandle = createWorkerCloseHandle({
+    worker,
+    logger: options.logger,
+    stoppingEvent: 'search_consumer_stopping',
+    stoppedEvent: 'search_consumer_stopped',
+    timeoutEvent: 'search_consumer_close_timeout',
+  });
 
   return {
     worker,
-    async close(timeoutMs) {
-      if (closing) {
-        if (closePromise) {
-          await closePromise;
-        }
-        return 'closed';
-      }
-      closing = true;
-      options.logger.info({ event: 'search_consumer_stopping' }, 'Search consumer stopping');
-
-      closePromise = worker.close();
-      const timedOut = await Promise.race([
-        closePromise.then(() => false),
-        new Promise<boolean>((resolve) => {
-          setTimeout(() => resolve(true), timeoutMs);
-        }),
-      ]);
-
-      if (timedOut) {
-        options.logger.warn(
-          {
-            event: 'search_consumer_close_timeout',
-            timeoutMs,
-          },
-          'Search consumer graceful close exceeded timeout; stalled-job recovery may reclaim work',
-        );
-        return 'timed_out';
-      }
-
-      options.logger.info({ event: 'search_consumer_stopped' }, 'Search consumer stopped');
-      return 'closed';
-    },
+    close: closeHandle.close,
   };
-}
-
-function classifyConsumerError(error: unknown): string {
-  if (error instanceof UnrecoverableError) {
-    return 'UNRECOVERABLE';
-  }
-  if (error && typeof error === 'object' && 'code' in error) {
-    return String((error as { code: unknown }).code);
-  }
-  if (error instanceof Error) {
-    return error.name;
-  }
-  return 'UNKNOWN';
 }
 
 export { UnrecoverableError };

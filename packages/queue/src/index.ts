@@ -1,10 +1,20 @@
 export {
   MEETING_SEARCHES_QUEUE_NAME,
+  MEETING_SEARCH_CANDIDATES_QUEUE_NAME,
+  MEETING_SEARCH_ROUTING_QUEUE_NAME,
   MEETING_SEARCH_REQUESTED_JOB_NAME,
+  MEETING_SEARCH_CANDIDATES_REQUESTED_JOB_NAME,
+  ROUTING_REQUESTED_JOB_NAME,
   MEETING_SEARCH_REQUESTED_JOB_SCHEMA_VERSION,
+  MEETING_SEARCH_CANDIDATES_REQUESTED_JOB_SCHEMA_VERSION,
+  ROUTING_REQUESTED_JOB_SCHEMA_VERSION,
   assertSafeJobId,
   meetingSearchRequestedJobId,
+  outboxJobId,
   type MeetingSearchRequestedJobData,
+  type MeetingSearchCandidatesRequestedJobData,
+  type RoutingRequestedJobData,
+  type OutboxMappedJobData,
   type OutboxPoisonErrorCode,
   type OutboxTransientErrorCode,
 } from './contract.js';
@@ -14,6 +24,7 @@ export { computeRetryDelayMs, jitterUnitFromEventId } from './backoff.js';
 export {
   mapOutboxEventToJob,
   type MappedMeetingSearchJob,
+  type MappedOutboxJob,
   type MapOutboxEventResult,
 } from './map-event.js';
 
@@ -32,6 +43,8 @@ export {
 
 export {
   validateMeetingSearchRequestedJob,
+  validateCandidatesRequestedJob,
+  validateRoutingRequestedJob,
   type JobValidationFailureCode,
   type JobValidationResult,
 } from './job-validation.js';
@@ -45,6 +58,22 @@ export {
   type MeetingSearchKickoffProcessor,
   type MeetingSearchKickoffTransition,
 } from './consumer.js';
+
+export {
+  createCandidateConsumer,
+  type CandidateConsumer,
+  type CandidateGenerationJobResult,
+  type CandidateGenerationProcessor,
+  type CreateCandidateConsumerOptions,
+} from './candidate-consumer.js';
+
+export {
+  createRoutingConsumer,
+  type CreateRoutingConsumerOptions,
+  type RoutingConsumer,
+  type RoutingJobResult,
+  type RoutingProcessor,
+} from './routing-consumer.js';
 
 export { createRedisConnection, closeRedisConnection } from './redis.js';
 

@@ -29,6 +29,20 @@
       "when": 1786190756457,
       "tag": "0003_ancient_naoko",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786193912887,
+      "tag": "0004_open_medusa",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786196236888,
+      "tag": "0005_steep_matthew_murdock",
+      "breakpoints": true
     }
   ]
 }

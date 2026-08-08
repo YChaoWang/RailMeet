@@ -38,6 +38,9 @@ export const OUTBOX_DEFAULTS = {
 /** BullMQ consumer + job retention defaults (new jobs only; Phase 5 jobs keep prior options). */
 export const SEARCH_JOB_DEFAULTS = {
   consumerConcurrency: 2,
+  candidateConsumerConcurrency: 2,
+  routingConsumerConcurrency: 4,
+  candidateLimit: 8,
   attempts: 5,
   backoffDelayMs: 2_000,
   /** BullMQ BackoffOptions.jitter fraction (0–1). */
@@ -128,6 +131,19 @@ export const workerEnvSchema = sharedEnvSchema
     ),
     SEARCH_CONSUMER_CONCURRENCY: positiveInt(1, 20, 'SEARCH_CONSUMER_CONCURRENCY').default(
       SEARCH_JOB_DEFAULTS.consumerConcurrency,
+    ),
+    SEARCH_CANDIDATE_CONSUMER_CONCURRENCY: positiveInt(
+      1,
+      20,
+      'SEARCH_CANDIDATE_CONSUMER_CONCURRENCY',
+    ).default(SEARCH_JOB_DEFAULTS.candidateConsumerConcurrency),
+    SEARCH_ROUTING_CONSUMER_CONCURRENCY: positiveInt(
+      1,
+      20,
+      'SEARCH_ROUTING_CONSUMER_CONCURRENCY',
+    ).default(SEARCH_JOB_DEFAULTS.routingConsumerConcurrency),
+    SEARCH_CANDIDATE_LIMIT: positiveInt(1, 20, 'SEARCH_CANDIDATE_LIMIT').default(
+      SEARCH_JOB_DEFAULTS.candidateLimit,
     ),
     SEARCH_JOB_ATTEMPTS: positiveInt(1, 20, 'SEARCH_JOB_ATTEMPTS').default(
       SEARCH_JOB_DEFAULTS.attempts,
@@ -245,6 +261,9 @@ export type OutboxDispatcherSettings = {
 
 export type SearchJobSettings = {
   consumerConcurrency: number;
+  candidateConsumerConcurrency: number;
+  routingConsumerConcurrency: number;
+  candidateLimit: number;
   attempts: number;
   backoffDelayMs: number;
   backoffJitter: number;
@@ -342,6 +361,9 @@ export function toWorkerConfig(env: WorkerEnv): WorkerConfig {
     },
     searchJobs: {
       consumerConcurrency: env.SEARCH_CONSUMER_CONCURRENCY,
+      candidateConsumerConcurrency: env.SEARCH_CANDIDATE_CONSUMER_CONCURRENCY,
+      routingConsumerConcurrency: env.SEARCH_ROUTING_CONSUMER_CONCURRENCY,
+      candidateLimit: env.SEARCH_CANDIDATE_LIMIT,
       attempts: env.SEARCH_JOB_ATTEMPTS,
       backoffDelayMs: env.SEARCH_JOB_BACKOFF_DELAY_MS,
       backoffJitter: env.SEARCH_JOB_BACKOFF_JITTER,

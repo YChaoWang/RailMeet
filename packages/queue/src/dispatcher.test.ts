@@ -23,6 +23,7 @@ function baseEvent(overrides: Partial<OutboxEventRecord> = {}): OutboxEventRecor
     aggregateType: 'meeting-search',
     aggregateId: searchId,
     schemaVersion: 1,
+    dedupeKey: 'default',
     payload: { searchId },
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     publishedAt: null,
@@ -124,7 +125,8 @@ describe('outbox dispatcher orchestration', () => {
       markDeadLettered: vi.fn(),
     };
     const publisher: MeetingSearchQueuePublisher = {
-      publishMeetingSearchRequested: vi.fn().mockResolvedValue('added'),
+      publishMeetingSearchRequested: vi.fn(),
+      publishMappedJob: vi.fn().mockResolvedValue('added'),
       close: vi.fn(),
     };
     const info = vi.fn();
@@ -167,7 +169,7 @@ describe('outbox dispatcher orchestration', () => {
     expect(logged).not.toMatch(/redis:\/\/|rediss:\/\/|postgresql:\/\/|postgres:\/\//i);
     expect(logged).not.toMatch(/displayName|originPlaceId|allowedCountry/i);
 
-    publisher.publishMeetingSearchRequested = vi
+    publisher.publishMappedJob = vi
       .fn()
       .mockRejectedValue(new QueueTransientError('REDIS_UNAVAILABLE', 'down'));
     outbox.claimDue = vi.fn().mockResolvedValue([
@@ -199,7 +201,8 @@ describe('outbox dispatcher orchestration', () => {
       markDeadLettered: vi.fn(),
     };
     const publisher: MeetingSearchQueuePublisher = {
-      publishMeetingSearchRequested: vi.fn().mockResolvedValue('already_exists'),
+      publishMeetingSearchRequested: vi.fn(),
+      publishMappedJob: vi.fn().mockResolvedValue('already_exists'),
       close: vi.fn(),
     };
     const dispatcher = createOutboxDispatcher({
@@ -242,7 +245,8 @@ describe('outbox dispatcher orchestration', () => {
       markDeadLettered,
     };
     const publisher: MeetingSearchQueuePublisher = {
-      publishMeetingSearchRequested: vi
+      publishMeetingSearchRequested: vi.fn(),
+      publishMappedJob: vi
         .fn()
         .mockRejectedValue(new QueueTransientError('REDIS_UNAVAILABLE', 'down')),
       close: vi.fn(),
@@ -290,7 +294,8 @@ describe('outbox dispatcher orchestration', () => {
       markDeadLettered: vi.fn(),
     };
     const publisher: MeetingSearchQueuePublisher = {
-      publishMeetingSearchRequested: vi.fn().mockImplementation(async (input) => {
+      publishMeetingSearchRequested: vi.fn(),
+      publishMappedJob: vi.fn().mockImplementation(async (input) => {
         if (input.jobId.includes('aaaaaaaa')) {
           throw new QueueTransientError('REDIS_UNAVAILABLE', 'fail-a');
         }
@@ -342,6 +347,7 @@ describe('outbox dispatcher orchestration', () => {
     };
     const publisher: MeetingSearchQueuePublisher = {
       publishMeetingSearchRequested: vi.fn(),
+      publishMappedJob: vi.fn(),
       close: vi.fn(),
     };
     const sleeps: Array<() => void> = [];
@@ -389,7 +395,8 @@ describe('outbox dispatcher orchestration', () => {
     const dispatcher = createOutboxDispatcher({
       outbox,
       publisher: {
-        publishMeetingSearchRequested: vi.fn().mockResolvedValue('added'),
+        publishMeetingSearchRequested: vi.fn(),
+        publishMappedJob: vi.fn().mockResolvedValue('added'),
         close: vi.fn(),
       },
       logger: createLogger({ name: 'test', level: 'silent', pretty: false }),
@@ -430,7 +437,8 @@ describe('outbox dispatcher orchestration', () => {
     const dispatcher = createOutboxDispatcher({
       outbox,
       publisher: {
-        publishMeetingSearchRequested: vi
+        publishMeetingSearchRequested: vi.fn(),
+        publishMappedJob: vi
           .fn()
           .mockRejectedValue(new QueueTransientError('REDIS_UNAVAILABLE', 'down')),
         close: vi.fn(),
@@ -471,7 +479,8 @@ describe('outbox dispatcher orchestration', () => {
       markDeadLettered: vi.fn(),
     };
     const publisher: MeetingSearchQueuePublisher = {
-      publishMeetingSearchRequested: vi.fn().mockImplementation(async () => {
+      publishMeetingSearchRequested: vi.fn(),
+      publishMappedJob: vi.fn().mockImplementation(async () => {
         if (!redisUp) {
           throw new QueueTransientError('REDIS_UNAVAILABLE', 'down');
         }

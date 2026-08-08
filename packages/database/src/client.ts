@@ -12,6 +12,10 @@ import {
 } from './repositories/meeting-search-repository.js';
 import { createOutboxRepository, type OutboxRepository } from './repositories/outbox-repository.js';
 import { createPlaceRepository, type PlaceRepository } from './repositories/place-repository.js';
+import {
+  createSearchPipelineRepository,
+  type SearchPipelineRepository,
+} from './repositories/search-pipeline-repository.js';
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -28,6 +32,7 @@ export type Database = {
   readonly places: PlaceRepository;
   readonly meetingSearches: MeetingSearchRepository;
   readonly outbox: OutboxRepository;
+  readonly searchPipeline: SearchPipelineRepository;
   migrate: () => Promise<void>;
   close: () => Promise<void>;
 };
@@ -45,12 +50,14 @@ export function createDatabase(config: DatabaseConfig): Database {
   const places = createPlaceRepository(db);
   const meetingSearches = createMeetingSearchRepository(db);
   const outbox = createOutboxRepository(db);
+  const searchPipeline = createSearchPipelineRepository(db);
 
   return {
     db,
     places,
     meetingSearches,
     outbox,
+    searchPipeline,
     async migrate() {
       const folder = config.migrationsFolder ?? join(packageRoot, 'migrations');
       await migrate(db, { migrationsFolder: folder });

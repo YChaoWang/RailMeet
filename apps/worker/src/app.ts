@@ -3,17 +3,23 @@ import { createDatabase, type Database } from '@railmeet/database';
 import { createLogger, type Logger } from '@railmeet/observability';
 import {
   closeRedisConnection,
+  createCandidateConsumer,
   createMeetingSearchConsumer,
   createMeetingSearchQueuePublisher,
   createOutboxDispatcher,
   createRedisConnection,
+  createRoutingConsumer,
+  type CandidateConsumer,
   type MeetingSearchConsumer,
   type MeetingSearchQueuePublisher,
   type OutboxDispatcher,
+  type RoutingConsumer,
 } from '@railmeet/queue';
 import { createTransitousJourneyPlanner, type JourneyPlanner } from '@railmeet/routing';
 
+import { createCandidateGenerationProcessor } from './candidate-generation.js';
 import { createMeetingSearchKickoffProcessor } from './meeting-search-kickoff.js';
+import { createRoutingWorkProcessor } from './routing-work.js';
 
 export type WorkerRuntime = {
   readonly logger: Logger;
@@ -21,6 +27,8 @@ export type WorkerRuntime = {
   readonly publisher: MeetingSearchQueuePublisher;
   readonly dispatcher: OutboxDispatcher;
   readonly consumer: MeetingSearchConsumer;
+  readonly candidateConsumer: CandidateConsumer;
+  readonly routingConsumer: RoutingConsumer;
   readonly journeyPlanner: JourneyPlanner;
   start: () => void;
   stop: () => Promise<void>;
@@ -33,9 +41,18 @@ export type BuildWorkerOptions = {
   readonly registerSignalHandlers?: boolean;
 };
 
+function workerRedis(url: string, commandTimeoutMs: number) {
+  return createRedisConnection({
+    url,
+    commandTimeoutMs,
+    connectTimeoutMs: commandTimeoutMs,
+    enableOfflineQueue: true,
+    maxRetriesPerRequest: null,
+  });
+}
+
 /**
- * Composition root for outbox dispatcher + BullMQ search kickoff consumer.
- * Constructs Transitous planner for Phase 7 readiness; kickoff does not call it.
+ * Composition root for outbox dispatcher + kickoff/candidate/routing consumers.
  */
 export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRuntime> {
   const logger =
@@ -56,14 +73,18 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
     connectTimeoutMs: options.config.outbox.redisCommandTimeoutMs,
   });
 
-  const consumerRedis = createRedisConnection({
-    url: options.config.redisUrl,
-    commandTimeoutMs: options.config.outbox.redisCommandTimeoutMs,
-    connectTimeoutMs: options.config.outbox.redisCommandTimeoutMs,
-    // BullMQ Worker manages blocking commands; allow offline queue while reconnecting.
-    enableOfflineQueue: true,
-    maxRetriesPerRequest: null,
-  });
+  const kickoffRedis = workerRedis(
+    options.config.redisUrl,
+    options.config.outbox.redisCommandTimeoutMs,
+  );
+  const candidateRedis = workerRedis(
+    options.config.redisUrl,
+    options.config.outbox.redisCommandTimeoutMs,
+  );
+  const routingRedis = workerRedis(
+    options.config.redisUrl,
+    options.config.outbox.redisCommandTimeoutMs,
+  );
 
   const publisher = createMeetingSearchQueuePublisher({
     connection: publisherRedis,
@@ -84,24 +105,48 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
     },
   });
 
-  const processKickoff = createMeetingSearchKickoffProcessor({
-    meetingSearches: database.meetingSearches,
-    logger,
-  });
-
-  const consumer = createMeetingSearchConsumer({
-    connection: consumerRedis,
-    logger,
-    concurrency: options.config.searchJobs.consumerConcurrency,
-    processKickoff,
-  });
-
   const journeyPlanner = createTransitousJourneyPlanner({
     baseUrl: options.config.transitous.baseUrl,
     userAgent: options.config.transitous.userAgent,
     timeoutMs: options.config.transitous.timeoutMs,
     maxResponseBytes: options.config.transitous.maxResponseBytes,
     logger,
+  });
+
+  const consumer = createMeetingSearchConsumer({
+    connection: kickoffRedis,
+    logger,
+    concurrency: options.config.searchJobs.consumerConcurrency,
+    processKickoff: createMeetingSearchKickoffProcessor({
+      meetingSearches: database.meetingSearches,
+      logger,
+    }),
+  });
+
+  const candidateConsumer = createCandidateConsumer({
+    connection: candidateRedis,
+    logger,
+    concurrency: options.config.searchJobs.candidateConsumerConcurrency,
+    processCandidates: createCandidateGenerationProcessor({
+      meetingSearches: database.meetingSearches,
+      places: database.places,
+      searchPipeline: database.searchPipeline,
+      candidateLimit: options.config.searchJobs.candidateLimit,
+      logger,
+    }),
+  });
+
+  const routingConsumer = createRoutingConsumer({
+    connection: routingRedis,
+    logger,
+    concurrency: options.config.searchJobs.routingConsumerConcurrency,
+    processRouting: createRoutingWorkProcessor({
+      meetingSearches: database.meetingSearches,
+      places: database.places,
+      searchPipeline: database.searchPipeline,
+      journeyPlanner,
+      logger,
+    }),
   });
 
   let stopping = false;
@@ -112,10 +157,14 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
     publisher,
     dispatcher,
     consumer,
+    candidateConsumer,
+    routingConsumer,
     journeyPlanner,
     start() {
       dispatcher.start();
       void consumer.worker.run();
+      void candidateConsumer.worker.run();
+      void routingConsumer.worker.run();
       logger.info(
         {
           event: 'worker_ready',
@@ -123,8 +172,11 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
           hasDatabaseUrl: options.config.databaseUrl.length > 0,
           hasRedisUrl: options.config.redisUrl.length > 0,
           consumerConcurrency: options.config.searchJobs.consumerConcurrency,
+          candidateConsumerConcurrency: options.config.searchJobs.candidateConsumerConcurrency,
+          routingConsumerConcurrency: options.config.searchJobs.routingConsumerConcurrency,
+          candidateLimit: options.config.searchJobs.candidateLimit,
         },
-        'Worker ready (outbox dispatcher + search kickoff consumer active)',
+        'Worker ready (dispatcher + kickoff + candidate + routing consumers active)',
       );
     },
     async stop() {
@@ -133,11 +185,18 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
       }
       stopping = true;
       logger.info('Shutting down worker');
-      await consumer.close(options.config.searchJobs.shutdownTimeoutMs);
+      const timeoutMs = options.config.searchJobs.shutdownTimeoutMs;
+      await Promise.all([
+        consumer.close(timeoutMs),
+        candidateConsumer.close(timeoutMs),
+        routingConsumer.close(timeoutMs),
+      ]);
       await dispatcher.stop();
       await publisher.close();
       await closeRedisConnection(publisherRedis);
-      await closeRedisConnection(consumerRedis);
+      await closeRedisConnection(kickoffRedis);
+      await closeRedisConnection(candidateRedis);
+      await closeRedisConnection(routingRedis);
       await database.close();
       logger.info('Worker closed cleanly');
     },

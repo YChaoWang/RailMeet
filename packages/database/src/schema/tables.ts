@@ -17,6 +17,7 @@ import {
 import { sql } from 'drizzle-orm';
 import {
   check,
+  doublePrecision,
   foreignKey,
   geometry,
   index,
@@ -35,11 +36,37 @@ import {
 
 import {
   MEETING_SEARCH_AGGREGATE_TYPE,
+  MEETING_SEARCH_CANDIDATES_REQUESTED_EVENT_TYPE,
+  MEETING_SEARCH_CANDIDATES_REQUESTED_SCHEMA_VERSION,
   MEETING_SEARCH_REQUESTED_EVENT_TYPE,
   MEETING_SEARCH_REQUESTED_SCHEMA_VERSION,
   OUTBOX_AGGREGATE_TYPES,
+  OUTBOX_DEDUPE_KEY_DEFAULT,
   OUTBOX_EVENT_TYPES,
+  ROUTING_REQUESTED_EVENT_TYPE,
+  ROUTING_REQUESTED_SCHEMA_VERSION,
+  type OutboxPayload,
 } from '../outbox.js';
+
+export const CANDIDATE_GENERATION_STATUSES = [
+  'pending',
+  'running',
+  'succeeded',
+  'failed_permanent',
+] as const;
+
+export const ROUTING_WORK_STATUSES = [
+  'pending',
+  'running',
+  'succeeded',
+  'no_journeys',
+  'exhausted',
+] as const;
+
+const candidateGenerationStatusSqlList = CANDIDATE_GENERATION_STATUSES.map(
+  (value) => `'${value}'`,
+).join(', ');
+const routingWorkStatusSqlList = ROUTING_WORK_STATUSES.map((value) => `'${value}'`).join(', ');
 
 const placeKindSqlList = PLACE_KINDS.map((value) => `'${value}'`).join(', ');
 const rankingModeSqlList = RANKING_MODES.map((value) => `'${value}'`).join(', ');
@@ -85,9 +112,16 @@ export const places = pgTable(
       'places_timezone_length_chk',
       sql`char_length(${table.timezone}) >= 1 AND char_length(${table.timezone}) <= ${sql.raw(String(IANA_TIMEZONE_MAX_LENGTH))}`,
     ),
-    // Keep SQL text aligned with migration 0000 (`ST_SRID("location")`) so
-    // drizzle-kit does not emit a spurious ALTER on every generate.
+    // Keep SQL text aligned with migrations (`ST_SRID("location")` / GeometryType)
+    // so drizzle-kit does not emit a spurious ALTER on every generate.
     check('places_location_srid_chk', sql`ST_SRID("location") = 4326`),
+    check('places_location_point_chk', sql`GeometryType("location") = 'POINT'`),
+    check('places_location_not_empty_chk', sql`NOT ST_IsEmpty("location")`),
+    check(
+      'places_location_longitude_chk',
+      sql`ST_X("location") >= -180 AND ST_X("location") <= 180`,
+    ),
+    check('places_location_latitude_chk', sql`ST_Y("location") >= -90 AND ST_Y("location") <= 90`),
   ],
 );
 
@@ -222,6 +256,7 @@ const outboxAggregateTypeSqlList = OUTBOX_AGGREGATE_TYPES.map((value) => `'${val
  * Search create writes unpublished events; the worker dispatcher claims and publishes them.
  *
  * Deletion policy: outbox rows for a meeting search cascade when the search is deleted.
+ * dedupe_key allows multiple routing.requested events per search (one per routing work item).
  */
 export const outboxEvents = pgTable(
   'outbox_events',
@@ -233,7 +268,8 @@ export const outboxEvents = pgTable(
       .notNull()
       .references(() => meetingSearches.id, { onDelete: 'cascade' }),
     schemaVersion: integer('schema_version').notNull(),
-    payload: jsonb('payload').$type<{ searchId: string }>().notNull(),
+    payload: jsonb('payload').$type<OutboxPayload>().notNull(),
+    dedupeKey: text('dedupe_key').notNull().default(OUTBOX_DEDUPE_KEY_DEFAULT),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
     failureCount: integer('failure_count').notNull().default(0),
@@ -244,10 +280,11 @@ export const outboxEvents = pgTable(
     deadLetteredAt: timestamp('dead_lettered_at', { withTimezone: true, mode: 'date' }),
   },
   (table) => [
-    unique('outbox_events_aggregate_event_uid').on(
+    unique('outbox_events_aggregate_event_dedupe_uid').on(
       table.aggregateType,
       table.aggregateId,
       table.eventType,
+      table.dedupeKey,
     ),
     index('outbox_events_unpublished_created_at_idx')
       .on(table.createdAt)
@@ -266,17 +303,37 @@ export const outboxEvents = pgTable(
     check(
       'outbox_events_schema_version_chk',
       sql`${table.schemaVersion} >= 1 AND (
-        ${table.eventType} <> ${sql.raw(`'${MEETING_SEARCH_REQUESTED_EVENT_TYPE}'`)}
-        OR ${table.schemaVersion} = ${sql.raw(String(MEETING_SEARCH_REQUESTED_SCHEMA_VERSION))}
+        (
+          ${table.eventType} = ${sql.raw(`'${MEETING_SEARCH_REQUESTED_EVENT_TYPE}'`)}
+          AND ${table.schemaVersion} = ${sql.raw(String(MEETING_SEARCH_REQUESTED_SCHEMA_VERSION))}
+        ) OR (
+          ${table.eventType} = ${sql.raw(`'${MEETING_SEARCH_CANDIDATES_REQUESTED_EVENT_TYPE}'`)}
+          AND ${table.schemaVersion} = ${sql.raw(String(MEETING_SEARCH_CANDIDATES_REQUESTED_SCHEMA_VERSION))}
+        ) OR (
+          ${table.eventType} = ${sql.raw(`'${ROUTING_REQUESTED_EVENT_TYPE}'`)}
+          AND ${table.schemaVersion} = ${sql.raw(String(ROUTING_REQUESTED_SCHEMA_VERSION))}
+        )
       )`,
     ),
     check(
       'outbox_events_meeting_search_payload_chk',
       sql`(
-        ${table.eventType} <> ${sql.raw(`'${MEETING_SEARCH_REQUESTED_EVENT_TYPE}'`)}
-        OR (
-          ${table.aggregateType} = ${sql.raw(`'${MEETING_SEARCH_AGGREGATE_TYPE}'`)}
+        (
+          ${table.eventType} = ${sql.raw(`'${MEETING_SEARCH_REQUESTED_EVENT_TYPE}'`)}
+          AND ${table.aggregateType} = ${sql.raw(`'${MEETING_SEARCH_AGGREGATE_TYPE}'`)}
+          AND ${table.dedupeKey} = ${sql.raw(`'${OUTBOX_DEDUPE_KEY_DEFAULT}'`)}
           AND ${table.payload} = jsonb_build_object('searchId', ${table.aggregateId}::text)
+        ) OR (
+          ${table.eventType} = ${sql.raw(`'${MEETING_SEARCH_CANDIDATES_REQUESTED_EVENT_TYPE}'`)}
+          AND ${table.aggregateType} = ${sql.raw(`'${MEETING_SEARCH_AGGREGATE_TYPE}'`)}
+          AND ${table.dedupeKey} = ${sql.raw(`'${OUTBOX_DEDUPE_KEY_DEFAULT}'`)}
+          AND ${table.payload} = jsonb_build_object('searchId', ${table.aggregateId}::text)
+        ) OR (
+          ${table.eventType} = ${sql.raw(`'${ROUTING_REQUESTED_EVENT_TYPE}'`)}
+          AND ${table.aggregateType} = ${sql.raw(`'${MEETING_SEARCH_AGGREGATE_TYPE}'`)}
+          AND ${table.dedupeKey} = (${table.payload}->>'routingWorkId')
+          AND (${table.payload}->>'searchId') = ${table.aggregateId}::text
+          AND (${table.payload}->>'routingWorkId') IS NOT NULL
         )
       )`,
     ),
@@ -287,6 +344,146 @@ export const outboxEvents = pgTable(
         (${table.leaseToken} IS NULL AND ${table.leasedUntil} IS NULL)
         OR (${table.leaseToken} IS NOT NULL AND ${table.leasedUntil} IS NOT NULL)
       )`,
+    ),
+  ],
+);
+
+/**
+ * One durable candidate-generation claim per search (Phase 7).
+ */
+export const meetingSearchCandidateGenerations = pgTable(
+  'meeting_search_candidate_generations',
+  {
+    searchId: uuid('search_id')
+      .primaryKey()
+      .notNull()
+      .references(() => meetingSearches.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'),
+    startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }),
+    completedAt: timestamp('completed_at', { withTimezone: true, mode: 'date' }),
+    errorCode: text('error_code'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'meeting_search_candidate_generations_status_chk',
+      sql`${table.status} IN (${sql.raw(candidateGenerationStatusSqlList)})`,
+    ),
+  ],
+);
+
+/**
+ * Deterministic candidate cities for a running search (not final ranking).
+ */
+export const meetingSearchCandidates = pgTable(
+  'meeting_search_candidates',
+  {
+    searchId: uuid('search_id')
+      .notNull()
+      .references(() => meetingSearches.id, { onDelete: 'cascade' }),
+    destinationPlaceId: text('destination_place_id')
+      .notNull()
+      .references(() => places.id, { onDelete: 'restrict' }),
+    ordinal: integer('ordinal').notNull(),
+    distanceMeters: doublePrecision('distance_meters').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'meeting_search_candidates_pk',
+      columns: [table.searchId, table.destinationPlaceId],
+    }),
+    unique('meeting_search_candidates_search_ordinal_uid').on(table.searchId, table.ordinal),
+    check('meeting_search_candidates_ordinal_chk', sql`${table.ordinal} >= 0`),
+    check('meeting_search_candidates_distance_chk', sql`${table.distanceMeters} >= 0`),
+  ],
+);
+
+/**
+ * One routing work item per participant × candidate destination.
+ */
+export const meetingSearchRoutingWork = pgTable(
+  'meeting_search_routing_work',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    searchId: uuid('search_id')
+      .notNull()
+      .references(() => meetingSearches.id, { onDelete: 'cascade' }),
+    participantId: text('participant_id').notNull(),
+    destinationPlaceId: text('destination_place_id').notNull(),
+    status: text('status').notNull().default('pending'),
+    startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }),
+    completedAt: timestamp('completed_at', { withTimezone: true, mode: 'date' }),
+    errorCode: text('error_code'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('meeting_search_routing_work_logical_uid').on(
+      table.searchId,
+      table.participantId,
+      table.destinationPlaceId,
+    ),
+    foreignKey({
+      columns: [table.searchId, table.destinationPlaceId],
+      foreignColumns: [
+        meetingSearchCandidates.searchId,
+        meetingSearchCandidates.destinationPlaceId,
+      ],
+      name: 'meeting_search_routing_work_candidate_fkey',
+    }).onDelete('cascade'),
+    check(
+      'meeting_search_routing_work_status_chk',
+      sql`${table.status} IN (${sql.raw(routingWorkStatusSqlList)})`,
+    ),
+    check(
+      'meeting_search_routing_work_participant_id_length_chk',
+      sql`char_length(${table.participantId}) >= 1 AND char_length(${table.participantId}) <= ${sql.raw(String(PARTICIPANT_ID_MAX_LENGTH))}`,
+    ),
+    index('meeting_search_routing_work_search_status_idx').on(table.searchId, table.status),
+  ],
+);
+
+export type NormalizedJourneyLegJson = {
+  readonly mode: string;
+  readonly departureAt: string;
+  readonly arrivalAt: string;
+  readonly durationMinutes: number;
+  readonly providerReference?: string;
+};
+
+/**
+ * Provider-neutral persisted journeys for Phase 8 ranking (raw Transitous bodies never stored).
+ */
+export const meetingSearchJourneys = pgTable(
+  'meeting_search_journeys',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    routingWorkId: uuid('routing_work_id')
+      .notNull()
+      .references(() => meetingSearchRoutingWork.id, { onDelete: 'cascade' }),
+    journeyOrdinal: integer('journey_ordinal').notNull(),
+    departureAt: timestamp('departure_at', { withTimezone: true, mode: 'date' }).notNull(),
+    arrivalAt: timestamp('arrival_at', { withTimezone: true, mode: 'date' }).notNull(),
+    durationMinutes: integer('duration_minutes').notNull(),
+    transfers: integer('transfers').notNull(),
+    transportModes: text('transport_modes').array().notNull(),
+    legs: jsonb('legs').$type<readonly NormalizedJourneyLegJson[]>().notNull(),
+    providerReference: text('provider_reference'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('meeting_search_journeys_work_ordinal_uid').on(
+      table.routingWorkId,
+      table.journeyOrdinal,
+    ),
+    check('meeting_search_journeys_ordinal_chk', sql`${table.journeyOrdinal} >= 0`),
+    check('meeting_search_journeys_duration_chk', sql`${table.durationMinutes} >= 0`),
+    check('meeting_search_journeys_transfers_chk', sql`${table.transfers} >= 0`),
+    check(
+      'meeting_search_journeys_arrival_after_departure_chk',
+      sql`${table.arrivalAt} >= ${table.departureAt}`,
     ),
   ],
 );

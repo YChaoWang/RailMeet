@@ -64,6 +64,9 @@ describe('workerEnvSchema outbox settings', () => {
       redisCommandTimeoutMs: OUTBOX_DEFAULTS.redisCommandTimeoutMs,
     });
     expect(config.searchJobs.consumerConcurrency).toBe(2);
+    expect(config.searchJobs.candidateConsumerConcurrency).toBe(2);
+    expect(config.searchJobs.routingConsumerConcurrency).toBe(4);
+    expect(config.searchJobs.candidateLimit).toBe(8);
     expect(config.searchJobs.removeOnFailAgeSeconds).toBeGreaterThanOrEqual(
       config.searchJobs.removeOnCompleteAgeSeconds,
     );
@@ -177,6 +180,47 @@ describe('workerEnvSchema search job retry and retention', () => {
         'worker',
       ),
     ).toThrow(ConfigError);
+  });
+
+  it('applies SEARCH_CANDIDATE_LIMIT default of 8', () => {
+    const config = toWorkerConfig(parseWithSchema(workerEnvSchema, { ...validShared }, 'worker'));
+    expect(config.searchJobs.candidateLimit).toBe(8);
+  });
+
+  it('rejects SEARCH_CANDIDATE_LIMIT of zero', () => {
+    expect(() =>
+      parseWithSchema(workerEnvSchema, { ...validShared, SEARCH_CANDIDATE_LIMIT: '0' }, 'worker'),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects SEARCH_CANDIDATE_LIMIT negative values', () => {
+    expect(() =>
+      parseWithSchema(workerEnvSchema, { ...validShared, SEARCH_CANDIDATE_LIMIT: '-1' }, 'worker'),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects SEARCH_CANDIDATE_LIMIT non-integer values', () => {
+    expect(() =>
+      parseWithSchema(workerEnvSchema, { ...validShared, SEARCH_CANDIDATE_LIMIT: '1.5' }, 'worker'),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects SEARCH_CANDIDATE_LIMIT above configured maximum', () => {
+    expect(() =>
+      parseWithSchema(workerEnvSchema, { ...validShared, SEARCH_CANDIDATE_LIMIT: '21' }, 'worker'),
+    ).toThrow(ConfigError);
+  });
+
+  it('accepts SEARCH_CANDIDATE_LIMIT within the configured range', () => {
+    expect(
+      toWorkerConfig(
+        parseWithSchema(
+          workerEnvSchema,
+          { ...validShared, SEARCH_CANDIDATE_LIMIT: '12' },
+          'worker',
+        ),
+      ).searchJobs.candidateLimit,
+    ).toBe(12);
   });
 });
 

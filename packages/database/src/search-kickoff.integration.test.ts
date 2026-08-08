@@ -103,6 +103,14 @@ describe('meeting-search kickoff', () => {
     expect(loaded?.status).toBe('running');
     expect(loaded?.startedAt?.getTime()).toBe(first.startedAt.getTime());
 
+    const generation = await database.searchPipeline.findCandidateGeneration(search.id);
+    expect(generation?.status).toBe('pending');
+    const outbox = await database.outbox.findByAggregateId(search.id);
+    expect(outbox.map((event) => event.eventType).sort()).toEqual([
+      'meeting-search.candidates-requested',
+      'meeting-search.requested',
+    ]);
+
     const second = await database.meetingSearches.tryKickoff(search.id);
     expect(second.outcome).toBe('already_started');
     if (second.outcome !== 'already_started') {
@@ -111,6 +119,7 @@ describe('meeting-search kickoff', () => {
     expect(second.startedAt?.getTime()).toBe(first.startedAt.getTime());
     const again = await database.meetingSearches.findById(search.id);
     expect(again?.startedAt?.getTime()).toBe(first.startedAt.getTime());
+    expect((await database.outbox.findByAggregateId(search.id)).length).toBe(2);
   });
 
   it('does not reopen completed or failed searches', async () => {

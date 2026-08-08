@@ -22,6 +22,7 @@ describe('worker dispatcher lifecycle smoke', () => {
       outbox,
       publisher: {
         publishMeetingSearchRequested: vi.fn(),
+        publishMappedJob: vi.fn(),
         close: vi.fn(),
       },
       logger: createLogger({ name: 'worker-smoke', level: 'silent', pretty: false }),

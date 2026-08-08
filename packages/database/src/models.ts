@@ -1,10 +1,10 @@
 import type { PlaceKind, RankingMode, SearchStatus, TransportMode } from '@railmeet/shared';
 
-import type {
-  MeetingSearchRequestedPayload,
-  OutboxAggregateType,
-  OutboxEventType,
-} from './outbox.js';
+import type { OutboxAggregateType, OutboxEventType, OutboxPayload } from './outbox.js';
+
+export type CandidateGenerationStatus = 'pending' | 'running' | 'succeeded' | 'failed_permanent';
+
+export type RoutingWorkStatus = 'pending' | 'running' | 'succeeded' | 'no_journeys' | 'exhausted';
 
 /** Geographic point using PostGIS convention: x = longitude, y = latitude (SRID 4326). */
 export type GeoPoint = {
@@ -123,7 +123,8 @@ export type OutboxEventRecord = {
   readonly aggregateType: OutboxAggregateType;
   readonly aggregateId: string;
   readonly schemaVersion: number;
-  readonly payload: MeetingSearchRequestedPayload;
+  readonly dedupeKey: string;
+  readonly payload: OutboxPayload;
   readonly createdAt: Date;
   readonly publishedAt: Date | null;
   readonly failureCount: number;
@@ -132,6 +133,75 @@ export type OutboxEventRecord = {
   readonly leasedUntil: Date | null;
   readonly lastErrorCode: string | null;
   readonly deadLetteredAt: Date | null;
+};
+
+export type CandidateGenerationRecord = {
+  readonly searchId: string;
+  readonly status: CandidateGenerationStatus;
+  readonly startedAt: Date | null;
+  readonly completedAt: Date | null;
+  readonly errorCode: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+};
+
+export type MeetingSearchCandidateRecord = {
+  readonly searchId: string;
+  readonly destinationPlaceId: string;
+  readonly ordinal: number;
+  readonly distanceMeters: number;
+  readonly createdAt: Date;
+};
+
+export type NearestCityCandidate = {
+  readonly placeId: string;
+  readonly distanceMeters: number;
+};
+
+export type RoutingWorkRecord = {
+  readonly id: string;
+  readonly searchId: string;
+  readonly participantId: string;
+  readonly destinationPlaceId: string;
+  readonly status: RoutingWorkStatus;
+  readonly startedAt: Date | null;
+  readonly completedAt: Date | null;
+  readonly errorCode: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+};
+
+export type PersistedJourneyLeg = {
+  readonly mode: string;
+  readonly departureAt: Date;
+  readonly arrivalAt: Date;
+  readonly durationMinutes: number;
+  readonly providerReference?: string;
+};
+
+export type PersistedJourneyRecord = {
+  readonly id: string;
+  readonly routingWorkId: string;
+  readonly journeyOrdinal: number;
+  readonly departureAt: Date;
+  readonly arrivalAt: Date;
+  readonly durationMinutes: number;
+  readonly transfers: number;
+  readonly transportModes: readonly string[];
+  readonly legs: readonly PersistedJourneyLeg[];
+  readonly providerReference: string | null;
+  readonly createdAt: Date;
+};
+
+export type PersistJourneyInput = {
+  readonly journeyOrdinal: number;
+  readonly departureAt: Date;
+  readonly arrivalAt: Date;
+  readonly durationMinutes: number;
+  readonly transfers: number;
+  readonly transportModes: readonly string[];
+  readonly legs: readonly PersistedJourneyLeg[];
+  readonly providerReference?: string;
 };
 
 export type ClaimOutboxEventsCommand = {

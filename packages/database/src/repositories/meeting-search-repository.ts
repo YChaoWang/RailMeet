@@ -19,11 +19,15 @@ import type {
 } from '../models.js';
 import {
   MEETING_SEARCH_AGGREGATE_TYPE,
+  MEETING_SEARCH_CANDIDATES_REQUESTED_EVENT_TYPE,
+  MEETING_SEARCH_CANDIDATES_REQUESTED_SCHEMA_VERSION,
   MEETING_SEARCH_REQUESTED_EVENT_TYPE,
   MEETING_SEARCH_REQUESTED_SCHEMA_VERSION,
+  OUTBOX_DEDUPE_KEY_DEFAULT,
 } from '../outbox.js';
 import {
   meetingSearchAllowedCountries,
+  meetingSearchCandidateGenerations,
   meetingSearchParticipants,
   meetingSearchTransportModes,
   meetingSearches,
@@ -228,6 +232,7 @@ export function createMeetingSearchRepository(db: Db): MeetingSearchRepository {
           aggregateType: MEETING_SEARCH_AGGREGATE_TYPE,
           aggregateId: search.id,
           schemaVersion: MEETING_SEARCH_REQUESTED_SCHEMA_VERSION,
+          dedupeKey: OUTBOX_DEDUPE_KEY_DEFAULT,
           payload: { searchId: search.id },
         });
 
@@ -246,53 +251,69 @@ export function createMeetingSearchRepository(db: Db): MeetingSearchRepository {
     },
 
     async tryKickoff(searchId) {
-      const updated = await db
-        .update(meetingSearches)
-        .set({
-          status: 'running',
-          startedAt: sql`coalesce(${meetingSearches.startedAt}, now())`,
-          updatedAt: sql`now()`,
-        })
-        .where(sql`${meetingSearches.id} = ${searchId} AND ${meetingSearches.status} = 'queued'`)
-        .returning({
-          id: meetingSearches.id,
-          startedAt: meetingSearches.startedAt,
-        });
+      return db.transaction(async (tx) => {
+        const updated = await tx
+          .update(meetingSearches)
+          .set({
+            status: 'running',
+            startedAt: sql`coalesce(${meetingSearches.startedAt}, now())`,
+            updatedAt: sql`now()`,
+          })
+          .where(sql`${meetingSearches.id} = ${searchId} AND ${meetingSearches.status} = 'queued'`)
+          .returning({
+            id: meetingSearches.id,
+            startedAt: meetingSearches.startedAt,
+          });
 
-      if (updated.length > 0) {
-        const startedAt = updated[0]!.startedAt;
-        if (!startedAt) {
-          throw new Error('Kickoff updated search without started_at');
+        if (updated.length > 0) {
+          const startedAt = updated[0]!.startedAt;
+          if (!startedAt) {
+            throw new Error('Kickoff updated search without started_at');
+          }
+
+          await tx.insert(meetingSearchCandidateGenerations).values({
+            searchId,
+            status: 'pending',
+          });
+
+          await tx.insert(outboxEvents).values({
+            eventType: MEETING_SEARCH_CANDIDATES_REQUESTED_EVENT_TYPE,
+            aggregateType: MEETING_SEARCH_AGGREGATE_TYPE,
+            aggregateId: searchId,
+            schemaVersion: MEETING_SEARCH_CANDIDATES_REQUESTED_SCHEMA_VERSION,
+            dedupeKey: OUTBOX_DEDUPE_KEY_DEFAULT,
+            payload: { searchId },
+          });
+
+          return { outcome: 'started' as const, searchId, startedAt };
         }
-        return { outcome: 'started', searchId, startedAt };
-      }
 
-      const current = await loadMeetingSearchAggregate(db, searchId);
-      if (!current) {
-        return { outcome: 'not_found', searchId };
-      }
-      if (current.status === 'running') {
+        const current = await loadMeetingSearchAggregate(tx, searchId);
+        if (!current) {
+          return { outcome: 'not_found' as const, searchId };
+        }
+        if (current.status === 'running') {
+          return {
+            outcome: 'already_started' as const,
+            searchId,
+            startedAt: current.startedAt,
+          };
+        }
+        if (TERMINAL_KICKOFF_STATUSES.has(current.status)) {
+          return {
+            outcome: 'already_terminal' as const,
+            searchId,
+            status: current.status,
+            startedAt: current.startedAt,
+          };
+        }
         return {
-          outcome: 'already_started',
-          searchId,
-          startedAt: current.startedAt,
-        };
-      }
-      if (TERMINAL_KICKOFF_STATUSES.has(current.status)) {
-        return {
-          outcome: 'already_terminal',
+          outcome: 'already_terminal' as const,
           searchId,
           status: current.status,
           startedAt: current.startedAt,
         };
-      }
-      // Unexpected non-queued / non-running / non-terminal status — treat as terminal no-op.
-      return {
-        outcome: 'already_terminal',
-        searchId,
-        status: current.status,
-        startedAt: current.startedAt,
-      };
+      });
     },
 
     async updateStatusIf(searchId, expectedStatuses, nextStatus) {
