@@ -9,15 +9,15 @@ railmeet/
 ├── apps/
 │   ├── web/           # Next.js UI (talks only to the API)
 │   ├── api/           # Fastify HTTP API
-│   └── worker/        # Outbox dispatcher composition root (no BullMQ consumer yet)
+│   └── worker/        # Outbox dispatcher + BullMQ kickoff consumer
 ├── packages/
 │   ├── shared/        # Domain vocabulary — no Zod, no infrastructure
 │   ├── validation/    # Zod boundary schemas
 │   ├── database/      # Drizzle + PostGIS + outbox claim APIs
-│   ├── queue/         # BullMQ producer + outbox dispatcher loop
+│   ├── queue/         # BullMQ producer, dispatcher, kickoff consumer
 │   ├── config/        # Validated environment loaders
 │   ├── observability/ # Structured logging (Pino)
-│   ├── routing/       # Routing provider adapters (stub)
+│   ├── routing/       # Provider-neutral journey planning + Transitous
 │   └── search-engine/ # Pruning / scoring / ranking (stub)
 ├── docs/
 ├── docker-compose.yml # PostgreSQL+PostGIS and Redis
@@ -33,11 +33,12 @@ packages/validation
 packages/database
     ↑
 packages/queue          # depends on database + observability; not Fastify
+packages/routing        # Transitous adapter; no database/BullMQ imports
     ↑
 apps/api · apps/web · apps/worker
 ```
 
-`apps/api` must not import `@railmeet/queue`, BullMQ, or Redis clients.
+`apps/api` must not import `@railmeet/queue`, `@railmeet/routing`, BullMQ, Redis, or Transitous.
 
 Rules:
 
@@ -56,14 +57,14 @@ Rules:
 | ---------- | ------------------------------------------------------------------------------------------ |
 | **web**    | UI only. Never touches PostgreSQL, Redis, BullMQ, or Transitous.                           |
 | **api**    | Validates requests, creates searches, returns status. Thin handlers over application code. |
-| **worker** | Outbox → BullMQ dispatcher. No job consumer yet.                                           |
+| **worker** | Outbox → BullMQ publish + kickoff consumer (`queued` → `running`).                         |
 
 ## Runtime lifecycle
 
 - `buildServer()` / `buildWorker()` construct without listening as a side effect.
 - Database and Redis clients are created explicitly in entrypoints.
 - API `app.close()` awaits database pool shutdown when registered.
-- Worker shutdown: stop dispatcher → close queue → close Redis → close database.
+- Worker shutdown: close BullMQ consumer → stop dispatcher → close queue → close Redis → close database.
 - Config is loaded via `@railmeet/config` — route and repository modules must not read
   `process.env` directly.
 

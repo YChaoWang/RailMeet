@@ -19,7 +19,7 @@ const validShared = {
   DATABASE_URL: 'postgresql://railmeet:railmeet@localhost:5432/railmeet',
   REDIS_URL: 'redis://localhost:6379',
   API_BASE_URL: 'http://localhost:3001',
-  TRANSITOUS_BASE_URL: 'https://api.transitous.org',
+  TRANSITOUS_BASE_URL: 'https://api.transitous.org/api',
 } as const;
 
 describe('apiEnvSchema', () => {
@@ -63,6 +63,11 @@ describe('workerEnvSchema outbox settings', () => {
       publishConcurrency: OUTBOX_DEFAULTS.publishConcurrency,
       redisCommandTimeoutMs: OUTBOX_DEFAULTS.redisCommandTimeoutMs,
     });
+    expect(config.searchJobs.consumerConcurrency).toBe(2);
+    expect(config.searchJobs.removeOnFailAgeSeconds).toBeGreaterThanOrEqual(
+      config.searchJobs.removeOnCompleteAgeSeconds,
+    );
+    expect(config.transitous.userAgent).toMatch(/RailMeet\//);
   });
 
   it('accepts overrides within bounds', () => {
@@ -113,6 +118,65 @@ describe('workerEnvSchema outbox settings', () => {
         perEventSafetyMs: 2_000,
       }),
     ).toBe(28_000);
+  });
+});
+
+describe('workerEnvSchema search job retry and retention', () => {
+  it('applies search job defaults including backoff jitter and fail>=complete retention', () => {
+    const config = toWorkerConfig(parseWithSchema(workerEnvSchema, { ...validShared }, 'worker'));
+    expect(config.searchJobs.attempts).toBe(5);
+    expect(config.searchJobs.backoffDelayMs).toBe(2_000);
+    expect(config.searchJobs.backoffJitter).toBe(0.2);
+    expect(config.searchJobs.removeOnFailAgeSeconds).toBeGreaterThanOrEqual(
+      config.searchJobs.removeOnCompleteAgeSeconds,
+    );
+    expect(config.searchJobs.removeOnFailCount).toBeGreaterThanOrEqual(
+      config.searchJobs.removeOnCompleteCount,
+    );
+    expect(config.searchJobs.removeOnCompleteAgeSeconds).toBeGreaterThan(0);
+    expect(config.searchJobs.removeOnCompleteCount).toBeGreaterThan(0);
+  });
+
+  it('rejects invalid attempts, backoff, jitter, and retention combinations', () => {
+    const cases: Array<Record<string, string>> = [
+      { SEARCH_JOB_ATTEMPTS: '0' },
+      { SEARCH_JOB_ATTEMPTS: '-1' },
+      { SEARCH_JOB_ATTEMPTS: '1.5' },
+      { SEARCH_JOB_ATTEMPTS: '21' },
+      { SEARCH_JOB_BACKOFF_DELAY_MS: '0' },
+      { SEARCH_JOB_BACKOFF_DELAY_MS: '-10' },
+      { SEARCH_JOB_BACKOFF_JITTER: '-0.1' },
+      { SEARCH_JOB_BACKOFF_JITTER: '1.1' },
+      { SEARCH_JOB_REMOVE_ON_COMPLETE_AGE_SECONDS: '0' },
+      { SEARCH_JOB_REMOVE_ON_COMPLETE_COUNT: '0' },
+      { SEARCH_JOB_REMOVE_ON_FAIL_AGE_SECONDS: '0' },
+      { SEARCH_JOB_REMOVE_ON_FAIL_COUNT: '0' },
+      {
+        SEARCH_JOB_REMOVE_ON_COMPLETE_AGE_SECONDS: '3600',
+        SEARCH_JOB_REMOVE_ON_FAIL_AGE_SECONDS: '1800',
+      },
+      {
+        SEARCH_JOB_REMOVE_ON_COMPLETE_COUNT: '1000',
+        SEARCH_JOB_REMOVE_ON_FAIL_COUNT: '100',
+      },
+      { SEARCH_JOB_BACKOFF_DELAY_MS: 'Infinity' },
+    ];
+
+    for (const override of cases) {
+      expect(() =>
+        parseWithSchema(workerEnvSchema, { ...validShared, ...override }, 'worker'),
+      ).toThrow(ConfigError);
+    }
+  });
+
+  it('rejects a non-identifying Transitous User-Agent', () => {
+    expect(() =>
+      parseWithSchema(
+        workerEnvSchema,
+        { ...validShared, TRANSITOUS_USER_AGENT: 'curl/8.0' },
+        'worker',
+      ),
+    ).toThrow(ConfigError);
   });
 });
 

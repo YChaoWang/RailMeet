@@ -1,0 +1,1 @@
+ALTER TABLE "meeting_searches" ADD COLUMN "started_at" timestamp with time zone;

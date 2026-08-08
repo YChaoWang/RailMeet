@@ -15,11 +15,20 @@ import {
   workerEnvSchema,
 } from './schema.js';
 
-export type { ApiConfig, OutboxDispatcherSettings, WebConfig, WorkerConfig } from './schema.js';
+export type {
+  ApiConfig,
+  OutboxDispatcherSettings,
+  SearchJobSettings,
+  TransitousClientSettings,
+  WebConfig,
+  WorkerConfig,
+} from './schema.js';
 export {
   apiEnvSchema,
   ConfigError,
   OUTBOX_DEFAULTS,
+  SEARCH_JOB_DEFAULTS,
+  TRANSITOUS_DEFAULTS,
   minimumOutboxLeaseMs,
   parseWithSchema,
   sharedEnvSchema,

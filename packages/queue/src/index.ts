@@ -25,6 +25,27 @@ export {
   type PublishResult,
 } from './publisher.js';
 
+export {
+  buildMeetingSearchJobOptions,
+  type MeetingSearchJobRetentionOptions,
+} from './job-options.js';
+
+export {
+  validateMeetingSearchRequestedJob,
+  type JobValidationFailureCode,
+  type JobValidationResult,
+} from './job-validation.js';
+
+export {
+  createMeetingSearchConsumer,
+  UnrecoverableError,
+  type CreateMeetingSearchConsumerOptions,
+  type MeetingSearchConsumer,
+  type MeetingSearchKickoffJobResult,
+  type MeetingSearchKickoffProcessor,
+  type MeetingSearchKickoffTransition,
+} from './consumer.js';
+
 export { createRedisConnection, closeRedisConnection } from './redis.js';
 
 export {

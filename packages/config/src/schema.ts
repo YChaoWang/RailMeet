@@ -35,6 +35,28 @@ export const OUTBOX_DEFAULTS = {
   perEventSafetyMs: 2_000,
 } as const;
 
+/** BullMQ consumer + job retention defaults (new jobs only; Phase 5 jobs keep prior options). */
+export const SEARCH_JOB_DEFAULTS = {
+  consumerConcurrency: 2,
+  attempts: 5,
+  backoffDelayMs: 2_000,
+  /** BullMQ BackoffOptions.jitter fraction (0–1). */
+  backoffJitter: 0.2,
+  removeOnCompleteAgeSeconds: 3_600,
+  removeOnCompleteCount: 1_000,
+  removeOnFailAgeSeconds: 86_400,
+  removeOnFailCount: 5_000,
+  shutdownTimeoutMs: 30_000,
+} as const;
+
+export const TRANSITOUS_DEFAULTS = {
+  /** Official public MOTIS 2 API root (includes `/api`). */
+  baseUrl: 'https://api.transitous.org/api',
+  timeoutMs: 10_000,
+  maxResponseBytes: 1_048_576,
+  userAgent: 'RailMeet/0.0.0 (+https://github.com/example/railmeet)',
+} as const;
+
 /**
  * Minimum lease duration so the last event in a claimed batch cannot outlive its lease
  * while this dispatcher is still processing the batch with bounded concurrency.
@@ -63,13 +85,22 @@ const positiveInt = (min: number, max: number, label: string) =>
     .min(min, { message: `${label} must be at least ${min}` })
     .max(max, { message: `${label} must be at most ${max}` });
 
+const transitousUserAgentSchema = z
+  .string()
+  .min(8)
+  .max(200)
+  .refine((value) => /RailMeet\//i.test(value) && /\+https?:\/\//i.test(value), {
+    message:
+      'TRANSITOUS_USER_AGENT must identify the app (RailMeet/<version>) and include a contact URL (+https://...)',
+  });
+
 export const sharedEnvSchema = z.object({
   NODE_ENV: nodeEnvSchema,
   LOG_LEVEL: logLevelSchema.default('info'),
   DATABASE_URL: postgresUrlSchema,
   REDIS_URL: redisUrlSchema,
   API_BASE_URL: z.string().url(),
-  TRANSITOUS_BASE_URL: z.string().url(),
+  TRANSITOUS_BASE_URL: z.string().url().default(TRANSITOUS_DEFAULTS.baseUrl),
 });
 
 export const apiEnvSchema = sharedEnvSchema.extend({
@@ -95,6 +126,52 @@ export const workerEnvSchema = sharedEnvSchema
     OUTBOX_PUBLISH_CONCURRENCY: positiveInt(1, 20, 'OUTBOX_PUBLISH_CONCURRENCY').default(
       OUTBOX_DEFAULTS.publishConcurrency,
     ),
+    SEARCH_CONSUMER_CONCURRENCY: positiveInt(1, 20, 'SEARCH_CONSUMER_CONCURRENCY').default(
+      SEARCH_JOB_DEFAULTS.consumerConcurrency,
+    ),
+    SEARCH_JOB_ATTEMPTS: positiveInt(1, 20, 'SEARCH_JOB_ATTEMPTS').default(
+      SEARCH_JOB_DEFAULTS.attempts,
+    ),
+    SEARCH_JOB_BACKOFF_DELAY_MS: positiveInt(100, 60_000, 'SEARCH_JOB_BACKOFF_DELAY_MS').default(
+      SEARCH_JOB_DEFAULTS.backoffDelayMs,
+    ),
+    SEARCH_JOB_BACKOFF_JITTER: z.coerce
+      .number({ invalid_type_error: 'SEARCH_JOB_BACKOFF_JITTER must be a number' })
+      .min(0, { message: 'SEARCH_JOB_BACKOFF_JITTER must be at least 0' })
+      .max(1, { message: 'SEARCH_JOB_BACKOFF_JITTER must be at most 1' })
+      .default(SEARCH_JOB_DEFAULTS.backoffJitter),
+    SEARCH_JOB_REMOVE_ON_COMPLETE_AGE_SECONDS: positiveInt(
+      60,
+      30 * 86_400,
+      'SEARCH_JOB_REMOVE_ON_COMPLETE_AGE_SECONDS',
+    ).default(SEARCH_JOB_DEFAULTS.removeOnCompleteAgeSeconds),
+    SEARCH_JOB_REMOVE_ON_COMPLETE_COUNT: positiveInt(
+      1,
+      100_000,
+      'SEARCH_JOB_REMOVE_ON_COMPLETE_COUNT',
+    ).default(SEARCH_JOB_DEFAULTS.removeOnCompleteCount),
+    SEARCH_JOB_REMOVE_ON_FAIL_AGE_SECONDS: positiveInt(
+      60,
+      30 * 86_400,
+      'SEARCH_JOB_REMOVE_ON_FAIL_AGE_SECONDS',
+    ).default(SEARCH_JOB_DEFAULTS.removeOnFailAgeSeconds),
+    SEARCH_JOB_REMOVE_ON_FAIL_COUNT: positiveInt(
+      1,
+      100_000,
+      'SEARCH_JOB_REMOVE_ON_FAIL_COUNT',
+    ).default(SEARCH_JOB_DEFAULTS.removeOnFailCount),
+    WORKER_SHUTDOWN_TIMEOUT_MS: positiveInt(1_000, 300_000, 'WORKER_SHUTDOWN_TIMEOUT_MS').default(
+      SEARCH_JOB_DEFAULTS.shutdownTimeoutMs,
+    ),
+    TRANSITOUS_USER_AGENT: transitousUserAgentSchema.default(TRANSITOUS_DEFAULTS.userAgent),
+    TRANSITOUS_TIMEOUT_MS: positiveInt(500, 60_000, 'TRANSITOUS_TIMEOUT_MS').default(
+      TRANSITOUS_DEFAULTS.timeoutMs,
+    ),
+    TRANSITOUS_MAX_RESPONSE_BYTES: positiveInt(
+      4_096,
+      10 * 1_048_576,
+      'TRANSITOUS_MAX_RESPONSE_BYTES',
+    ).default(TRANSITOUS_DEFAULTS.maxResponseBytes),
   })
   .superRefine((env, ctx) => {
     const minimumLease = minimumOutboxLeaseMs({
@@ -115,6 +192,20 @@ export const workerEnvSchema = sharedEnvSchema
         code: z.ZodIssueCode.custom,
         path: ['OUTBOX_RETRY_MAX_MS'],
         message: 'OUTBOX_RETRY_MAX_MS must be >= OUTBOX_RETRY_BASE_MS',
+      });
+    }
+    if (env.SEARCH_JOB_REMOVE_ON_FAIL_AGE_SECONDS < env.SEARCH_JOB_REMOVE_ON_COMPLETE_AGE_SECONDS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SEARCH_JOB_REMOVE_ON_FAIL_AGE_SECONDS'],
+        message: 'Failed job retention age must be >= completed job retention age',
+      });
+    }
+    if (env.SEARCH_JOB_REMOVE_ON_FAIL_COUNT < env.SEARCH_JOB_REMOVE_ON_COMPLETE_COUNT) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SEARCH_JOB_REMOVE_ON_FAIL_COUNT'],
+        message: 'Failed job retention count must be >= completed job retention count',
       });
     }
   });
@@ -152,6 +243,25 @@ export type OutboxDispatcherSettings = {
   redisCommandTimeoutMs: number;
 };
 
+export type SearchJobSettings = {
+  consumerConcurrency: number;
+  attempts: number;
+  backoffDelayMs: number;
+  backoffJitter: number;
+  removeOnCompleteAgeSeconds: number;
+  removeOnCompleteCount: number;
+  removeOnFailAgeSeconds: number;
+  removeOnFailCount: number;
+  shutdownTimeoutMs: number;
+};
+
+export type TransitousClientSettings = {
+  baseUrl: string;
+  userAgent: string;
+  timeoutMs: number;
+  maxResponseBytes: number;
+};
+
 export type WorkerConfig = {
   nodeEnv: WorkerEnv['NODE_ENV'];
   logLevel: WorkerEnv['LOG_LEVEL'];
@@ -160,6 +270,8 @@ export type WorkerConfig = {
   apiBaseUrl: string;
   transitousBaseUrl: string;
   outbox: OutboxDispatcherSettings;
+  searchJobs: SearchJobSettings;
+  transitous: TransitousClientSettings;
 };
 
 export type WebConfig = {
@@ -227,6 +339,23 @@ export function toWorkerConfig(env: WorkerEnv): WorkerConfig {
       retryMaxMs: env.OUTBOX_RETRY_MAX_MS,
       publishConcurrency: env.OUTBOX_PUBLISH_CONCURRENCY,
       redisCommandTimeoutMs: OUTBOX_DEFAULTS.redisCommandTimeoutMs,
+    },
+    searchJobs: {
+      consumerConcurrency: env.SEARCH_CONSUMER_CONCURRENCY,
+      attempts: env.SEARCH_JOB_ATTEMPTS,
+      backoffDelayMs: env.SEARCH_JOB_BACKOFF_DELAY_MS,
+      backoffJitter: env.SEARCH_JOB_BACKOFF_JITTER,
+      removeOnCompleteAgeSeconds: env.SEARCH_JOB_REMOVE_ON_COMPLETE_AGE_SECONDS,
+      removeOnCompleteCount: env.SEARCH_JOB_REMOVE_ON_COMPLETE_COUNT,
+      removeOnFailAgeSeconds: env.SEARCH_JOB_REMOVE_ON_FAIL_AGE_SECONDS,
+      removeOnFailCount: env.SEARCH_JOB_REMOVE_ON_FAIL_COUNT,
+      shutdownTimeoutMs: env.WORKER_SHUTDOWN_TIMEOUT_MS,
+    },
+    transitous: {
+      baseUrl: env.TRANSITOUS_BASE_URL,
+      userAgent: env.TRANSITOUS_USER_AGENT,
+      timeoutMs: env.TRANSITOUS_TIMEOUT_MS,
+      maxResponseBytes: env.TRANSITOUS_MAX_RESPONSE_BYTES,
     },
   };
 }

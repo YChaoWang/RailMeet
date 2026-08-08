@@ -16,7 +16,8 @@
     "@railmeet/config": "workspace:*",
     "@railmeet/database": "workspace:^",
     "@railmeet/observability": "workspace:*",
-    "@railmeet/queue": "workspace:^"
+    "@railmeet/queue": "workspace:^",
+    "@railmeet/routing": "workspace:^"
   },
   "devDependencies": {
     "tsx": "^4.20.3",

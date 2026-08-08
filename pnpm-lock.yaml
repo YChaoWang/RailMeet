@@ -130,6 +130,9 @@ importers:
       '@railmeet/queue':
         specifier: workspace:^
         version: link:../../packages/queue
+      '@railmeet/routing':
+        specifier: workspace:^
+        version: link:../../packages/routing
     devDependencies:
       tsx:
         specifier: ^4.20.3
@@ -233,6 +236,16 @@ importers:
         version: 3.2.7(@types/node@22.20.1)(jiti@1.21.7)(tsx@4.23.11)(yaml@2.9.0)
 
   packages/routing:
+    dependencies:
+      '@railmeet/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@railmeet/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.9.3

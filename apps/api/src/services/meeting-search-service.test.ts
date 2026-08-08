@@ -49,6 +49,7 @@ describe('meeting-search service', () => {
         participants: [],
         allowedTransportModes: ['train'],
         allowedCountryCodes: [],
+        startedAt: null,
         createdAt: new Date('2026-06-01T12:00:00.000Z'),
         updatedAt: new Date('2026-06-01T12:00:00.000Z'),
       },

@@ -29,6 +29,16 @@
       "cache": false,
       "passThroughEnv": ["DOCKER_HOST", "TESTCONTAINERS_*"]
     },
+    "test:integration:transitous": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "passThroughEnv": [
+        "TRANSITOUS_BASE_URL",
+        "TRANSITOUS_USER_AGENT",
+        "DOCKER_HOST",
+        "TESTCONTAINERS_*"
+      ]
+    },
     "db:generate": {
       "cache": false
     },

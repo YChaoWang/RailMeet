@@ -29,8 +29,12 @@ Recovery reclaims the expired lease, calls `add()` with the same job ID (no-op d
 then marks published. Custom job IDs prevent duplicate enqueue **only while the prior job
 still exists**. Worker-level idempotency is required before any auto-removal policy.
 
-Jobs are retained in this phase (`removeOnComplete/Fail: false`). A later phase must choose
-bounded retention together with consumer idempotency.
+Phase 6 introduces bounded producer-side retention for **new** jobs (`attempts`, exponential
+backoff with jitter, `removeOnComplete` / `removeOnFail` age+count). Existing Phase 5 jobs
+retain their original unbounded retention options and may remain indefinitely unless
+explicitly cleaned up. Phase 6 does not automatically delete or migrate those jobs. After
+removal, the same deterministic job ID may be added again; PostgreSQL kickoff idempotency
+preserves correctness (at-least-once delivery with an idempotent state transition).
 
 ### Leasing
 
@@ -74,8 +78,8 @@ The Fastify API does not import BullMQ/Redis. `POST /api/v1/meeting-searches` re
 
 ### Status meaning
 
-After successful publication the meeting search remains `queued` — durably accepted and
-waiting in BullMQ. No consumer runs yet; status does not become `running`.
+After successful publication the meeting search remains `queued` until the Phase 6 kickoff
+consumer transitions it to `running`. See [search-kickoff-and-routing.md](./search-kickoff-and-routing.md).
 
 ## Local worker
 

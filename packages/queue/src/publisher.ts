@@ -6,6 +6,10 @@ import {
   MEETING_SEARCHES_QUEUE_NAME,
   type MeetingSearchRequestedJobData,
 } from './contract.js';
+import {
+  buildMeetingSearchJobOptions,
+  type MeetingSearchJobRetentionOptions,
+} from './job-options.js';
 
 export type PublishMeetingSearchRequestedInput = {
   readonly jobId: string;
@@ -27,6 +31,7 @@ export type MeetingSearchQueuePublisher = {
 
 export type CreateMeetingSearchQueuePublisherOptions = {
   readonly connection: Redis;
+  readonly jobOptions: MeetingSearchJobRetentionOptions;
   /** Optional override for tests. */
   readonly queueName?: string;
 };
@@ -78,8 +83,7 @@ export class QueueTransientError extends Error {
  *
  * Uses `queue.add()` with a deterministic job ID only — no check-then-add race.
  * An already-existing job ID is treated as successful delivery (at-least-once recovery).
- * Jobs are retained so deduplication survives dispatcher restarts until Phase 6 chooses
- * a retention policy with worker-level idempotency.
+ * New jobs use bounded retries and retention; Phase 5 retained jobs keep prior options.
  */
 export function createMeetingSearchQueuePublisher(
   options: CreateMeetingSearchQueuePublisherOptions,
@@ -87,10 +91,7 @@ export function createMeetingSearchQueuePublisher(
   const queueName = options.queueName ?? MEETING_SEARCHES_QUEUE_NAME;
   const queue = new Queue<MeetingSearchRequestedJobData>(queueName, {
     connection: options.connection,
-    defaultJobOptions: {
-      removeOnComplete: false,
-      removeOnFail: false,
-    },
+    defaultJobOptions: buildMeetingSearchJobOptions(options.jobOptions),
   });
 
   queue.on('error', () => undefined);

@@ -83,6 +83,8 @@ export type MeetingSearchRecord = {
   readonly allowedTransportModes: readonly TransportMode[];
   /** Empty array means no country restriction. */
   readonly allowedCountryCodes: readonly string[];
+  /** Set once on first queued→running kickoff; null while still queued. */
+  readonly startedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
@@ -91,6 +93,29 @@ export type ConditionalStatusUpdateResult =
   | { readonly outcome: 'updated'; readonly search: MeetingSearchRecord }
   | { readonly outcome: 'not_found' }
   | { readonly outcome: 'conflict'; readonly currentStatus: SearchStatus };
+
+/**
+ * Idempotent Phase 6 kickoff result for queued → running.
+ * Does not reopen terminal searches and never resets startedAt.
+ */
+export type SearchKickoffResult =
+  | {
+      readonly outcome: 'started';
+      readonly searchId: string;
+      readonly startedAt: Date;
+    }
+  | {
+      readonly outcome: 'already_started';
+      readonly searchId: string;
+      readonly startedAt: Date | null;
+    }
+  | {
+      readonly outcome: 'already_terminal';
+      readonly searchId: string;
+      readonly status: SearchStatus;
+      readonly startedAt: Date | null;
+    }
+  | { readonly outcome: 'not_found'; readonly searchId: string };
 
 export type OutboxEventRecord = {
   readonly id: string;

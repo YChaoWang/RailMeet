@@ -109,6 +109,11 @@ export const meetingSearches = pgTable(
     maxTransfers: integer('max_transfers').notNull(),
     minTransferDurationMinutes: integer('min_transfer_duration_minutes').notNull(),
     rankingMode: text('ranking_mode').notNull(),
+    /**
+     * Set once when the search first transitions queued → running.
+     * Never updated on duplicate kickoff deliveries.
+     */
+    startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },

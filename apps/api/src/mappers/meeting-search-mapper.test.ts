@@ -76,6 +76,7 @@ describe('meeting-search mapper', () => {
       ],
       allowedTransportModes: ['train'],
       allowedCountryCodes: ['DE'],
+      startedAt: null,
       createdAt: new Date('2026-06-01T10:00:00.000Z'),
       updatedAt: new Date('2026-06-01T10:00:00.000Z'),
     };

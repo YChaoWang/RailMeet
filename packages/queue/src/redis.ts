@@ -2,8 +2,11 @@ import { Redis } from 'ioredis';
 
 export type CreateRedisConnectionOptions = {
   readonly url: string;
-  /** Bound Redis command retries so enqueue failures surface for outbox retry. */
-  readonly maxRetriesPerRequest?: number;
+  /**
+   * Bound Redis command retries so enqueue failures surface for outbox retry.
+   * Pass `null` for BullMQ Worker connections (required by BullMQ blocking commands).
+   */
+  readonly maxRetriesPerRequest?: number | null;
   readonly connectTimeoutMs?: number;
   readonly commandTimeoutMs?: number;
   /** When false (default), commands fail immediately if the connection is down. */
@@ -19,7 +22,8 @@ export type CreateRedisConnectionOptions = {
  */
 export function createRedisConnection(options: CreateRedisConnectionOptions): Redis {
   const redis = new Redis(options.url, {
-    maxRetriesPerRequest: options.maxRetriesPerRequest ?? 1,
+    maxRetriesPerRequest:
+      options.maxRetriesPerRequest === undefined ? 1 : options.maxRetriesPerRequest,
     connectTimeout: options.connectTimeoutMs ?? 5_000,
     commandTimeout: options.commandTimeoutMs ?? 5_000,
     enableReadyCheck: true,

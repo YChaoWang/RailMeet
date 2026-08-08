@@ -13,6 +13,7 @@
     "test": "turbo run test",
     "test:integration": "pnpm --filter @railmeet/database test:integration",
     "test:integration:queue": "pnpm --filter @railmeet/queue test:integration",
+    "test:integration:transitous": "pnpm --filter @railmeet/routing test:integration:transitous",
     "worker:dev": "pnpm --filter @railmeet/worker dev",
     "worker:start": "pnpm --filter @railmeet/worker start",
     "format": "prettier --write .",

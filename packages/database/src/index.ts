@@ -40,6 +40,7 @@ export type {
   MeetingSearchRecord,
   OutboxEventRecord,
   PlaceRecord,
+  SearchKickoffResult,
 } from './models.js';
 
 export type { MeetingSearchRepository } from './repositories/meeting-search-repository.js';

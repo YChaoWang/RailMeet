@@ -17,8 +17,14 @@
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --config vitest.config.ts",
+    "test:integration:transitous": "vitest run --config vitest.live.config.ts",
     "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@railmeet/observability": "workspace:*",
+    "@railmeet/shared": "workspace:*",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

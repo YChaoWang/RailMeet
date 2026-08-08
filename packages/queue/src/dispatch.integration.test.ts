@@ -20,6 +20,16 @@ import { createMeetingSearchQueuePublisher } from './publisher.js';
 import { closeRedisConnection, createRedisConnection } from './redis.js';
 
 const POSTGIS_IMAGE = 'ghcr.io/baosystems/postgis:16-3.5';
+
+const testJobOptions = {
+  attempts: 5,
+  backoffDelayMs: 1_000,
+  backoffJitter: 0.2,
+  removeOnCompleteAgeSeconds: 3_600,
+  removeOnCompleteCount: 1_000,
+  removeOnFailAgeSeconds: 86_400,
+  removeOnFailCount: 5_000,
+} as const;
 const execFileAsync = promisify(execFile);
 
 async function pauseContainer(containerId: string): Promise<void> {
@@ -149,7 +159,10 @@ describe('outbox to BullMQ integration', () => {
     const [event] = await database.outbox.findByAggregateId(search.id);
     expect(event?.publishedAt).toBeNull();
 
-    const publisher = createMeetingSearchQueuePublisher({ connection: redis });
+    const publisher = createMeetingSearchQueuePublisher({
+      connection: redis,
+      jobOptions: testJobOptions,
+    });
     const dispatcher = createOutboxDispatcher({
       outbox: database.outbox,
       publisher,
@@ -196,7 +209,10 @@ describe('outbox to BullMQ integration', () => {
     const search = await createSearch();
     const [event] = await database.outbox.findByAggregateId(search.id);
     const jobId = meetingSearchRequestedJobId(event!.id);
-    const publisher = createMeetingSearchQueuePublisher({ connection: redis });
+    const publisher = createMeetingSearchQueuePublisher({
+      connection: redis,
+      jobOptions: testJobOptions,
+    });
 
     // Explicit crash window: claim → enqueue → skip mark-published → expire lease → reclaim.
     const leaseToken = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
@@ -266,8 +282,14 @@ describe('outbox to BullMQ integration', () => {
       }),
     );
 
-    const publisherA = createMeetingSearchQueuePublisher({ connection: redis });
-    const publisherB = createMeetingSearchQueuePublisher({ connection: redis });
+    const publisherA = createMeetingSearchQueuePublisher({
+      connection: redis,
+      jobOptions: testJobOptions,
+    });
+    const publisherB = createMeetingSearchQueuePublisher({
+      connection: redis,
+      jobOptions: testJobOptions,
+    });
     const config = {
       pollIntervalMs: 60_000,
       batchSize: 10,
@@ -309,7 +331,10 @@ describe('outbox to BullMQ integration', () => {
     const search = await createSearch();
     const [event] = await database.outbox.findByAggregateId(search.id);
 
-    const publisher = createMeetingSearchQueuePublisher({ connection: redis });
+    const publisher = createMeetingSearchQueuePublisher({
+      connection: redis,
+      jobOptions: testJobOptions,
+    });
     const dispatcher = createOutboxDispatcher({
       outbox: database.outbox,
       publisher,
@@ -352,7 +377,7 @@ describe('outbox to BullMQ integration', () => {
       }
       if (row?.nextAttemptAt && row.nextAttemptAt.getTime() > Date.now()) {
         await new Promise((resolve) =>
-          setTimeout(resolve, Math.min(250, (row?.nextAttemptAt?.getTime() ?? 0) - Date.now() + 20)),
+          setTimeout(resolve, Math.min(250, row?.nextAttemptAt?.getTime() ?? 0 - Date.now() + 20)),
         );
       }
       const cycle = await dispatcher.runOnce();

@@ -8,19 +8,20 @@ reliability, clear architecture, and incremental delivery.
 
 ## Docs
 
-| Doc                                                          | Contents                                |
-| ------------------------------------------------------------ | --------------------------------------- |
-| [docs/architecture.md](./docs/architecture.md)               | Monorepo, packages, services, lifecycle |
-| [docs/domain.md](./docs/domain.md)                           | Domain model, time, validation          |
-| [docs/persistence-and-api.md](./docs/persistence-and-api.md) | Database, outbox, HTTP API              |
-| [docs/outbox-dispatch.md](./docs/outbox-dispatch.md)         | Dispatcher, BullMQ publish, retries     |
+| Doc                                                                        | Contents                                |
+| -------------------------------------------------------------------------- | --------------------------------------- |
+| [docs/architecture.md](./docs/architecture.md)                             | Monorepo, packages, services, lifecycle |
+| [docs/domain.md](./docs/domain.md)                                         | Domain model, time, validation          |
+| [docs/persistence-and-api.md](./docs/persistence-and-api.md)               | Database, outbox, HTTP API              |
+| [docs/outbox-dispatch.md](./docs/outbox-dispatch.md)                       | Dispatcher, BullMQ publish, retries     |
+| [docs/search-kickoff-and-routing.md](./docs/search-kickoff-and-routing.md) | Kickoff consumer, retention, Transitous |
 
 ## Architecture (summary)
 
 ```text
 apps/web · apps/api · apps/worker
         ↑
-packages/queue (worker only)
+packages/queue · packages/routing (worker)
 packages/validation · packages/database
         ↑
 packages/shared
@@ -28,7 +29,7 @@ packages/shared
 
 - **web** — UI only; talks to the API
 - **api** — validates requests, creates searches, returns status (thin handlers)
-- **worker** — outbox → BullMQ dispatcher (no consumer yet)
+- **worker** — outbox → BullMQ publisher + kickoff consumer (`queued` → `running`)
 
 See [docs/architecture.md](./docs/architecture.md) for the full layout and dependency rules.
 
@@ -37,11 +38,13 @@ See [docs/architecture.md](./docs/architecture.md) for the full layout and depen
 - Canonical places + meeting-search aggregates in PostGIS
 - Transactional outbox (`meeting-search.requested`) on create
 - Worker dispatcher publishes unpublished events to BullMQ with deterministic job IDs
+- BullMQ kickoff consumer atomically transitions `queued` → `running` (idempotent)
+- Provider-neutral routing boundary + Transitous MOTIS 2 `/api/v5/plan` adapter
 - `POST/GET /api/v1/meeting-searches` with shared envelopes and request IDs
 - `/health`, Compose PostGIS + Redis, unit and integration tests
 
-`queued` means durably accepted in PostgreSQL, and after dispatch also waiting in BullMQ.
-There is no auth, journey results, BullMQ consumer, Transitous, or ranking yet.
+`queued` means durably accepted. `running` means the kickoff job was accepted — not that
+routes exist yet. There is no auth, candidate generation, journey persistence, or ranking yet.
 
 ## Local setup
 
@@ -89,39 +92,41 @@ pnpm db:check      # migration consistency
 
 See [`.env.example`](./.env.example).
 
-| Variable                   | Used by              | Purpose                                 |
-| -------------------------- | -------------------- | --------------------------------------- |
-| `DATABASE_URL`             | api, worker, migrate | PostgreSQL connection string            |
-| `REDIS_URL`                | api, worker          | Redis (reserved; unused by app yet)     |
-| `API_BASE_URL`             | api, worker          | Public API base URL                     |
-| `API_HOST` / `API_PORT`    | api                  | Listen address                          |
-| `NEXT_PUBLIC_API_BASE_URL` | web                  | Browser-facing API URL                  |
-| `TRANSITOUS_BASE_URL`      | api, worker          | Routing provider base (unused yet)      |
-| `LOG_LEVEL`                | all                  | Pino log level                          |
-| `NODE_ENV`                 | all                  | `development` \| `test` \| `production` |
+| Variable                   | Used by                  | Purpose                                 |
+| -------------------------- | ------------------------ | --------------------------------------- |
+| `DATABASE_URL`             | api, worker, migrate     | PostgreSQL connection string            |
+| `REDIS_URL`                | worker (api config only) | Redis for BullMQ                        |
+| `API_BASE_URL`             | api, worker              | Public API base URL                     |
+| `API_HOST` / `API_PORT`    | api                      | Listen address                          |
+| `NEXT_PUBLIC_API_BASE_URL` | web                      | Browser-facing API URL                  |
+| `TRANSITOUS_BASE_URL`      | worker                   | MOTIS API root (`…/api`)                |
+| `TRANSITOUS_USER_AGENT`    | worker                   | Required identifying User-Agent         |
+| `LOG_LEVEL`                | all                      | Pino log level                          |
+| `NODE_ENV`                 | all                      | `development` \| `test` \| `production` |
 
 No secrets are committed.
 
 ## Commands
 
-| Command                       | Description                                  |
-| ----------------------------- | -------------------------------------------- |
-| `pnpm dev`                    | Start web, api, worker, and watched packages |
-| `pnpm build`                  | Build all packages and apps                  |
-| `pnpm lint`                   | Lint all workspaces                          |
-| `pnpm typecheck`              | Type-check all workspaces                    |
-| `pnpm test`                   | Unit/smoke tests (no Testcontainers)         |
-| `pnpm test:integration`       | Database integration tests (Docker required) |
-| `pnpm test:integration:queue` | Outbox → BullMQ Redis integration tests      |
-| `pnpm worker:dev`             | Run the outbox dispatcher worker             |
-| `pnpm format`                 | Format with Prettier                         |
-| `pnpm format:check`           | Check formatting                             |
-| `pnpm docker:up`              | Start PostGIS and Redis                      |
-| `pnpm docker:down`            | Stop Compose services                        |
-| `pnpm db:generate`            | Generate SQL migrations from Drizzle schema  |
-| `pnpm db:migrate`             | Apply committed migrations                   |
-| `pnpm db:check`               | Check migration consistency                  |
-| `pnpm db:studio`              | Open Drizzle Studio                          |
+| Command                            | Description                                  |
+| ---------------------------------- | -------------------------------------------- |
+| `pnpm dev`                         | Start web, api, worker, and watched packages |
+| `pnpm build`                       | Build all packages and apps                  |
+| `pnpm lint`                        | Lint all workspaces                          |
+| `pnpm typecheck`                   | Type-check all workspaces                    |
+| `pnpm test`                        | Unit/smoke tests (no Testcontainers)         |
+| `pnpm test:integration`            | Database integration tests (Docker required) |
+| `pnpm test:integration:queue`      | Outbox + BullMQ consumer Redis integration   |
+| `pnpm test:integration:transitous` | Opt-in live Transitous smoke (1 request)     |
+| `pnpm worker:dev`                  | Run dispatcher + kickoff consumer            |
+| `pnpm format`                      | Format with Prettier                         |
+| `pnpm format:check`                | Check formatting                             |
+| `pnpm docker:up`                   | Start PostGIS and Redis                      |
+| `pnpm docker:down`                 | Stop Compose services                        |
+| `pnpm db:generate`                 | Generate SQL migrations from Drizzle schema  |
+| `pnpm db:migrate`                  | Apply committed migrations                   |
+| `pnpm db:check`                    | Check migration consistency                  |
+| `pnpm db:studio`                   | Open Drizzle Studio                          |
 
 ## Testing
 
@@ -135,12 +140,11 @@ migrations against disposable PostGIS via Testcontainers.
 
 ## Current limitations
 
-- No BullMQ job consumer or search status transition to `running`
-- No Transitous integration or journey evaluation
-- No ranking / candidate generation
+- Kickoff leaves searches in `running`; candidate generation, ranking, journey persistence, and completion are Phase 7+
+- Transitous adapter exists for development/validation; kickoff does not call it and no destination is invented
 - No place seed/import pipeline
 - Parent-city “must be kind=city” is not DB-enforced
 - No authentication or user ownership
 - No journey results, progress, cancellation, SSE, maps, or deployment config
 - `/ready` probe not yet implemented
-- BullMQ job retention is unbounded until a later retention + idempotency policy
+- Existing Phase 5 jobs retain their original unbounded retention options and may remain indefinitely unless explicitly cleaned up; Phase 6 does not automatically delete or migrate those jobs. Bounded retention applies only to newly produced jobs.
