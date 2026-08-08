@@ -1,6 +1,9 @@
 export {
   meetingSearchAllowedCountries,
+  meetingSearchCandidateEvaluations,
   meetingSearchCandidateGenerations,
+  meetingSearchCandidateRankingJourneys,
+  meetingSearchCandidateRankings,
   meetingSearchCandidates,
   meetingSearchJourneys,
   meetingSearchParticipants,
@@ -9,6 +12,8 @@ export {
   meetingSearches,
   outboxEvents,
   places,
+  CANDIDATE_FEASIBILITY_REASONS,
   CANDIDATE_GENERATION_STATUSES,
   ROUTING_WORK_STATUSES,
+  SEARCH_COMPLETION_OUTCOMES,
 } from './tables.js';

@@ -177,6 +177,9 @@ importers:
 
   packages/database:
     dependencies:
+      '@railmeet/search-engine':
+        specifier: workspace:^
+        version: link:../search-engine
       '@railmeet/shared':
         specifier: workspace:*
         version: link:../shared
@@ -246,6 +249,9 @@ importers:
       '@testcontainers/redis':
         specifier: ^10.28.0
         version: 10.28.0
+      testcontainers:
+        specifier: ^10.28.0
+        version: 10.28.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -273,6 +279,10 @@ importers:
         version: 3.2.7(@types/node@22.20.1)(jiti@1.21.7)(tsx@4.23.11)(yaml@2.9.0)
 
   packages/search-engine:
+    dependencies:
+      '@railmeet/shared':
+        specifier: workspace:^
+        version: link:../shared
     devDependencies:
       typescript:
         specifier: ^5.9.3

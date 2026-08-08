@@ -6,15 +6,19 @@
 export const MEETING_SEARCHES_QUEUE_NAME = 'meeting-searches' as const;
 export const MEETING_SEARCH_CANDIDATES_QUEUE_NAME = 'meeting-search-candidates' as const;
 export const MEETING_SEARCH_ROUTING_QUEUE_NAME = 'meeting-search-routing' as const;
+export const MEETING_SEARCH_FINALIZATION_QUEUE_NAME = 'meeting-search-finalization' as const;
 
 export const MEETING_SEARCH_REQUESTED_JOB_NAME = 'meeting-search.requested' as const;
 export const MEETING_SEARCH_CANDIDATES_REQUESTED_JOB_NAME =
   'meeting-search.candidates-requested' as const;
 export const ROUTING_REQUESTED_JOB_NAME = 'routing.requested' as const;
+export const MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_NAME =
+  'meeting-search.finalization-requested' as const;
 
 export const MEETING_SEARCH_REQUESTED_JOB_SCHEMA_VERSION = 1 as const;
 export const MEETING_SEARCH_CANDIDATES_REQUESTED_JOB_SCHEMA_VERSION = 1 as const;
 export const ROUTING_REQUESTED_JOB_SCHEMA_VERSION = 1 as const;
+export const MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_SCHEMA_VERSION = 1 as const;
 
 export type MeetingSearchRequestedJobData = {
   readonly schemaVersion: typeof MEETING_SEARCH_REQUESTED_JOB_SCHEMA_VERSION;
@@ -32,8 +36,16 @@ export type RoutingRequestedJobData = {
   readonly routingWorkId: string;
 };
 
+export type MeetingSearchFinalizationRequestedJobData = {
+  readonly schemaVersion: typeof MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_SCHEMA_VERSION;
+  readonly searchId: string;
+};
+
 export type OutboxMappedJobData =
-  MeetingSearchRequestedJobData | MeetingSearchCandidatesRequestedJobData | RoutingRequestedJobData;
+  | MeetingSearchRequestedJobData
+  | MeetingSearchCandidatesRequestedJobData
+  | RoutingRequestedJobData
+  | MeetingSearchFinalizationRequestedJobData;
 
 /** Deterministic BullMQ job ID derived from the outbox event UUID. */
 export function outboxJobId(eventId: string): string {

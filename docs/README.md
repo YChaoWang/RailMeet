@@ -10,5 +10,6 @@ Design docs organized by system structure — not delivery phases.
 | [outbox-dispatch.md](./outbox-dispatch.md)                                                 | Lease/claim, BullMQ publish, retry, worker lifecycle   |
 | [search-kickoff-and-routing.md](./search-kickoff-and-routing.md)                           | Kickoff consumer, retention, Transitous policy         |
 | [candidate-generation-and-routing-fanout.md](./candidate-generation-and-routing-fanout.md) | Phase 7 candidates, fan-out, journey persistence       |
+| [finalization-and-ranking.md](./finalization-and-ranking.md)                               | Phase 8 fan-in, ranking, search completion             |
 
 Day-to-day setup, env vars, and commands live in the root [README](../README.md).

@@ -6,5 +6,11 @@
     "composite": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.integration.test.ts", "dist", "node_modules"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.integration.test.ts",
+    "src/**/*.integration-util.ts",
+    "dist",
+    "node_modules"
+  ]
 }

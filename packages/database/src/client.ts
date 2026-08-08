@@ -13,6 +13,10 @@ import {
 import { createOutboxRepository, type OutboxRepository } from './repositories/outbox-repository.js';
 import { createPlaceRepository, type PlaceRepository } from './repositories/place-repository.js';
 import {
+  createFinalizationRepository,
+  type FinalizationRepository,
+} from './repositories/finalization-repository.js';
+import {
   createSearchPipelineRepository,
   type SearchPipelineRepository,
 } from './repositories/search-pipeline-repository.js';
@@ -33,6 +37,7 @@ export type Database = {
   readonly meetingSearches: MeetingSearchRepository;
   readonly outbox: OutboxRepository;
   readonly searchPipeline: SearchPipelineRepository;
+  readonly finalization: FinalizationRepository;
   migrate: () => Promise<void>;
   close: () => Promise<void>;
 };
@@ -51,6 +56,7 @@ export function createDatabase(config: DatabaseConfig): Database {
   const meetingSearches = createMeetingSearchRepository(db);
   const outbox = createOutboxRepository(db);
   const searchPipeline = createSearchPipelineRepository(db);
+  const finalization = createFinalizationRepository(db);
 
   return {
     db,
@@ -58,6 +64,7 @@ export function createDatabase(config: DatabaseConfig): Database {
     meetingSearches,
     outbox,
     searchPipeline,
+    finalization,
     async migrate() {
       const folder = config.migrationsFolder ?? join(packageRoot, 'migrations');
       await migrate(db, { migrationsFolder: folder });

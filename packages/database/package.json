@@ -27,6 +27,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@railmeet/search-engine": "workspace:^",
     "@railmeet/shared": "workspace:*",
     "dotenv": "^16.5.0",
     "drizzle-orm": "^0.45.2",

@@ -38,6 +38,8 @@ import {
   MEETING_SEARCH_AGGREGATE_TYPE,
   MEETING_SEARCH_CANDIDATES_REQUESTED_EVENT_TYPE,
   MEETING_SEARCH_CANDIDATES_REQUESTED_SCHEMA_VERSION,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION,
   MEETING_SEARCH_REQUESTED_EVENT_TYPE,
   MEETING_SEARCH_REQUESTED_SCHEMA_VERSION,
   OUTBOX_AGGREGATE_TYPES,
@@ -63,10 +65,28 @@ export const ROUTING_WORK_STATUSES = [
   'exhausted',
 ] as const;
 
+export const SEARCH_COMPLETION_OUTCOMES = [
+  'no_candidates',
+  'ranked',
+  'no_feasible_candidates',
+] as const;
+
+export const CANDIDATE_FEASIBILITY_REASONS = [
+  'feasible',
+  'participant_no_journeys',
+  'routing_incomplete',
+  'technical_failure',
+  'invariant_violation',
+] as const;
+
 const candidateGenerationStatusSqlList = CANDIDATE_GENERATION_STATUSES.map(
   (value) => `'${value}'`,
 ).join(', ');
 const routingWorkStatusSqlList = ROUTING_WORK_STATUSES.map((value) => `'${value}'`).join(', ');
+const completionOutcomeSqlList = SEARCH_COMPLETION_OUTCOMES.map((value) => `'${value}'`).join(', ');
+const feasibilityReasonSqlList = CANDIDATE_FEASIBILITY_REASONS.map((value) => `'${value}'`).join(
+  ', ',
+);
 
 const placeKindSqlList = PLACE_KINDS.map((value) => `'${value}'`).join(', ');
 const rankingModeSqlList = RANKING_MODES.map((value) => `'${value}'`).join(', ');
@@ -148,6 +168,16 @@ export const meetingSearches = pgTable(
      * Never updated on duplicate kickoff deliveries.
      */
     startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }),
+    /** Set once on running → completed (Phase 8). */
+    completedAt: timestamp('completed_at', { withTimezone: true, mode: 'date' }),
+    /** Set once on running → failed (Phase 8). */
+    failedAt: timestamp('failed_at', { withTimezone: true, mode: 'date' }),
+    /** Domain completion outcome when status is completed. */
+    completionOutcome: text('completion_outcome'),
+    /** Sanitized internal failure code when status is failed. */
+    failureCode: text('failure_code'),
+    /** Primary recommendation for the requested ranking mode when outcome is ranked. */
+    recommendedDestinationPlaceId: text('recommended_destination_place_id'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
@@ -173,6 +203,45 @@ export const meetingSearches = pgTable(
       'meeting_searches_min_transfer_duration_chk',
       sql`${table.minTransferDurationMinutes} >= 1 AND ${table.minTransferDurationMinutes} <= ${sql.raw(String(MIN_TRANSFER_DURATION_MINUTES_UPPER_BOUND))}`,
     ),
+    check(
+      'meeting_searches_completion_outcome_chk',
+      sql`${table.completionOutcome} IS NULL OR ${table.completionOutcome} IN (${sql.raw(completionOutcomeSqlList)})`,
+    ),
+    check(
+      'meeting_searches_completion_pairing_chk',
+      sql`(
+        (
+          ${table.status} = 'completed'
+          AND ${table.completionOutcome} IS NOT NULL
+          AND ${table.failedAt} IS NULL
+          AND ${table.failureCode} IS NULL
+          AND (
+            (${table.completionOutcome} = 'ranked' AND ${table.recommendedDestinationPlaceId} IS NOT NULL)
+            OR (${table.completionOutcome} <> 'ranked' AND ${table.recommendedDestinationPlaceId} IS NULL)
+          )
+        )
+        OR (
+          ${table.status} = 'failed'
+          AND ${table.failureCode} IS NOT NULL
+          AND ${table.completionOutcome} IS NULL
+          AND ${table.completedAt} IS NULL
+          AND ${table.recommendedDestinationPlaceId} IS NULL
+        )
+        OR (
+          ${table.status} NOT IN ('completed', 'failed')
+          AND ${table.completionOutcome} IS NULL
+          AND ${table.failureCode} IS NULL
+          AND ${table.completedAt} IS NULL
+          AND ${table.failedAt} IS NULL
+          AND ${table.recommendedDestinationPlaceId} IS NULL
+        )
+      )`,
+    ),
+    foreignKey({
+      columns: [table.recommendedDestinationPlaceId],
+      foreignColumns: [places.id],
+      name: 'meeting_searches_recommended_destination_place_id_fkey',
+    }).onDelete('restrict'),
   ],
 );
 
@@ -312,6 +381,9 @@ export const outboxEvents = pgTable(
         ) OR (
           ${table.eventType} = ${sql.raw(`'${ROUTING_REQUESTED_EVENT_TYPE}'`)}
           AND ${table.schemaVersion} = ${sql.raw(String(ROUTING_REQUESTED_SCHEMA_VERSION))}
+        ) OR (
+          ${table.eventType} = ${sql.raw(`'${MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE}'`)}
+          AND ${table.schemaVersion} = ${sql.raw(String(MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION))}
         )
       )`,
     ),
@@ -334,6 +406,14 @@ export const outboxEvents = pgTable(
           AND ${table.dedupeKey} = (${table.payload}->>'routingWorkId')
           AND (${table.payload}->>'searchId') = ${table.aggregateId}::text
           AND (${table.payload}->>'routingWorkId') IS NOT NULL
+        ) OR (
+          ${table.eventType} = ${sql.raw(`'${MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE}'`)}
+          AND ${table.aggregateType} = ${sql.raw(`'${MEETING_SEARCH_AGGREGATE_TYPE}'`)}
+          AND ${table.payload} = jsonb_build_object('searchId', ${table.aggregateId}::text)
+          AND (
+            ${table.dedupeKey} LIKE 'candidate-generation:%'
+            OR ${table.dedupeKey} LIKE 'routing-work:%'
+          )
         )
       )`,
     ),
@@ -484,6 +564,148 @@ export const meetingSearchJourneys = pgTable(
     check(
       'meeting_search_journeys_arrival_after_departure_chk',
       sql`${table.arrivalAt} >= ${table.departureAt}`,
+    ),
+  ],
+);
+
+/**
+ * Phase 8 feasibility evaluation for every candidate (including infeasible).
+ */
+export const meetingSearchCandidateEvaluations = pgTable(
+  'meeting_search_candidate_evaluations',
+  {
+    searchId: uuid('search_id').notNull(),
+    destinationPlaceId: text('destination_place_id').notNull(),
+    feasibility: text('feasibility').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'meeting_search_candidate_evaluations_pk',
+      columns: [table.searchId, table.destinationPlaceId],
+    }),
+    foreignKey({
+      columns: [table.searchId, table.destinationPlaceId],
+      foreignColumns: [
+        meetingSearchCandidates.searchId,
+        meetingSearchCandidates.destinationPlaceId,
+      ],
+      name: 'meeting_search_candidate_evaluations_candidate_fkey',
+    }).onDelete('cascade'),
+    check(
+      'meeting_search_candidate_evaluations_feasibility_chk',
+      sql`${table.feasibility} IN (${sql.raw(feasibilityReasonSqlList)})`,
+    ),
+  ],
+);
+
+/**
+ * Phase 8 ranking row per search × ranking mode × feasible candidate.
+ * Duration metrics use integer minutes (same unit as meeting_search_journeys.duration_minutes).
+ * Arrival spread uses milliseconds between earliest and latest selected arrivals.
+ */
+export const meetingSearchCandidateRankings = pgTable(
+  'meeting_search_candidate_rankings',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    searchId: uuid('search_id')
+      .notNull()
+      .references(() => meetingSearches.id, { onDelete: 'cascade' }),
+    rankingMode: text('ranking_mode').notNull(),
+    destinationPlaceId: text('destination_place_id').notNull(),
+    rank: integer('rank').notNull(),
+    totalDurationMinutes: integer('total_duration_minutes').notNull(),
+    maxDurationMinutes: integer('max_duration_minutes').notNull(),
+    durationRangeMinutes: integer('duration_range_minutes').notNull(),
+    totalTransfers: integer('total_transfers').notNull(),
+    maxTransfers: integer('max_transfers').notNull(),
+    earliestArrivalAt: timestamp('earliest_arrival_at', {
+      withTimezone: true,
+      mode: 'date',
+    }).notNull(),
+    latestArrivalAt: timestamp('latest_arrival_at', { withTimezone: true, mode: 'date' }).notNull(),
+    arrivalSpreadMs: integer('arrival_spread_ms').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('meeting_search_candidate_rankings_mode_candidate_uid').on(
+      table.searchId,
+      table.rankingMode,
+      table.destinationPlaceId,
+    ),
+    unique('meeting_search_candidate_rankings_mode_rank_uid').on(
+      table.searchId,
+      table.rankingMode,
+      table.rank,
+    ),
+    foreignKey({
+      columns: [table.searchId, table.destinationPlaceId],
+      foreignColumns: [
+        meetingSearchCandidates.searchId,
+        meetingSearchCandidates.destinationPlaceId,
+      ],
+      name: 'meeting_search_candidate_rankings_candidate_fkey',
+    }).onDelete('cascade'),
+    check(
+      'meeting_search_candidate_rankings_mode_chk',
+      sql`${table.rankingMode} IN (${sql.raw(rankingModeSqlList)})`,
+    ),
+    check('meeting_search_candidate_rankings_rank_chk', sql`${table.rank} >= 1`),
+    check(
+      'meeting_search_candidate_rankings_duration_chk',
+      sql`${table.totalDurationMinutes} >= 0 AND ${table.maxDurationMinutes} >= 0 AND ${table.durationRangeMinutes} >= 0`,
+    ),
+    check(
+      'meeting_search_candidate_rankings_transfers_chk',
+      sql`${table.totalTransfers} >= 0 AND ${table.maxTransfers} >= 0`,
+    ),
+    check('meeting_search_candidate_rankings_spread_chk', sql`${table.arrivalSpreadMs} >= 0`),
+    check(
+      'meeting_search_candidate_rankings_arrival_order_chk',
+      sql`${table.latestArrivalAt} >= ${table.earliestArrivalAt}`,
+    ),
+  ],
+);
+
+/**
+ * Selected journey for each participant of a ranked candidate under a ranking mode.
+ */
+export const meetingSearchCandidateRankingJourneys = pgTable(
+  'meeting_search_candidate_ranking_journeys',
+  {
+    searchId: uuid('search_id').notNull(),
+    rankingMode: text('ranking_mode').notNull(),
+    destinationPlaceId: text('destination_place_id').notNull(),
+    participantId: text('participant_id').notNull(),
+    journeyId: uuid('journey_id')
+      .notNull()
+      .references(() => meetingSearchJourneys.id, { onDelete: 'restrict' }),
+    rankingId: uuid('ranking_id')
+      .notNull()
+      .references(() => meetingSearchCandidateRankings.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'meeting_search_candidate_ranking_journeys_pk',
+      columns: [table.searchId, table.rankingMode, table.destinationPlaceId, table.participantId],
+    }),
+    foreignKey({
+      columns: [table.searchId, table.rankingMode, table.destinationPlaceId],
+      foreignColumns: [
+        meetingSearchCandidateRankings.searchId,
+        meetingSearchCandidateRankings.rankingMode,
+        meetingSearchCandidateRankings.destinationPlaceId,
+      ],
+      name: 'meeting_search_candidate_ranking_journeys_ranking_fkey',
+    }).onDelete('cascade'),
+    check(
+      'meeting_search_candidate_ranking_journeys_mode_chk',
+      sql`${table.rankingMode} IN (${sql.raw(rankingModeSqlList)})`,
+    ),
+    check(
+      'meeting_search_candidate_ranking_journeys_participant_id_length_chk',
+      sql`char_length(${table.participantId}) >= 1 AND char_length(${table.participantId}) <= ${sql.raw(String(PARTICIPANT_ID_MAX_LENGTH))}`,
     ),
   ],
 );

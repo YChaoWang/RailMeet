@@ -1,12 +1,14 @@
 /**
  * Transactional outbox constants for durable processing intent.
- * Phase 4–5 write/publish meeting-search.requested; Phase 7 adds candidates + routing.
+ * Phase 4–5 write/publish meeting-search.requested; Phase 7 adds candidates + routing;
+ * Phase 8 adds finalization fan-in.
  */
 
 export const OUTBOX_EVENT_TYPES = [
   'meeting-search.requested',
   'meeting-search.candidates-requested',
   'routing.requested',
+  'meeting-search.finalization-requested',
 ] as const;
 export type OutboxEventType = (typeof OUTBOX_EVENT_TYPES)[number];
 
@@ -25,6 +27,10 @@ export const MEETING_SEARCH_CANDIDATES_REQUESTED_SCHEMA_VERSION = 1 as const;
 export const ROUTING_REQUESTED_EVENT_TYPE = 'routing.requested' as const;
 export const ROUTING_REQUESTED_SCHEMA_VERSION = 1 as const;
 
+export const MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE =
+  'meeting-search.finalization-requested' as const;
+export const MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION = 1 as const;
+
 export const OUTBOX_DEDUPE_KEY_DEFAULT = 'default' as const;
 
 export type MeetingSearchRequestedPayload = {
@@ -40,8 +46,15 @@ export type RoutingRequestedPayload = {
   readonly routingWorkId: string;
 };
 
+export type MeetingSearchFinalizationRequestedPayload = {
+  readonly searchId: string;
+};
+
 export type OutboxPayload =
-  MeetingSearchRequestedPayload | MeetingSearchCandidatesRequestedPayload | RoutingRequestedPayload;
+  | MeetingSearchRequestedPayload
+  | MeetingSearchCandidatesRequestedPayload
+  | RoutingRequestedPayload
+  | MeetingSearchFinalizationRequestedPayload;
 
 export function isOutboxEventType(value: string): value is OutboxEventType {
   return (OUTBOX_EVENT_TYPES as readonly string[]).includes(value);
@@ -49,4 +62,14 @@ export function isOutboxEventType(value: string): value is OutboxEventType {
 
 export function isOutboxAggregateType(value: string): value is OutboxAggregateType {
   return (OUTBOX_AGGREGATE_TYPES as readonly string[]).includes(value);
+}
+
+/** Deterministic outbox dedupe key for candidate-generation terminal events. */
+export function candidateGenerationFinalizationDedupeKey(searchId: string): string {
+  return `candidate-generation:${searchId}`;
+}
+
+/** Deterministic outbox dedupe key for routing-work terminal events. */
+export function routingWorkFinalizationDedupeKey(routingWorkId: string): string {
+  return `routing-work:${routingWorkId}`;
 }

@@ -3,6 +3,7 @@ import type { Redis } from 'ioredis';
 
 import {
   MEETING_SEARCH_CANDIDATES_QUEUE_NAME,
+  MEETING_SEARCH_FINALIZATION_QUEUE_NAME,
   MEETING_SEARCH_REQUESTED_JOB_NAME,
   MEETING_SEARCHES_QUEUE_NAME,
   MEETING_SEARCH_ROUTING_QUEUE_NAME,
@@ -114,6 +115,7 @@ export function createMeetingSearchQueuePublisher(
   getQueue(kickoffQueueName);
   getQueue(MEETING_SEARCH_CANDIDATES_QUEUE_NAME);
   getQueue(MEETING_SEARCH_ROUTING_QUEUE_NAME);
+  getQueue(MEETING_SEARCH_FINALIZATION_QUEUE_NAME);
 
   let closed = false;
 

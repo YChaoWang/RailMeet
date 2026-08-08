@@ -1,11 +1,14 @@
 import {
   MEETING_SEARCH_CANDIDATES_REQUESTED_JOB_NAME,
   MEETING_SEARCH_CANDIDATES_REQUESTED_JOB_SCHEMA_VERSION,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_NAME,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_SCHEMA_VERSION,
   MEETING_SEARCH_REQUESTED_JOB_NAME,
   MEETING_SEARCH_REQUESTED_JOB_SCHEMA_VERSION,
   ROUTING_REQUESTED_JOB_NAME,
   ROUTING_REQUESTED_JOB_SCHEMA_VERSION,
   type MeetingSearchCandidatesRequestedJobData,
+  type MeetingSearchFinalizationRequestedJobData,
   type MeetingSearchRequestedJobData,
   type RoutingRequestedJobData,
 } from './contract.js';
@@ -179,6 +182,51 @@ export function validateRoutingRequestedJob(input: {
       schemaVersion: ROUTING_REQUESTED_JOB_SCHEMA_VERSION,
       searchId: data.searchId,
       routingWorkId: data.routingWorkId,
+    },
+  };
+}
+
+export function validateFinalizationRequestedJob(input: {
+  readonly name: string;
+  readonly data: unknown;
+}): JobValidationResult<MeetingSearchFinalizationRequestedJobData> {
+  if (input.name !== MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_NAME) {
+    return {
+      ok: false,
+      code: 'WRONG_JOB_NAME',
+      message: `Unexpected job name: ${input.name}`,
+    };
+  }
+  const data = asObject(input.data);
+  if (!data) {
+    return { ok: false, code: 'INVALID_JOB_PAYLOAD', message: 'Job data must be an object' };
+  }
+  if (data.schemaVersion !== MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_SCHEMA_VERSION) {
+    return {
+      ok: false,
+      code: 'UNSUPPORTED_SCHEMA_VERSION',
+      message: `Unsupported schemaVersion: ${String(data.schemaVersion)}`,
+    };
+  }
+  if (typeof data.searchId !== 'string' || !UUID_RE.test(data.searchId)) {
+    return {
+      ok: false,
+      code: 'INVALID_SEARCH_ID',
+      message: 'Job data.searchId must be a UUID',
+    };
+  }
+  if (Object.keys(data).some((key) => key !== 'schemaVersion' && key !== 'searchId')) {
+    return {
+      ok: false,
+      code: 'INVALID_JOB_PAYLOAD',
+      message: 'Job data contains unexpected properties',
+    };
+  }
+  return {
+    ok: true,
+    data: {
+      schemaVersion: MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_SCHEMA_VERSION,
+      searchId: data.searchId,
     },
   };
 }

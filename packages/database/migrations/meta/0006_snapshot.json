@@ -1,0 +1,1407 @@
+{
+  "id": "0915c698-199b-49cd-bfcf-e54fd7bbe327",
+  "prevId": "117286e9-a9d9-47e3-9f8b-1c94fb4ac2d6",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.meeting_search_allowed_countries": {
+      "name": "meeting_search_allowed_countries",
+      "schema": "",
+      "columns": {
+        "meeting_search_id": {
+          "name": "meeting_search_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "country_code": {
+          "name": "country_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meeting_search_allowed_countries_meeting_search_id_meeting_searches_id_fk": {
+          "name": "meeting_search_allowed_countries_meeting_search_id_meeting_searches_id_fk",
+          "tableFrom": "meeting_search_allowed_countries",
+          "tableTo": "meeting_searches",
+          "columnsFrom": ["meeting_search_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "meeting_search_allowed_countries_pk": {
+          "name": "meeting_search_allowed_countries_pk",
+          "columns": ["meeting_search_id", "country_code"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "meeting_search_allowed_countries_code_chk": {
+          "name": "meeting_search_allowed_countries_code_chk",
+          "value": "\"meeting_search_allowed_countries\".\"country_code\" ~ '^[A-Z]{2}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_search_candidate_evaluations": {
+      "name": "meeting_search_candidate_evaluations",
+      "schema": "",
+      "columns": {
+        "search_id": {
+          "name": "search_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "destination_place_id": {
+          "name": "destination_place_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "feasibility": {
+          "name": "feasibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meeting_search_candidate_evaluations_candidate_fkey": {
+          "name": "meeting_search_candidate_evaluations_candidate_fkey",
+          "tableFrom": "meeting_search_candidate_evaluations",
+          "tableTo": "meeting_search_candidates",
+          "columnsFrom": ["search_id", "destination_place_id"],
+          "columnsTo": ["search_id", "destination_place_id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "meeting_search_candidate_evaluations_pk": {
+          "name": "meeting_search_candidate_evaluations_pk",
+          "columns": ["search_id", "destination_place_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "meeting_search_candidate_evaluations_feasibility_chk": {
+          "name": "meeting_search_candidate_evaluations_feasibility_chk",
+          "value": "\"meeting_search_candidate_evaluations\".\"feasibility\" IN ('feasible', 'participant_no_journeys', 'routing_incomplete', 'technical_failure', 'invariant_violation')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_search_candidate_generations": {
+      "name": "meeting_search_candidate_generations",
+      "schema": "",
+      "columns": {
+        "search_id": {
+          "name": "search_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meeting_search_candidate_generations_search_id_meeting_searches_id_fk": {
+          "name": "meeting_search_candidate_generations_search_id_meeting_searches_id_fk",
+          "tableFrom": "meeting_search_candidate_generations",
+          "tableTo": "meeting_searches",
+          "columnsFrom": ["search_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "meeting_search_candidate_generations_status_chk": {
+          "name": "meeting_search_candidate_generations_status_chk",
+          "value": "\"meeting_search_candidate_generations\".\"status\" IN ('pending', 'running', 'succeeded', 'failed_permanent')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_search_candidate_ranking_journeys": {
+      "name": "meeting_search_candidate_ranking_journeys",
+      "schema": "",
+      "columns": {
+        "search_id": {
+          "name": "search_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ranking_mode": {
+          "name": "ranking_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "destination_place_id": {
+          "name": "destination_place_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "participant_id": {
+          "name": "participant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "journey_id": {
+          "name": "journey_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ranking_id": {
+          "name": "ranking_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meeting_search_candidate_ranking_journeys_journey_id_meeting_search_journeys_id_fk": {
+          "name": "meeting_search_candidate_ranking_journeys_journey_id_meeting_search_journeys_id_fk",
+          "tableFrom": "meeting_search_candidate_ranking_journeys",
+          "tableTo": "meeting_search_journeys",
+          "columnsFrom": ["journey_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "meeting_search_candidate_ranking_journeys_ranking_id_meeting_search_candidate_rankings_id_fk": {
+          "name": "meeting_search_candidate_ranking_journeys_ranking_id_meeting_search_candidate_rankings_id_fk",
+          "tableFrom": "meeting_search_candidate_ranking_journeys",
+          "tableTo": "meeting_search_candidate_rankings",
+          "columnsFrom": ["ranking_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_search_candidate_ranking_journeys_ranking_fkey": {
+          "name": "meeting_search_candidate_ranking_journeys_ranking_fkey",
+          "tableFrom": "meeting_search_candidate_ranking_journeys",
+          "tableTo": "meeting_search_candidate_rankings",
+          "columnsFrom": ["search_id", "ranking_mode", "destination_place_id"],
+          "columnsTo": ["search_id", "ranking_mode", "destination_place_id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "meeting_search_candidate_ranking_journeys_pk": {
+          "name": "meeting_search_candidate_ranking_journeys_pk",
+          "columns": ["search_id", "ranking_mode", "destination_place_id", "participant_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "meeting_search_candidate_ranking_journeys_mode_chk": {
+          "name": "meeting_search_candidate_ranking_journeys_mode_chk",
+          "value": "\"meeting_search_candidate_ranking_journeys\".\"ranking_mode\" IN ('fairest', 'fastest-overall', 'fewest-transfers', 'arrive-together')"
+        },
+        "meeting_search_candidate_ranking_journeys_participant_id_length_chk": {
+          "name": "meeting_search_candidate_ranking_journeys_participant_id_length_chk",
+          "value": "char_length(\"meeting_search_candidate_ranking_journeys\".\"participant_id\") >= 1 AND char_length(\"meeting_search_candidate_ranking_journeys\".\"participant_id\") <= 64"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_search_candidate_rankings": {
+      "name": "meeting_search_candidate_rankings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "search_id": {
+          "name": "search_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ranking_mode": {
+          "name": "ranking_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "destination_place_id": {
+          "name": "destination_place_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rank": {
+          "name": "rank",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_duration_minutes": {
+          "name": "total_duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_duration_minutes": {
+          "name": "max_duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_range_minutes": {
+          "name": "duration_range_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_transfers": {
+          "name": "total_transfers",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_transfers": {
+          "name": "max_transfers",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "earliest_arrival_at": {
+          "name": "earliest_arrival_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "latest_arrival_at": {
+          "name": "latest_arrival_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "arrival_spread_ms": {
+          "name": "arrival_spread_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meeting_search_candidate_rankings_search_id_meeting_searches_id_fk": {
+          "name": "meeting_search_candidate_rankings_search_id_meeting_searches_id_fk",
+          "tableFrom": "meeting_search_candidate_rankings",
+          "tableTo": "meeting_searches",
+          "columnsFrom": ["search_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_search_candidate_rankings_candidate_fkey": {
+          "name": "meeting_search_candidate_rankings_candidate_fkey",
+          "tableFrom": "meeting_search_candidate_rankings",
+          "tableTo": "meeting_search_candidates",
+          "columnsFrom": ["search_id", "destination_place_id"],
+          "columnsTo": ["search_id", "destination_place_id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "meeting_search_candidate_rankings_mode_candidate_uid": {
+          "name": "meeting_search_candidate_rankings_mode_candidate_uid",
+          "nullsNotDistinct": false,
+          "columns": ["search_id", "ranking_mode", "destination_place_id"]
+        },
+        "meeting_search_candidate_rankings_mode_rank_uid": {
+          "name": "meeting_search_candidate_rankings_mode_rank_uid",
+          "nullsNotDistinct": false,
+          "columns": ["search_id", "ranking_mode", "rank"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "meeting_search_candidate_rankings_mode_chk": {
+          "name": "meeting_search_candidate_rankings_mode_chk",
+          "value": "\"meeting_search_candidate_rankings\".\"ranking_mode\" IN ('fairest', 'fastest-overall', 'fewest-transfers', 'arrive-together')"
+        },
+        "meeting_search_candidate_rankings_rank_chk": {
+          "name": "meeting_search_candidate_rankings_rank_chk",
+          "value": "\"meeting_search_candidate_rankings\".\"rank\" >= 1"
+        },
+        "meeting_search_candidate_rankings_duration_chk": {
+          "name": "meeting_search_candidate_rankings_duration_chk",
+          "value": "\"meeting_search_candidate_rankings\".\"total_duration_minutes\" >= 0 AND \"meeting_search_candidate_rankings\".\"max_duration_minutes\" >= 0 AND \"meeting_search_candidate_rankings\".\"duration_range_minutes\" >= 0"
+        },
+        "meeting_search_candidate_rankings_transfers_chk": {
+          "name": "meeting_search_candidate_rankings_transfers_chk",
+          "value": "\"meeting_search_candidate_rankings\".\"total_transfers\" >= 0 AND \"meeting_search_candidate_rankings\".\"max_transfers\" >= 0"
+        },
+        "meeting_search_candidate_rankings_spread_chk": {
+          "name": "meeting_search_candidate_rankings_spread_chk",
+          "value": "\"meeting_search_candidate_rankings\".\"arrival_spread_ms\" >= 0"
+        },
+        "meeting_search_candidate_rankings_arrival_order_chk": {
+          "name": "meeting_search_candidate_rankings_arrival_order_chk",
+          "value": "\"meeting_search_candidate_rankings\".\"latest_arrival_at\" >= \"meeting_search_candidate_rankings\".\"earliest_arrival_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_search_candidates": {
+      "name": "meeting_search_candidates",
+      "schema": "",
+      "columns": {
+        "search_id": {
+          "name": "search_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "destination_place_id": {
+          "name": "destination_place_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ordinal": {
+          "name": "ordinal",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "distance_meters": {
+          "name": "distance_meters",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meeting_search_candidates_search_id_meeting_searches_id_fk": {
+          "name": "meeting_search_candidates_search_id_meeting_searches_id_fk",
+          "tableFrom": "meeting_search_candidates",
+          "tableTo": "meeting_searches",
+          "columnsFrom": ["search_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_search_candidates_destination_place_id_places_id_fk": {
+          "name": "meeting_search_candidates_destination_place_id_places_id_fk",
+          "tableFrom": "meeting_search_candidates",
+          "tableTo": "places",
+          "columnsFrom": ["destination_place_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "meeting_search_candidates_pk": {
+          "name": "meeting_search_candidates_pk",
+          "columns": ["search_id", "destination_place_id"]
+        }
+      },
+      "uniqueConstraints": {
+        "meeting_search_candidates_search_ordinal_uid": {
+          "name": "meeting_search_candidates_search_ordinal_uid",
+          "nullsNotDistinct": false,
+          "columns": ["search_id", "ordinal"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "meeting_search_candidates_ordinal_chk": {
+          "name": "meeting_search_candidates_ordinal_chk",
+          "value": "\"meeting_search_candidates\".\"ordinal\" >= 0"
+        },
+        "meeting_search_candidates_distance_chk": {
+          "name": "meeting_search_candidates_distance_chk",
+          "value": "\"meeting_search_candidates\".\"distance_meters\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_search_journeys": {
+      "name": "meeting_search_journeys",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "routing_work_id": {
+          "name": "routing_work_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "journey_ordinal": {
+          "name": "journey_ordinal",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "departure_at": {
+          "name": "departure_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "arrival_at": {
+          "name": "arrival_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_minutes": {
+          "name": "duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "transfers": {
+          "name": "transfers",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "transport_modes": {
+          "name": "transport_modes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "legs": {
+          "name": "legs",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_reference": {
+          "name": "provider_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meeting_search_journeys_routing_work_id_meeting_search_routing_work_id_fk": {
+          "name": "meeting_search_journeys_routing_work_id_meeting_search_routing_work_id_fk",
+          "tableFrom": "meeting_search_journeys",
+          "tableTo": "meeting_search_routing_work",
+          "columnsFrom": ["routing_work_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "meeting_search_journeys_work_ordinal_uid": {
+          "name": "meeting_search_journeys_work_ordinal_uid",
+          "nullsNotDistinct": false,
+          "columns": ["routing_work_id", "journey_ordinal"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "meeting_search_journeys_ordinal_chk": {
+          "name": "meeting_search_journeys_ordinal_chk",
+          "value": "\"meeting_search_journeys\".\"journey_ordinal\" >= 0"
+        },
+        "meeting_search_journeys_duration_chk": {
+          "name": "meeting_search_journeys_duration_chk",
+          "value": "\"meeting_search_journeys\".\"duration_minutes\" >= 0"
+        },
+        "meeting_search_journeys_transfers_chk": {
+          "name": "meeting_search_journeys_transfers_chk",
+          "value": "\"meeting_search_journeys\".\"transfers\" >= 0"
+        },
+        "meeting_search_journeys_arrival_after_departure_chk": {
+          "name": "meeting_search_journeys_arrival_after_departure_chk",
+          "value": "\"meeting_search_journeys\".\"arrival_at\" >= \"meeting_search_journeys\".\"departure_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_search_participants": {
+      "name": "meeting_search_participants",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "meeting_search_id": {
+          "name": "meeting_search_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "participant_id": {
+          "name": "participant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "origin_place_id": {
+          "name": "origin_place_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meeting_search_participants_meeting_search_id_meeting_searches_id_fk": {
+          "name": "meeting_search_participants_meeting_search_id_meeting_searches_id_fk",
+          "tableFrom": "meeting_search_participants",
+          "tableTo": "meeting_searches",
+          "columnsFrom": ["meeting_search_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_search_participants_origin_place_id_places_id_fk": {
+          "name": "meeting_search_participants_origin_place_id_places_id_fk",
+          "tableFrom": "meeting_search_participants",
+          "tableTo": "places",
+          "columnsFrom": ["origin_place_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "meeting_search_participants_search_participant_uid": {
+          "name": "meeting_search_participants_search_participant_uid",
+          "nullsNotDistinct": false,
+          "columns": ["meeting_search_id", "participant_id"]
+        },
+        "meeting_search_participants_search_position_uid": {
+          "name": "meeting_search_participants_search_position_uid",
+          "nullsNotDistinct": false,
+          "columns": ["meeting_search_id", "position"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "meeting_search_participants_participant_id_length_chk": {
+          "name": "meeting_search_participants_participant_id_length_chk",
+          "value": "char_length(\"meeting_search_participants\".\"participant_id\") >= 1 AND char_length(\"meeting_search_participants\".\"participant_id\") <= 64"
+        },
+        "meeting_search_participants_display_name_length_chk": {
+          "name": "meeting_search_participants_display_name_length_chk",
+          "value": "char_length(\"meeting_search_participants\".\"display_name\") >= 1 AND char_length(\"meeting_search_participants\".\"display_name\") <= 80"
+        },
+        "meeting_search_participants_position_chk": {
+          "name": "meeting_search_participants_position_chk",
+          "value": "\"meeting_search_participants\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_search_routing_work": {
+      "name": "meeting_search_routing_work",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "search_id": {
+          "name": "search_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "participant_id": {
+          "name": "participant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "destination_place_id": {
+          "name": "destination_place_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "meeting_search_routing_work_search_status_idx": {
+          "name": "meeting_search_routing_work_search_status_idx",
+          "columns": [
+            {
+              "expression": "search_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "meeting_search_routing_work_search_id_meeting_searches_id_fk": {
+          "name": "meeting_search_routing_work_search_id_meeting_searches_id_fk",
+          "tableFrom": "meeting_search_routing_work",
+          "tableTo": "meeting_searches",
+          "columnsFrom": ["search_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_search_routing_work_candidate_fkey": {
+          "name": "meeting_search_routing_work_candidate_fkey",
+          "tableFrom": "meeting_search_routing_work",
+          "tableTo": "meeting_search_candidates",
+          "columnsFrom": ["search_id", "destination_place_id"],
+          "columnsTo": ["search_id", "destination_place_id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "meeting_search_routing_work_logical_uid": {
+          "name": "meeting_search_routing_work_logical_uid",
+          "nullsNotDistinct": false,
+          "columns": ["search_id", "participant_id", "destination_place_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "meeting_search_routing_work_status_chk": {
+          "name": "meeting_search_routing_work_status_chk",
+          "value": "\"meeting_search_routing_work\".\"status\" IN ('pending', 'running', 'succeeded', 'no_journeys', 'exhausted')"
+        },
+        "meeting_search_routing_work_participant_id_length_chk": {
+          "name": "meeting_search_routing_work_participant_id_length_chk",
+          "value": "char_length(\"meeting_search_routing_work\".\"participant_id\") >= 1 AND char_length(\"meeting_search_routing_work\".\"participant_id\") <= 64"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_search_transport_modes": {
+      "name": "meeting_search_transport_modes",
+      "schema": "",
+      "columns": {
+        "meeting_search_id": {
+          "name": "meeting_search_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meeting_search_transport_modes_meeting_search_id_meeting_searches_id_fk": {
+          "name": "meeting_search_transport_modes_meeting_search_id_meeting_searches_id_fk",
+          "tableFrom": "meeting_search_transport_modes",
+          "tableTo": "meeting_searches",
+          "columnsFrom": ["meeting_search_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "meeting_search_transport_modes_pk": {
+          "name": "meeting_search_transport_modes_pk",
+          "columns": ["meeting_search_id", "mode"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "meeting_search_transport_modes_mode_chk": {
+          "name": "meeting_search_transport_modes_mode_chk",
+          "value": "\"meeting_search_transport_modes\".\"mode\" IN ('train', 'bus', 'tram', 'metro', 'ferry')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_searches": {
+      "name": "meeting_searches",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "travel_date": {
+          "name": "travel_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "earliest_departure_time": {
+          "name": "earliest_departure_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "latest_arrival_time": {
+          "name": "latest_arrival_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "arrival_day_offset": {
+          "name": "arrival_day_offset",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "max_journey_duration_minutes": {
+          "name": "max_journey_duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_transfers": {
+          "name": "max_transfers",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "min_transfer_duration_minutes": {
+          "name": "min_transfer_duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ranking_mode": {
+          "name": "ranking_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failed_at": {
+          "name": "failed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completion_outcome": {
+          "name": "completion_outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_code": {
+          "name": "failure_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recommended_destination_place_id": {
+          "name": "recommended_destination_place_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "meeting_searches_recommended_destination_place_id_fkey": {
+          "name": "meeting_searches_recommended_destination_place_id_fkey",
+          "tableFrom": "meeting_searches",
+          "tableTo": "places",
+          "columnsFrom": ["recommended_destination_place_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "meeting_searches_status_chk": {
+          "name": "meeting_searches_status_chk",
+          "value": "\"meeting_searches\".\"status\" IN ('queued', 'running', 'partially-completed', 'completed', 'failed', 'cancelling', 'cancelled')"
+        },
+        "meeting_searches_ranking_mode_chk": {
+          "name": "meeting_searches_ranking_mode_chk",
+          "value": "\"meeting_searches\".\"ranking_mode\" IN ('fairest', 'fastest-overall', 'fewest-transfers', 'arrive-together')"
+        },
+        "meeting_searches_arrival_day_offset_chk": {
+          "name": "meeting_searches_arrival_day_offset_chk",
+          "value": "\"meeting_searches\".\"arrival_day_offset\" >= 0 AND \"meeting_searches\".\"arrival_day_offset\" <= 1"
+        },
+        "meeting_searches_max_journey_duration_chk": {
+          "name": "meeting_searches_max_journey_duration_chk",
+          "value": "\"meeting_searches\".\"max_journey_duration_minutes\" >= 1 AND \"meeting_searches\".\"max_journey_duration_minutes\" <= 1440"
+        },
+        "meeting_searches_max_transfers_chk": {
+          "name": "meeting_searches_max_transfers_chk",
+          "value": "\"meeting_searches\".\"max_transfers\" >= 0 AND \"meeting_searches\".\"max_transfers\" <= 5"
+        },
+        "meeting_searches_min_transfer_duration_chk": {
+          "name": "meeting_searches_min_transfer_duration_chk",
+          "value": "\"meeting_searches\".\"min_transfer_duration_minutes\" >= 1 AND \"meeting_searches\".\"min_transfer_duration_minutes\" <= 120"
+        },
+        "meeting_searches_completion_outcome_chk": {
+          "name": "meeting_searches_completion_outcome_chk",
+          "value": "\"meeting_searches\".\"completion_outcome\" IS NULL OR \"meeting_searches\".\"completion_outcome\" IN ('no_candidates', 'ranked', 'no_feasible_candidates')"
+        },
+        "meeting_searches_completion_pairing_chk": {
+          "name": "meeting_searches_completion_pairing_chk",
+          "value": "(\n        (\n          \"meeting_searches\".\"status\" = 'completed'\n          AND \"meeting_searches\".\"completion_outcome\" IS NOT NULL\n          AND \"meeting_searches\".\"failed_at\" IS NULL\n          AND \"meeting_searches\".\"failure_code\" IS NULL\n          AND (\n            (\"meeting_searches\".\"completion_outcome\" = 'ranked' AND \"meeting_searches\".\"recommended_destination_place_id\" IS NOT NULL)\n            OR (\"meeting_searches\".\"completion_outcome\" <> 'ranked' AND \"meeting_searches\".\"recommended_destination_place_id\" IS NULL)\n          )\n        )\n        OR (\n          \"meeting_searches\".\"status\" = 'failed'\n          AND \"meeting_searches\".\"failure_code\" IS NOT NULL\n          AND \"meeting_searches\".\"completion_outcome\" IS NULL\n          AND \"meeting_searches\".\"completed_at\" IS NULL\n          AND \"meeting_searches\".\"recommended_destination_place_id\" IS NULL\n        )\n        OR (\n          \"meeting_searches\".\"status\" NOT IN ('completed', 'failed')\n          AND \"meeting_searches\".\"completion_outcome\" IS NULL\n          AND \"meeting_searches\".\"failure_code\" IS NULL\n          AND \"meeting_searches\".\"completed_at\" IS NULL\n          AND \"meeting_searches\".\"failed_at\" IS NULL\n          AND \"meeting_searches\".\"recommended_destination_place_id\" IS NULL\n        )\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.outbox_events": {
+      "name": "outbox_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aggregate_type": {
+          "name": "aggregate_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aggregate_id": {
+          "name": "aggregate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "schema_version": {
+          "name": "schema_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dedupe_key": {
+          "name": "dedupe_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'default'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_count": {
+          "name": "failure_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "leased_until": {
+          "name": "leased_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dead_lettered_at": {
+          "name": "dead_lettered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "outbox_events_unpublished_created_at_idx": {
+          "name": "outbox_events_unpublished_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"outbox_events\".\"published_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "outbox_events_due_claim_idx": {
+          "name": "outbox_events_due_claim_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"outbox_events\".\"published_at\" IS NULL AND \"outbox_events\".\"dead_lettered_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "outbox_events_aggregate_id_meeting_searches_id_fk": {
+          "name": "outbox_events_aggregate_id_meeting_searches_id_fk",
+          "tableFrom": "outbox_events",
+          "tableTo": "meeting_searches",
+          "columnsFrom": ["aggregate_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "outbox_events_aggregate_event_dedupe_uid": {
+          "name": "outbox_events_aggregate_event_dedupe_uid",
+          "nullsNotDistinct": false,
+          "columns": ["aggregate_type", "aggregate_id", "event_type", "dedupe_key"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "outbox_events_event_type_chk": {
+          "name": "outbox_events_event_type_chk",
+          "value": "\"outbox_events\".\"event_type\" IN ('meeting-search.requested', 'meeting-search.candidates-requested', 'routing.requested', 'meeting-search.finalization-requested')"
+        },
+        "outbox_events_aggregate_type_chk": {
+          "name": "outbox_events_aggregate_type_chk",
+          "value": "\"outbox_events\".\"aggregate_type\" IN ('meeting-search')"
+        },
+        "outbox_events_schema_version_chk": {
+          "name": "outbox_events_schema_version_chk",
+          "value": "\"outbox_events\".\"schema_version\" >= 1 AND (\n        (\n          \"outbox_events\".\"event_type\" = 'meeting-search.requested'\n          AND \"outbox_events\".\"schema_version\" = 1\n        ) OR (\n          \"outbox_events\".\"event_type\" = 'meeting-search.candidates-requested'\n          AND \"outbox_events\".\"schema_version\" = 1\n        ) OR (\n          \"outbox_events\".\"event_type\" = 'routing.requested'\n          AND \"outbox_events\".\"schema_version\" = 1\n        ) OR (\n          \"outbox_events\".\"event_type\" = 'meeting-search.finalization-requested'\n          AND \"outbox_events\".\"schema_version\" = 1\n        )\n      )"
+        },
+        "outbox_events_meeting_search_payload_chk": {
+          "name": "outbox_events_meeting_search_payload_chk",
+          "value": "(\n        (\n          \"outbox_events\".\"event_type\" = 'meeting-search.requested'\n          AND \"outbox_events\".\"aggregate_type\" = 'meeting-search'\n          AND \"outbox_events\".\"dedupe_key\" = 'default'\n          AND \"outbox_events\".\"payload\" = jsonb_build_object('searchId', \"outbox_events\".\"aggregate_id\"::text)\n        ) OR (\n          \"outbox_events\".\"event_type\" = 'meeting-search.candidates-requested'\n          AND \"outbox_events\".\"aggregate_type\" = 'meeting-search'\n          AND \"outbox_events\".\"dedupe_key\" = 'default'\n          AND \"outbox_events\".\"payload\" = jsonb_build_object('searchId', \"outbox_events\".\"aggregate_id\"::text)\n        ) OR (\n          \"outbox_events\".\"event_type\" = 'routing.requested'\n          AND \"outbox_events\".\"aggregate_type\" = 'meeting-search'\n          AND \"outbox_events\".\"dedupe_key\" = (\"outbox_events\".\"payload\"->>'routingWorkId')\n          AND (\"outbox_events\".\"payload\"->>'searchId') = \"outbox_events\".\"aggregate_id\"::text\n          AND (\"outbox_events\".\"payload\"->>'routingWorkId') IS NOT NULL\n        ) OR (\n          \"outbox_events\".\"event_type\" = 'meeting-search.finalization-requested'\n          AND \"outbox_events\".\"aggregate_type\" = 'meeting-search'\n          AND \"outbox_events\".\"payload\" = jsonb_build_object('searchId', \"outbox_events\".\"aggregate_id\"::text)\n          AND (\n            \"outbox_events\".\"dedupe_key\" LIKE 'candidate-generation:%'\n            OR \"outbox_events\".\"dedupe_key\" LIKE 'routing-work:%'\n          )\n        )\n      )"
+        },
+        "outbox_events_failure_count_chk": {
+          "name": "outbox_events_failure_count_chk",
+          "value": "\"outbox_events\".\"failure_count\" >= 0"
+        },
+        "outbox_events_lease_pair_chk": {
+          "name": "outbox_events_lease_pair_chk",
+          "value": "(\n        (\"outbox_events\".\"lease_token\" IS NULL AND \"outbox_events\".\"leased_until\" IS NULL)\n        OR (\"outbox_events\".\"lease_token\" IS NOT NULL AND \"outbox_events\".\"leased_until\" IS NOT NULL)\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.places": {
+      "name": "places",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "country_code": {
+          "name": "country_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "location": {
+          "name": "location",
+          "type": "geometry(point)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parent_city_id": {
+          "name": "parent_city_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "places_location_gix": {
+          "name": "places_location_gix",
+          "columns": [
+            {
+              "expression": "location",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gist",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "places_parent_city_id_fkey": {
+          "name": "places_parent_city_id_fkey",
+          "tableFrom": "places",
+          "tableTo": "places",
+          "columnsFrom": ["parent_city_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "places_id_length_chk": {
+          "name": "places_id_length_chk",
+          "value": "char_length(\"places\".\"id\") >= 1 AND char_length(\"places\".\"id\") <= 128"
+        },
+        "places_name_length_chk": {
+          "name": "places_name_length_chk",
+          "value": "char_length(\"places\".\"name\") >= 1 AND char_length(\"places\".\"name\") <= 200"
+        },
+        "places_kind_chk": {
+          "name": "places_kind_chk",
+          "value": "\"places\".\"kind\" IN ('city', 'station')"
+        },
+        "places_country_code_chk": {
+          "name": "places_country_code_chk",
+          "value": "\"places\".\"country_code\" ~ '^[A-Z]{2}$'"
+        },
+        "places_timezone_length_chk": {
+          "name": "places_timezone_length_chk",
+          "value": "char_length(\"places\".\"timezone\") >= 1 AND char_length(\"places\".\"timezone\") <= 64"
+        },
+        "places_location_srid_chk": {
+          "name": "places_location_srid_chk",
+          "value": "ST_SRID(\"location\") = 4326"
+        },
+        "places_location_point_chk": {
+          "name": "places_location_point_chk",
+          "value": "GeometryType(\"location\") = 'POINT'"
+        },
+        "places_location_not_empty_chk": {
+          "name": "places_location_not_empty_chk",
+          "value": "NOT ST_IsEmpty(\"location\")"
+        },
+        "places_location_longitude_chk": {
+          "name": "places_location_longitude_chk",
+          "value": "ST_X(\"location\") >= -180 AND ST_X(\"location\") <= 180"
+        },
+        "places_location_latitude_chk": {
+          "name": "places_location_latitude_chk",
+          "value": "ST_Y(\"location\") >= -90 AND ST_Y(\"location\") <= 90"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

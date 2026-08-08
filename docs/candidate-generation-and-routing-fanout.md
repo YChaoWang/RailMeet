@@ -93,7 +93,7 @@ Logs must not include coordinates, complete request URLs, or provider response b
 ### Why the search remains `running`
 
 Phase 7 only gathers candidates and journeys. Ranking, destination selection, and completion
-are Phase 8.
+are Phase 8 — see [finalization-and-ranking.md](./finalization-and-ranking.md).
 
 ## Consequences
 

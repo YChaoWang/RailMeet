@@ -16,6 +16,8 @@ export {
   MEETING_SEARCH_AGGREGATE_TYPE,
   MEETING_SEARCH_CANDIDATES_REQUESTED_EVENT_TYPE,
   MEETING_SEARCH_CANDIDATES_REQUESTED_SCHEMA_VERSION,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION,
   MEETING_SEARCH_REQUESTED_EVENT_TYPE,
   MEETING_SEARCH_REQUESTED_SCHEMA_VERSION,
   OUTBOX_AGGREGATE_TYPES,
@@ -23,9 +25,12 @@ export {
   OUTBOX_EVENT_TYPES,
   ROUTING_REQUESTED_EVENT_TYPE,
   ROUTING_REQUESTED_SCHEMA_VERSION,
+  candidateGenerationFinalizationDedupeKey,
   isOutboxAggregateType,
   isOutboxEventType,
+  routingWorkFinalizationDedupeKey,
   type MeetingSearchCandidatesRequestedPayload,
+  type MeetingSearchFinalizationRequestedPayload,
   type MeetingSearchRequestedPayload,
   type OutboxAggregateType,
   type OutboxEventType,
@@ -41,7 +46,9 @@ export type {
   ConditionalStatusUpdateResult,
   CreateMeetingSearchCommand,
   CreateMeetingSearchParticipantCommand,
+  CandidateFeasibilityReason,
   CreatePlaceCommand,
+  FinalizeMeetingSearchResult,
   GeoPoint,
   MarkOutboxDeadLetterCommand,
   MarkOutboxPublishedCommand,
@@ -57,9 +64,11 @@ export type {
   PlaceRecord,
   RoutingWorkRecord,
   RoutingWorkStatus,
+  SearchCompletionOutcome,
   SearchKickoffResult,
 } from './models.js';
 
+export type { FinalizationRepository } from './repositories/finalization-repository.js';
 export type { MeetingSearchRepository } from './repositories/meeting-search-repository.js';
 export type { OutboxRepository } from './repositories/outbox-repository.js';
 export type { PlaceRepository } from './repositories/place-repository.js';

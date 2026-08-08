@@ -182,6 +182,53 @@ describe('workerEnvSchema search job retry and retention', () => {
     ).toThrow(ConfigError);
   });
 
+  it('applies SEARCH_FINALIZATION_CONSUMER_CONCURRENCY default of 2', () => {
+    const config = toWorkerConfig(parseWithSchema(workerEnvSchema, { ...validShared }, 'worker'));
+    expect(config.searchJobs.finalizationConsumerConcurrency).toBe(2);
+  });
+
+  it('rejects SEARCH_FINALIZATION_CONSUMER_CONCURRENCY of zero', () => {
+    expect(() =>
+      parseWithSchema(
+        workerEnvSchema,
+        { ...validShared, SEARCH_FINALIZATION_CONSUMER_CONCURRENCY: '0' },
+        'worker',
+      ),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects SEARCH_FINALIZATION_CONSUMER_CONCURRENCY negative values', () => {
+    expect(() =>
+      parseWithSchema(
+        workerEnvSchema,
+        { ...validShared, SEARCH_FINALIZATION_CONSUMER_CONCURRENCY: '-1' },
+        'worker',
+      ),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects SEARCH_FINALIZATION_CONSUMER_CONCURRENCY non-integer values', () => {
+    expect(() =>
+      parseWithSchema(
+        workerEnvSchema,
+        { ...validShared, SEARCH_FINALIZATION_CONSUMER_CONCURRENCY: '1.5' },
+        'worker',
+      ),
+    ).toThrow(ConfigError);
+  });
+
+  it('accepts SEARCH_FINALIZATION_CONSUMER_CONCURRENCY valid override', () => {
+    expect(
+      toWorkerConfig(
+        parseWithSchema(
+          workerEnvSchema,
+          { ...validShared, SEARCH_FINALIZATION_CONSUMER_CONCURRENCY: '3' },
+          'worker',
+        ),
+      ).searchJobs.finalizationConsumerConcurrency,
+    ).toBe(3);
+  });
+
   it('applies SEARCH_CANDIDATE_LIMIT default of 8', () => {
     const config = toWorkerConfig(parseWithSchema(workerEnvSchema, { ...validShared }, 'worker'));
     expect(config.searchJobs.candidateLimit).toBe(8);

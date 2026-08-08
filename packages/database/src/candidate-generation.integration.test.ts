@@ -214,6 +214,10 @@ describe('candidate generation persistence', () => {
       'succeeded',
     );
     expect((await database.meetingSearches.findById(search.id))?.status).toBe('running');
+    const finalizationEvents = (await database.outbox.findByAggregateId(search.id)).filter(
+      (event) => event.eventType === 'meeting-search.finalization-requested',
+    );
+    expect(finalizationEvents.length).toBe(1);
   });
 
   it('handles duplicate candidate-generation claims without resetting started_at', async () => {

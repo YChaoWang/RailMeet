@@ -68,6 +68,15 @@ export type MeetingSearchParticipantRecord = {
   readonly position: number;
 };
 
+export type SearchCompletionOutcome = 'no_candidates' | 'ranked' | 'no_feasible_candidates';
+
+export type CandidateFeasibilityReason =
+  | 'feasible'
+  | 'participant_no_journeys'
+  | 'routing_incomplete'
+  | 'technical_failure'
+  | 'invariant_violation';
+
 export type MeetingSearchRecord = {
   readonly id: string;
   readonly status: SearchStatus;
@@ -85,9 +94,36 @@ export type MeetingSearchRecord = {
   readonly allowedCountryCodes: readonly string[];
   /** Set once on first queued→running kickoff; null while still queued. */
   readonly startedAt: Date | null;
+  /** Set once on running→completed (Phase 8). */
+  readonly completedAt: Date | null;
+  /** Set once on running→failed (Phase 8). */
+  readonly failedAt: Date | null;
+  readonly completionOutcome: SearchCompletionOutcome | null;
+  readonly failureCode: string | null;
+  readonly recommendedDestinationPlaceId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
+
+export type FinalizeMeetingSearchResult =
+  | {
+      readonly outcome: 'completed';
+      readonly searchId: string;
+      readonly completionOutcome: SearchCompletionOutcome;
+      readonly recommendedDestinationPlaceId: string | null;
+    }
+  | {
+      readonly outcome: 'failed';
+      readonly searchId: string;
+      readonly failureCode: string;
+    }
+  | { readonly outcome: 'not_ready'; readonly searchId: string }
+  | {
+      readonly outcome: 'already_terminal';
+      readonly searchId: string;
+      readonly status: SearchStatus;
+    }
+  | { readonly outcome: 'not_found'; readonly searchId: string };
 
 export type ConditionalStatusUpdateResult =
   | { readonly outcome: 'updated'; readonly search: MeetingSearchRecord }

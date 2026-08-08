@@ -16,13 +16,14 @@ reliability, clear architecture, and incremental delivery.
 | [docs/outbox-dispatch.md](./docs/outbox-dispatch.md)                                                 | Dispatcher, BullMQ publish, retries     |
 | [docs/search-kickoff-and-routing.md](./docs/search-kickoff-and-routing.md)                           | Kickoff consumer, retention, Transitous |
 | [docs/candidate-generation-and-routing-fanout.md](./docs/candidate-generation-and-routing-fanout.md) | Phase 7 candidates and journey fan-out  |
+| [docs/finalization-and-ranking.md](./docs/finalization-and-ranking.md)                               | Phase 8 fan-in, ranking, completion     |
 
 ## Architecture (summary)
 
 ```text
 apps/web · apps/api · apps/worker
         ↑
-packages/queue · packages/routing (worker)
+packages/queue · packages/routing · packages/search-engine (worker)
 packages/validation · packages/database
         ↑
 packages/shared
@@ -30,22 +31,25 @@ packages/shared
 
 - **web** — UI only; talks to the API
 - **api** — validates requests, creates searches, returns status (thin handlers)
-- **worker** — outbox → BullMQ publisher + kickoff consumer (`queued` → `running`)
+- **worker** — outbox dispatcher + kickoff, candidate, routing, and finalization consumers
 
 See [docs/architecture.md](./docs/architecture.md) for the full layout and dependency rules.
 
 ## What works today
 
 - Canonical places + meeting-search aggregates in PostGIS
-- Transactional outbox (`meeting-search.requested`) on create
+- Transactional outbox on create, candidates, routing, and finalization fan-in
 - Worker dispatcher publishes unpublished events to BullMQ with deterministic job IDs
-- BullMQ kickoff consumer atomically transitions `queued` → `running` (idempotent)
+- Kickoff → candidate generation → routing → finalization ranking pipeline
+- Deterministic ranking for `fairest`, `fastest-overall`, `fewest-transfers`, `arrive-together`
+- Durable `completed` / `failed` search outcomes with relational ranking persistence
 - Provider-neutral routing boundary + Transitous MOTIS 2 `/api/v5/plan` adapter
 - `POST/GET /api/v1/meeting-searches` with shared envelopes and request IDs
 - `/health`, Compose PostGIS + Redis, unit and integration tests
 
-`queued` means durably accepted. `running` means the kickoff job was accepted — not that
-routes exist yet. There is no auth, candidate generation, journey persistence, or ranking yet.
+`queued` means durably accepted. `running` means the async pipeline is in progress.
+`completed` / `failed` are Phase 8 terminal outcomes. There is no public results API or
+frontend ranking UI yet (Phase 9).
 
 ## Local setup
 
@@ -119,7 +123,7 @@ No secrets are committed.
 | `pnpm test:integration`            | Database integration tests (Docker required) |
 | `pnpm test:integration:queue`      | Outbox + BullMQ consumer Redis integration   |
 | `pnpm test:integration:transitous` | Opt-in live Transitous smoke (1 request)     |
-| `pnpm worker:dev`                  | Run dispatcher + kickoff consumer            |
+| `pnpm worker:dev`                  | Run dispatcher + Phase 6–8 consumers         |
 | `pnpm format`                      | Format with Prettier                         |
 | `pnpm format:check`                | Check formatting                             |
 | `pnpm docker:up`                   | Start PostGIS and Redis                      |
@@ -141,8 +145,7 @@ migrations against disposable PostGIS via Testcontainers.
 
 ## Current limitations
 
-- Searches remain `running` after candidate generation and journey fan-out; ranking, destination selection, and completion are Phase 8
-- No public journey/result or progress APIs yet
+- Ranking results are persisted but not exposed via a public results/progress API or frontend (Phase 9)
 - No place seed/import pipeline
 - Parent-city “must be kind=city” is not DB-enforced
 - No authentication or user ownership

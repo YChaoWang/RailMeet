@@ -2,6 +2,8 @@ import {
   MEETING_SEARCH_AGGREGATE_TYPE,
   MEETING_SEARCH_CANDIDATES_REQUESTED_EVENT_TYPE,
   MEETING_SEARCH_CANDIDATES_REQUESTED_SCHEMA_VERSION,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION,
   MEETING_SEARCH_REQUESTED_EVENT_TYPE,
   MEETING_SEARCH_REQUESTED_SCHEMA_VERSION,
   ROUTING_REQUESTED_EVENT_TYPE,
@@ -14,6 +16,9 @@ import {
   MEETING_SEARCH_CANDIDATES_QUEUE_NAME,
   MEETING_SEARCH_CANDIDATES_REQUESTED_JOB_NAME,
   MEETING_SEARCH_CANDIDATES_REQUESTED_JOB_SCHEMA_VERSION,
+  MEETING_SEARCH_FINALIZATION_QUEUE_NAME,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_NAME,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_SCHEMA_VERSION,
   MEETING_SEARCH_REQUESTED_JOB_NAME,
   MEETING_SEARCH_REQUESTED_JOB_SCHEMA_VERSION,
   MEETING_SEARCHES_QUEUE_NAME,
@@ -126,6 +131,36 @@ export function mapOutboxEventToJob(event: OutboxEventRecord): MapOutboxEventRes
           schemaVersion: ROUTING_REQUESTED_JOB_SCHEMA_VERSION,
           searchId,
           routingWorkId,
+        },
+      },
+    };
+  }
+
+  if (event.eventType === MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE) {
+    if (event.schemaVersion !== MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION) {
+      return { ok: false, errorCode: 'UNSUPPORTED_SCHEMA_VERSION' };
+    }
+    const searchId = event.payload.searchId;
+    if (
+      typeof searchId !== 'string' ||
+      searchId.length === 0 ||
+      searchId !== event.aggregateId ||
+      !(
+        event.dedupeKey.startsWith('candidate-generation:') ||
+        event.dedupeKey.startsWith('routing-work:')
+      )
+    ) {
+      return { ok: false, errorCode: 'INVALID_PAYLOAD' };
+    }
+    return {
+      ok: true,
+      job: {
+        queueName: MEETING_SEARCH_FINALIZATION_QUEUE_NAME,
+        jobName: MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_NAME,
+        jobId,
+        data: {
+          schemaVersion: MEETING_SEARCH_FINALIZATION_REQUESTED_JOB_SCHEMA_VERSION,
+          searchId,
         },
       },
     };

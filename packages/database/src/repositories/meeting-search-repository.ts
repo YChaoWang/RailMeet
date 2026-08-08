@@ -15,6 +15,7 @@ import type {
   CreateMeetingSearchCommand,
   MeetingSearchParticipantRecord,
   MeetingSearchRecord,
+  SearchCompletionOutcome,
   SearchKickoffResult,
 } from '../models.js';
 import {
@@ -92,6 +93,16 @@ function assertArrivalDayOffset(value: number): 0 | 1 {
   throw new Error(`Unexpected arrival day offset from database: ${value}`);
 }
 
+function assertCompletionOutcome(value: string | null): SearchCompletionOutcome | null {
+  if (value === null) {
+    return null;
+  }
+  if (value === 'no_candidates' || value === 'ranked' || value === 'no_feasible_candidates') {
+    return value;
+  }
+  throw new Error(`Unexpected completion outcome from database: ${value}`);
+}
+
 async function loadMeetingSearchAggregate(
   db: Db,
   searchId: string,
@@ -136,6 +147,11 @@ async function loadMeetingSearchAggregate(
     allowedTransportModes: modeRows.map((row) => assertTransportMode(row.mode)),
     allowedCountryCodes: countryRows.map((row) => row.countryCode),
     startedAt: search.startedAt ?? null,
+    completedAt: search.completedAt ?? null,
+    failedAt: search.failedAt ?? null,
+    completionOutcome: assertCompletionOutcome(search.completionOutcome ?? null),
+    failureCode: search.failureCode ?? null,
+    recommendedDestinationPlaceId: search.recommendedDestinationPlaceId ?? null,
     createdAt: search.createdAt,
     updatedAt: search.updatedAt,
   };

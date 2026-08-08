@@ -31,6 +31,7 @@
     "@railmeet/routing": "workspace:*",
     "@testcontainers/postgresql": "^10.28.0",
     "@testcontainers/redis": "^10.28.0",
+    "testcontainers": "^10.28.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }

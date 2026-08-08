@@ -126,7 +126,11 @@ describe('meeting-search kickoff', () => {
     const completed = await createQueuedSearch(database);
     await database.meetingSearches.tryKickoff(completed.id);
     await database.db.execute(sql`
-      UPDATE meeting_searches SET status = 'completed' WHERE id = ${completed.id}
+      UPDATE meeting_searches
+      SET status = 'completed',
+          completion_outcome = 'no_candidates',
+          completed_at = coalesce(completed_at, now())
+      WHERE id = ${completed.id}
     `);
     const completedKickoff = await database.meetingSearches.tryKickoff(completed.id);
     expect(completedKickoff.outcome).toBe('already_terminal');
@@ -134,7 +138,11 @@ describe('meeting-search kickoff', () => {
 
     const failed = await createQueuedSearch(database);
     await database.db.execute(sql`
-      UPDATE meeting_searches SET status = 'failed' WHERE id = ${failed.id}
+      UPDATE meeting_searches
+      SET status = 'failed',
+          failure_code = 'TEST_FAILURE',
+          failed_at = coalesce(failed_at, now())
+      WHERE id = ${failed.id}
     `);
     const failedKickoff = await database.meetingSearches.tryKickoff(failed.id);
     expect(failedKickoff.outcome).toBe('already_terminal');

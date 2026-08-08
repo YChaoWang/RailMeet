@@ -43,6 +43,13 @@
       "when": 1786196236888,
       "tag": "0005_steep_matthew_murdock",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786197199064,
+      "tag": "0006_petite_flatman",
+      "breakpoints": true
     }
   ]
 }

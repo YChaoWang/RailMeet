@@ -4,12 +4,14 @@ import { createLogger, type Logger } from '@railmeet/observability';
 import {
   closeRedisConnection,
   createCandidateConsumer,
+  createFinalizationConsumer,
   createMeetingSearchConsumer,
   createMeetingSearchQueuePublisher,
   createOutboxDispatcher,
   createRedisConnection,
   createRoutingConsumer,
   type CandidateConsumer,
+  type FinalizationConsumer,
   type MeetingSearchConsumer,
   type MeetingSearchQueuePublisher,
   type OutboxDispatcher,
@@ -18,6 +20,7 @@ import {
 import { createTransitousJourneyPlanner, type JourneyPlanner } from '@railmeet/routing';
 
 import { createCandidateGenerationProcessor } from './candidate-generation.js';
+import { createFinalizationProcessor } from './finalization.js';
 import { createMeetingSearchKickoffProcessor } from './meeting-search-kickoff.js';
 import { createRoutingWorkProcessor } from './routing-work.js';
 
@@ -29,6 +32,7 @@ export type WorkerRuntime = {
   readonly consumer: MeetingSearchConsumer;
   readonly candidateConsumer: CandidateConsumer;
   readonly routingConsumer: RoutingConsumer;
+  readonly finalizationConsumer: FinalizationConsumer;
   readonly journeyPlanner: JourneyPlanner;
   start: () => void;
   stop: () => Promise<void>;
@@ -52,7 +56,7 @@ function workerRedis(url: string, commandTimeoutMs: number) {
 }
 
 /**
- * Composition root for outbox dispatcher + kickoff/candidate/routing consumers.
+ * Composition root for outbox dispatcher + kickoff/candidate/routing/finalization consumers.
  */
 export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRuntime> {
   const logger =
@@ -82,6 +86,10 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
     options.config.outbox.redisCommandTimeoutMs,
   );
   const routingRedis = workerRedis(
+    options.config.redisUrl,
+    options.config.outbox.redisCommandTimeoutMs,
+  );
+  const finalizationRedis = workerRedis(
     options.config.redisUrl,
     options.config.outbox.redisCommandTimeoutMs,
   );
@@ -149,6 +157,16 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
     }),
   });
 
+  const finalizationConsumer = createFinalizationConsumer({
+    connection: finalizationRedis,
+    logger,
+    concurrency: options.config.searchJobs.finalizationConsumerConcurrency,
+    processFinalization: createFinalizationProcessor({
+      finalization: database.finalization,
+      logger,
+    }),
+  });
+
   let stopping = false;
 
   const runtime: WorkerRuntime = {
@@ -159,12 +177,14 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
     consumer,
     candidateConsumer,
     routingConsumer,
+    finalizationConsumer,
     journeyPlanner,
     start() {
       dispatcher.start();
       void consumer.worker.run();
       void candidateConsumer.worker.run();
       void routingConsumer.worker.run();
+      void finalizationConsumer.worker.run();
       logger.info(
         {
           event: 'worker_ready',
@@ -174,9 +194,11 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
           consumerConcurrency: options.config.searchJobs.consumerConcurrency,
           candidateConsumerConcurrency: options.config.searchJobs.candidateConsumerConcurrency,
           routingConsumerConcurrency: options.config.searchJobs.routingConsumerConcurrency,
+          finalizationConsumerConcurrency:
+            options.config.searchJobs.finalizationConsumerConcurrency,
           candidateLimit: options.config.searchJobs.candidateLimit,
         },
-        'Worker ready (dispatcher + kickoff + candidate + routing consumers active)',
+        'Worker ready (dispatcher + kickoff + candidate + routing + finalization consumers active)',
       );
     },
     async stop() {
@@ -190,6 +212,7 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
         consumer.close(timeoutMs),
         candidateConsumer.close(timeoutMs),
         routingConsumer.close(timeoutMs),
+        finalizationConsumer.close(timeoutMs),
       ]);
       await dispatcher.stop();
       await publisher.close();
@@ -197,6 +220,7 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
       await closeRedisConnection(kickoffRedis);
       await closeRedisConnection(candidateRedis);
       await closeRedisConnection(routingRedis);
+      await closeRedisConnection(finalizationRedis);
       await database.close();
       logger.info('Worker closed cleanly');
     },

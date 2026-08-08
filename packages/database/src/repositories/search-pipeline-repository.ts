@@ -3,8 +3,12 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import {
   MEETING_SEARCH_AGGREGATE_TYPE,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE,
+  MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION,
   ROUTING_REQUESTED_EVENT_TYPE,
   ROUTING_REQUESTED_SCHEMA_VERSION,
+  candidateGenerationFinalizationDedupeKey,
+  routingWorkFinalizationDedupeKey,
 } from '../outbox.js';
 import type {
   CandidateGenerationRecord,
@@ -219,20 +223,36 @@ export function createSearchPipelineRepository(db: Db): SearchPipelineRepository
     },
 
     async completeCandidateGeneration(searchId, outcome, errorCode) {
-      await db
-        .update(meetingSearchCandidateGenerations)
-        .set({
-          status: outcome,
-          completedAt: sql`coalesce(${meetingSearchCandidateGenerations.completedAt}, now())`,
-          errorCode: errorCode ?? null,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          and(
-            eq(meetingSearchCandidateGenerations.searchId, searchId),
-            sql`${meetingSearchCandidateGenerations.status} IN ('pending', 'running')`,
-          ),
-        );
+      await db.transaction(async (tx) => {
+        await tx
+          .update(meetingSearchCandidateGenerations)
+          .set({
+            status: outcome,
+            completedAt: sql`coalesce(${meetingSearchCandidateGenerations.completedAt}, now())`,
+            errorCode: errorCode ?? null,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              eq(meetingSearchCandidateGenerations.searchId, searchId),
+              sql`${meetingSearchCandidateGenerations.status} IN ('pending', 'running')`,
+            ),
+          );
+
+        if (outcome === 'failed_permanent') {
+          await tx
+            .insert(outboxEvents)
+            .values({
+              eventType: MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE,
+              aggregateType: MEETING_SEARCH_AGGREGATE_TYPE,
+              aggregateId: searchId,
+              schemaVersion: MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION,
+              dedupeKey: candidateGenerationFinalizationDedupeKey(searchId),
+              payload: { searchId },
+            })
+            .onConflictDoNothing();
+        }
+      });
     },
 
     async findNearestCityCandidates(originPlaceIds, limit) {
@@ -349,6 +369,20 @@ export function createSearchPipelineRepository(db: Db): SearchPipelineRepository
           })
           .where(eq(meetingSearchCandidateGenerations.searchId, input.searchId));
 
+        if (existingCandidates.length === 0) {
+          await tx
+            .insert(outboxEvents)
+            .values({
+              eventType: MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE,
+              aggregateType: MEETING_SEARCH_AGGREGATE_TYPE,
+              aggregateId: input.searchId,
+              schemaVersion: MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION,
+              dedupeKey: candidateGenerationFinalizationDedupeKey(input.searchId),
+              payload: { searchId: input.searchId },
+            })
+            .onConflictDoNothing();
+        }
+
         return {
           candidateCount: existingCandidates.length,
           routingWorkCount: workRows.length,
@@ -422,7 +456,7 @@ export function createSearchPipelineRepository(db: Db): SearchPipelineRepository
             .onConflictDoNothing();
         }
 
-        await tx
+        const updated = await tx
           .update(meetingSearchRoutingWork)
           .set({
             status: input.status,
@@ -435,25 +469,89 @@ export function createSearchPipelineRepository(db: Db): SearchPipelineRepository
               eq(meetingSearchRoutingWork.id, input.routingWorkId),
               sql`${meetingSearchRoutingWork.status} IN ('pending', 'running')`,
             ),
-          );
+          )
+          .returning({
+            id: meetingSearchRoutingWork.id,
+            searchId: meetingSearchRoutingWork.searchId,
+          });
+
+        const work =
+          updated[0] ??
+          (
+            await tx
+              .select({
+                id: meetingSearchRoutingWork.id,
+                searchId: meetingSearchRoutingWork.searchId,
+              })
+              .from(meetingSearchRoutingWork)
+              .where(eq(meetingSearchRoutingWork.id, input.routingWorkId))
+              .limit(1)
+          )[0];
+
+        if (work) {
+          await tx
+            .insert(outboxEvents)
+            .values({
+              eventType: MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE,
+              aggregateType: MEETING_SEARCH_AGGREGATE_TYPE,
+              aggregateId: work.searchId,
+              schemaVersion: MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION,
+              dedupeKey: routingWorkFinalizationDedupeKey(work.id),
+              payload: { searchId: work.searchId },
+            })
+            .onConflictDoNothing();
+        }
       });
     },
 
     async markRoutingWorkExhausted(routingWorkId, errorCode) {
-      await db
-        .update(meetingSearchRoutingWork)
-        .set({
-          status: 'exhausted',
-          completedAt: sql`coalesce(${meetingSearchRoutingWork.completedAt}, now())`,
-          errorCode,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          and(
-            eq(meetingSearchRoutingWork.id, routingWorkId),
-            sql`${meetingSearchRoutingWork.status} IN ('pending', 'running')`,
-          ),
-        );
+      await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(meetingSearchRoutingWork)
+          .set({
+            status: 'exhausted',
+            completedAt: sql`coalesce(${meetingSearchRoutingWork.completedAt}, now())`,
+            errorCode,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              eq(meetingSearchRoutingWork.id, routingWorkId),
+              sql`${meetingSearchRoutingWork.status} IN ('pending', 'running')`,
+            ),
+          )
+          .returning({
+            id: meetingSearchRoutingWork.id,
+            searchId: meetingSearchRoutingWork.searchId,
+          });
+
+        const work =
+          updated[0] ??
+          (
+            await tx
+              .select({
+                id: meetingSearchRoutingWork.id,
+                searchId: meetingSearchRoutingWork.searchId,
+              })
+              .from(meetingSearchRoutingWork)
+              .where(eq(meetingSearchRoutingWork.id, routingWorkId))
+              .limit(1)
+          )[0];
+
+        if (work) {
+          await tx
+            .insert(outboxEvents)
+            .values({
+              eventType: MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE,
+              aggregateType: MEETING_SEARCH_AGGREGATE_TYPE,
+              aggregateId: work.searchId,
+              schemaVersion: MEETING_SEARCH_FINALIZATION_REQUESTED_SCHEMA_VERSION,
+              dedupeKey: routingWorkFinalizationDedupeKey(work.id),
+              payload: { searchId: work.searchId },
+            })
+            .onConflictDoNothing();
+        }
+      });
     },
 
     async listJourneysForRoutingWork(routingWorkId) {
