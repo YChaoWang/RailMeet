@@ -255,48 +255,59 @@ export function SearchMap({
         const seq = ++stationRequestSeqRef.current;
         setStationStatus('loading');
 
-        void fetchMapStops(query, { signal: controller.signal }).then((result) => {
-          if (seq !== stationRequestSeqRef.current || controller.signal.aborted) {
-            return;
-          }
-          if (!result.ok) {
-            setStationStatus('error');
-            return;
-          }
-          const collection: GeoJsonFeatureCollection = {
-            type: 'FeatureCollection',
-            features: result.data.features.map((feature) => ({
-              type: 'Feature',
-              id: feature.properties.stopId,
-              properties: {
-                stationId: feature.properties.stopId,
-                name: feature.properties.name,
-                kind: feature.properties.kind,
-                importance: feature.properties.importance,
-                provider: 'transitous',
-                cluster: false,
-              },
-              geometry: feature.geometry,
-            })),
-          };
-          if (stationCacheRef.current.size > 40) {
-            const oldest = stationCacheRef.current.keys().next().value;
-            if (oldest) {
-              stationCacheRef.current.delete(oldest);
+        void fetchMapStops(query, { signal: controller.signal })
+          .then((result) => {
+            if (seq !== stationRequestSeqRef.current || controller.signal.aborted) {
+              return;
             }
-          }
-          stationCacheRef.current.set(viewportKey, collection);
-          const source = map.getSource(STATION_SOURCE_ID) as GeoJsonSetDataSource | undefined;
-          source?.setData(collection);
-          stationViewportKeyRef.current = viewportKey;
-          setStationStatus(
-            result.data.metadata.aggregated ||
-              result.data.metadata.truncated ||
-              zoom < STATION_INDIVIDUAL_ZOOM_MIN
-              ? 'aggregated'
-              : 'ready',
-          );
-        });
+            if (!result.ok) {
+              setStationStatus('error');
+              return;
+            }
+            const collection: GeoJsonFeatureCollection = {
+              type: 'FeatureCollection',
+              features: result.data.features.map((feature) => ({
+                type: 'Feature',
+                id: feature.properties.stopId,
+                properties: {
+                  stationId: feature.properties.stopId,
+                  name: feature.properties.name,
+                  kind: feature.properties.kind,
+                  importance: feature.properties.importance,
+                  provider: 'transitous',
+                  cluster: false,
+                },
+                geometry: feature.geometry,
+              })),
+            };
+            if (stationCacheRef.current.size > 40) {
+              const oldest = stationCacheRef.current.keys().next().value;
+              if (oldest) {
+                stationCacheRef.current.delete(oldest);
+              }
+            }
+            stationCacheRef.current.set(viewportKey, collection);
+            const source = map.getSource(STATION_SOURCE_ID) as GeoJsonSetDataSource | undefined;
+            source?.setData(collection);
+            stationViewportKeyRef.current = viewportKey;
+            setStationStatus(
+              result.data.metadata.aggregated ||
+                result.data.metadata.truncated ||
+                zoom < STATION_INDIVIDUAL_ZOOM_MIN
+                ? 'aggregated'
+                : 'ready',
+            );
+          })
+          .catch((error: unknown) => {
+            // Expected when a newer viewport aborts the previous request.
+            if (controller.signal.aborted || isAbortError(error)) {
+              return;
+            }
+            if (seq !== stationRequestSeqRef.current) {
+              return;
+            }
+            setStationStatus('error');
+          });
       };
 
       let styleReadyHandled = false;
@@ -1193,6 +1204,16 @@ function formatPopupTime(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof DOMException && error.name === 'AbortError') ||
+    (typeof error === 'object' &&
+      error !== null &&
+      'name' in error &&
+      (error as { name?: string }).name === 'AbortError')
+  );
 }
 
 function escapeHtml(value: string): string {
