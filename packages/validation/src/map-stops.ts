@@ -1,6 +1,5 @@
 import {
-  MAP_STOPS_DETAILED_MAX_SPAN_DEG,
-  MAP_STOPS_DETAILED_ZOOM_MIN,
+  MAP_STOPS_MAX_REQUEST_SPAN_DEG,
   PLACE_NAME_MAX_LENGTH,
   PROVIDER_PLACE_ID_MAX_LENGTH,
 } from '@railmeet/shared';
@@ -86,13 +85,10 @@ export const mapStopsQuerySchema = z
     }
     const latSpan = value.maxLat - value.minLat;
     const lonSpan = value.maxLon - value.minLon;
-    if (
-      value.zoom >= MAP_STOPS_DETAILED_ZOOM_MIN &&
-      (latSpan > MAP_STOPS_DETAILED_MAX_SPAN_DEG || lonSpan > MAP_STOPS_DETAILED_MAX_SPAN_DEG)
-    ) {
+    if (latSpan > MAP_STOPS_MAX_REQUEST_SPAN_DEG || lonSpan > MAP_STOPS_MAX_REQUEST_SPAN_DEG) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `At zoom >= ${MAP_STOPS_DETAILED_ZOOM_MIN}, viewport span must be at most ${MAP_STOPS_DETAILED_MAX_SPAN_DEG} degrees`,
+        message: `Viewport span must be at most ${MAP_STOPS_MAX_REQUEST_SPAN_DEG} degrees`,
         path: ['zoom'],
       });
     }

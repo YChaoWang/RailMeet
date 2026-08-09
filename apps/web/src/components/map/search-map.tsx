@@ -10,12 +10,21 @@ import type {
   MapTravelerPopup,
 } from '@/lib/map-markers';
 import { collectSceneCoordinates, originsToGeoJson } from '@/lib/map-markers';
-import { fetchMapStops, mapStopsQueryFromBounds } from '@/lib/map-stops-client';
+import { ensureMapLibreWorker } from '@/lib/ensure-maplibre-worker';
+import {
+  fetchMapStops,
+  isMapStopsViewportEligible,
+  mapStopsQueryFromBounds,
+} from '@/lib/map-stops-client';
 import { formatArrivalSpreadMs, formatDurationMinutes } from '@/lib/search-view-model';
 import { cn } from '@/lib/utils';
 
 /** OpenFreeMap Liberty — open style with required attribution. */
 export const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+
+/** Public-domain Terrarium DEM (AWS elevation tiles) for optional Terrain mode. */
+export const TERRAIN_DEM_TILES_URL =
+  'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
 
 const ROUTE_SOURCE_ID = 'railmeet-selected-routes';
 const ROUTE_CASING_LAYER_ID = 'railmeet-selected-routes-casing';
@@ -29,6 +38,8 @@ const STATION_CLUSTER_LAYER_ID = 'railmeet-viewport-stations-clusters';
 const STATION_CLUSTER_COUNT_LAYER_ID = 'railmeet-viewport-stations-cluster-count';
 const STATION_POINT_LAYER_ID = 'railmeet-viewport-stations-points';
 const STATION_LABEL_LAYER_ID = 'railmeet-viewport-stations-labels';
+const TERRAIN_SOURCE_ID = 'railmeet-terrain-dem';
+const HILLSHADE_LAYER_ID = 'railmeet-terrain-hillshade';
 
 const ROUTE_LAYER_IDS = [
   ROUTE_CASING_LAYER_ID,
@@ -36,6 +47,7 @@ const ROUTE_LAYER_IDS = [
   ROUTE_WALK_LAYER_ID,
 ] as const;
 
+/** Inspected OpenFreeMap Liberty rail line layer IDs (do not invent). */
 const BASEMAP_RAIL_LINE_IDS = [
   'road_major_rail',
   'road_major_rail_hatching',
@@ -51,7 +63,21 @@ const BASEMAP_RAIL_LINE_IDS = [
   'tunnel_transit_rail_hatching',
 ] as const;
 
+/** Inspected OpenFreeMap Liberty place/country label layer IDs. */
+const BASEMAP_PLACE_LABEL_IDS = [
+  'label_city',
+  'label_city_capital',
+  'label_town',
+  'label_village',
+  'label_state',
+  'label_country_1',
+  'label_country_2',
+  'label_country_3',
+] as const;
+
 const STATION_FETCH_DEBOUNCE_MS = 400;
+/** Below this zoom: basemap cities/rails only — no continental station download. */
+const STATION_FETCH_ZOOM_MIN = 7;
 const STATION_DETAIL_ZOOM_MIN = 10;
 const STATION_INDIVIDUAL_ZOOM_MIN = 12;
 
@@ -138,12 +164,15 @@ export function SearchMap({
       if (cancelled || !containerRef.current) {
         return;
       }
+      ensureMapLibreWorker();
       maplibreglRef.current = maplibregl;
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: MAP_STYLE_URL,
-        center: [10.0, 50.0],
-        zoom: 4.2,
+        // Paris region at a provider-safe span so the first station request can succeed
+        // while OpenFreeMap cities/rails remain visible before any traveler is added.
+        center: [2.3522, 48.8566],
+        zoom: 11.6,
         attributionControl: false,
       });
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
@@ -184,24 +213,21 @@ export function SearchMap({
 
       const refreshStations = () => {
         const zoom = map.getZoom();
-        if (zoom < STATION_DETAIL_ZOOM_MIN) {
+        const bounds = {
+          minLon: map.getBounds().getWest(),
+          minLat: map.getBounds().getSouth(),
+          maxLon: map.getBounds().getEast(),
+          maxLat: map.getBounds().getNorth(),
+        };
+        // Continental / wide views: keep basemap cities/rails; only fetch when the
+        // provider can safely answer (zoom + span). Never treat oversized boxes as errors.
+        if (zoom < STATION_FETCH_ZOOM_MIN || !isMapStopsViewportEligible(bounds)) {
           setStationStatus('zoom');
-          const source = map.getSource(STATION_SOURCE_ID) as GeoJsonSetDataSource | undefined;
-          source?.setData({ type: 'FeatureCollection', features: [] });
           stationViewportKeyRef.current = null;
           return;
         }
 
-        const bounds = map.getBounds();
-        const query = mapStopsQueryFromBounds(
-          {
-            minLon: bounds.getWest(),
-            minLat: bounds.getSouth(),
-            maxLon: bounds.getEast(),
-            maxLat: bounds.getNorth(),
-          },
-          zoom,
-        );
+        const query = mapStopsQueryFromBounds(bounds, zoom);
         const viewportKey = [
           query.minLon.toFixed(3),
           query.minLat.toFixed(3),
@@ -264,7 +290,9 @@ export function SearchMap({
           source?.setData(collection);
           stationViewportKeyRef.current = viewportKey;
           setStationStatus(
-            result.data.metadata.aggregated || result.data.metadata.truncated
+            result.data.metadata.aggregated ||
+              result.data.metadata.truncated ||
+              zoom < STATION_INDIVIDUAL_ZOOM_MIN
               ? 'aggregated'
               : 'ready',
           );
@@ -290,6 +318,7 @@ export function SearchMap({
         wrapperRef.current?.setAttribute('data-style-ready', '1');
         try {
           enhanceBasemapTransport(map);
+          ensureTerrainSupport(map, maplibregl);
           // Defer custom sources slightly so the basemap vector pipeline can start.
           // Custom overlays still apply on the next turn via applyCurrentScene.
           window.setTimeout(() => {
@@ -297,7 +326,9 @@ export function SearchMap({
               return;
             }
             applyCurrentScene(true);
+            raiseTravelerLayers(map);
             labelNavigationControls(wrapperRef.current ?? containerRef.current);
+            labelTerrainControl(wrapperRef.current ?? containerRef.current);
             if (!stationHandlersBoundRef.current) {
               stationHandlersBoundRef.current = true;
               map.on('moveend', () => {
@@ -444,6 +475,11 @@ export function SearchMap({
     >
       {/* Inner node is owned by MapLibre — keep React attributes on the wrapper only. */}
       <div ref={containerRef} className="absolute inset-0 h-full w-full" />
+      {stationStatus === 'loading' ? (
+        <p className="pointer-events-none absolute bottom-3 left-1/2 z-[5] max-w-[min(90%,28rem)] -translate-x-1/2 rounded-lg bg-white/90 px-3 py-1.5 text-center text-[11px] text-ink-700 shadow-sm md:left-[calc(50%+200px)]">
+          Loading stations…
+        </p>
+      ) : null}
       {stationStatus === 'zoom' || stationStatus === 'aggregated' ? (
         <p className="pointer-events-none absolute bottom-3 left-1/2 z-[5] max-w-[min(90%,28rem)] -translate-x-1/2 rounded-lg bg-white/90 px-3 py-1.5 text-center text-[11px] text-ink-700 shadow-sm md:left-[calc(50%+200px)]">
           {stationStatus === 'aggregated'
@@ -481,20 +517,177 @@ function enhanceBasemapTransport(map: MapInstance) {
       continue;
     }
     try {
-      map.setPaintProperty(layerId, 'line-opacity', 0.9);
-      map.setPaintProperty(layerId, 'line-width', 1.6);
+      map.setLayoutProperty(layerId, 'visibility', 'visible');
+      // Stock Liberty rails are near-invisible (#bbb, width≈0 until z14). Strengthen mid-zoom context.
+      if (layerId.endsWith('_hatching')) {
+        map.setPaintProperty(layerId, 'line-color', '#6b7280');
+        map.setPaintProperty(layerId, 'line-opacity', 0.75);
+        map.setPaintProperty(layerId, 'line-width', [
+          'interpolate',
+          ['exponential', 1.3],
+          ['zoom'],
+          7,
+          0.6,
+          11,
+          1.4,
+          14,
+          2.4,
+          18,
+          5,
+        ]);
+      } else {
+        map.setPaintProperty(layerId, 'line-color', '#4b5563');
+        map.setPaintProperty(layerId, 'line-opacity', 0.95);
+        map.setPaintProperty(layerId, 'line-width', [
+          'interpolate',
+          ['exponential', 1.3],
+          ['zoom'],
+          7,
+          0.9,
+          11,
+          1.8,
+          14,
+          2.6,
+          18,
+          4,
+        ]);
+      }
     } catch {
       // Keep stock layer.
     }
   }
+
+  for (const layerId of BASEMAP_PLACE_LABEL_IDS) {
+    if (!map.getLayer(layerId)) {
+      continue;
+    }
+    try {
+      map.setLayoutProperty(layerId, 'visibility', 'visible');
+      map.setPaintProperty(layerId, 'text-opacity', 1);
+      map.setPaintProperty(layerId, 'text-halo-width', 1.4);
+      map.setPaintProperty(layerId, 'text-halo-color', '#ffffff');
+    } catch {
+      // Keep stock labels.
+    }
+  }
+
   if (map.getLayer('poi_transit')) {
     try {
       map.setLayoutProperty('poi_transit', 'visibility', 'visible');
-      map.setPaintProperty('poi_transit', 'icon-opacity', 0.85);
+      map.setPaintProperty('poi_transit', 'icon-opacity', 0.9);
+      map.setPaintProperty('poi_transit', 'text-opacity', 0.95);
+      map.setPaintProperty('poi_transit', 'text-halo-width', 1.2);
     } catch {
       // Keep stock POI styling.
     }
   }
+}
+
+function firstSymbolLayerId(map: MapInstance): string | undefined {
+  const style = map.getStyle();
+  const layers = style?.layers;
+  if (!layers) {
+    return undefined;
+  }
+  for (const layer of layers) {
+    if (layer.type === 'symbol') {
+      return layer.id;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Terrain is a background DEM/hillshade toggle — never setStyle().
+ * Preserves station GeoJSON, routes, and traveler markers.
+ */
+function ensureTerrainSupport(map: MapInstance, maplibregl: MapLibreModule) {
+  if (!map.getSource(TERRAIN_SOURCE_ID)) {
+    map.addSource(TERRAIN_SOURCE_ID, {
+      type: 'raster-dem',
+      tiles: [TERRAIN_DEM_TILES_URL],
+      tileSize: 256,
+      maxzoom: 15,
+      encoding: 'terrarium',
+      attribution: 'Terrain © <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a>',
+    });
+  }
+  if (!map.getLayer(HILLSHADE_LAYER_ID)) {
+    const beforeId = firstSymbolLayerId(map);
+    map.addLayer(
+      {
+        id: HILLSHADE_LAYER_ID,
+        type: 'hillshade',
+        source: TERRAIN_SOURCE_ID,
+        layout: { visibility: 'none' },
+        paint: {
+          'hillshade-exaggeration': 0.28,
+          'hillshade-shadow-color': '#5b6470',
+          'hillshade-highlight-color': '#ffffff',
+          'hillshade-illumination-anchor': 'map',
+        },
+      },
+      beforeId,
+    );
+  }
+
+  const alreadyHasTerrainControl = Boolean(
+    (map.getContainer().parentElement ?? map.getContainer()).querySelector(
+      '.maplibregl-ctrl-terrain',
+    ),
+  );
+  if (!alreadyHasTerrainControl) {
+    map.addControl(
+      new maplibregl.TerrainControl({
+        source: TERRAIN_SOURCE_ID,
+        exaggeration: 1.05,
+      }),
+      'top-right',
+    );
+  }
+
+  map.on('terrain', () => {
+    const enabled = Boolean(map.getTerrain());
+    if (map.getLayer(HILLSHADE_LAYER_ID)) {
+      try {
+        map.setLayoutProperty(HILLSHADE_LAYER_ID, 'visibility', enabled ? 'visible' : 'none');
+      } catch {
+        // Ignore transient style races.
+      }
+    }
+    raiseTravelerLayers(map);
+  });
+}
+
+function raiseTravelerLayers(map: MapInstance) {
+  for (const layerId of [
+    STATION_CLUSTER_LAYER_ID,
+    STATION_CLUSTER_COUNT_LAYER_ID,
+    STATION_POINT_LAYER_ID,
+    STATION_LABEL_LAYER_ID,
+    ROUTE_CASING_LAYER_ID,
+    ROUTE_TRANSIT_LAYER_ID,
+    ROUTE_WALK_LAYER_ID,
+    ORIGIN_CIRCLE_LAYER_ID,
+    ORIGIN_LABEL_LAYER_ID,
+  ]) {
+    if (map.getLayer(layerId)) {
+      try {
+        map.moveLayer(layerId);
+      } catch {
+        // Layer may be mid-add.
+      }
+    }
+  }
+}
+
+function labelTerrainControl(container: HTMLElement | null) {
+  if (!container) {
+    return;
+  }
+  container
+    .querySelector('.maplibregl-ctrl-terrain')
+    ?.setAttribute('aria-label', 'Toggle terrain');
 }
 
 function ensureOriginLayers(map: MapInstance) {
@@ -1051,3 +1244,8 @@ export const SEARCH_MAP_STATION_LAYER_IDS = [
   STATION_POINT_LAYER_ID,
   STATION_LABEL_LAYER_ID,
 ] as const;
+export const SEARCH_MAP_TERRAIN_SOURCE_ID = TERRAIN_SOURCE_ID;
+export const SEARCH_MAP_HILLSHADE_LAYER_ID = HILLSHADE_LAYER_ID;
+export const SEARCH_MAP_BASEMAP_RAIL_LAYER_IDS = BASEMAP_RAIL_LINE_IDS;
+export const SEARCH_MAP_BASEMAP_PLACE_LABEL_IDS = BASEMAP_PLACE_LABEL_IDS;
+export const SEARCH_MAP_STATION_FETCH_ZOOM_MIN = STATION_FETCH_ZOOM_MIN;

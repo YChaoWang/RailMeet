@@ -56,11 +56,17 @@ export const MAP_STOPS_FEATURE_SOFT_LIMIT = 1500;
 /** Provider HTTP body size cap for viewport map-stops (dense cities exceed plan payloads). */
 export const MAP_STOPS_MAX_RESPONSE_BYTES = 8 * 1_048_576;
 
-/** Zoom at which detailed (local) stops are expected; larger boxes are rejected. */
+/** Zoom at which detailed (local) stops are expected. */
 export const MAP_STOPS_DETAILED_ZOOM_MIN = 12;
 
-/** Max lat/lon span (degrees) allowed when zoom >= MAP_STOPS_DETAILED_ZOOM_MIN. */
-export const MAP_STOPS_DETAILED_MAX_SPAN_DEG = 0.5;
+/**
+ * Max lat/lon span (degrees) for a map-stops request at any zoom.
+ * Transitous MOTIS `/map/stops` returns HTTP 422 for boxes around ≥0.5°.
+ */
+export const MAP_STOPS_MAX_REQUEST_SPAN_DEG = 0.4;
+
+/** @deprecated Prefer MAP_STOPS_MAX_REQUEST_SPAN_DEG — same limit applies at all zooms. */
+export const MAP_STOPS_DETAILED_MAX_SPAN_DEG = MAP_STOPS_MAX_REQUEST_SPAN_DEG;
 
 /** Suggested minimum zoom when the API returns an aggregated/truncated subset. */
 export const MAP_STOPS_MINIMUM_DETAIL_ZOOM = 12;

@@ -20,7 +20,7 @@ describe('mapStopsQuerySchema', () => {
     });
   });
 
-  it('rejects inverted and oversized detailed bounds', () => {
+  it('rejects inverted and oversized viewport bounds at any zoom', () => {
     expect(
       mapStopsQuerySchema.safeParse({
         minLon: 13.5,
@@ -37,9 +37,19 @@ describe('mapStopsQuerySchema', () => {
         minLat: 0,
         maxLon: 1,
         maxLat: 1,
-        zoom: 12,
+        zoom: 8,
       }).success,
     ).toBe(false);
+
+    expect(
+      mapStopsQuerySchema.safeParse({
+        minLon: 2.2,
+        minLat: 48.7,
+        maxLon: 2.5,
+        maxLat: 49.0,
+        zoom: 11,
+      }).success,
+    ).toBe(true);
   });
 });
 

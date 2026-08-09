@@ -1,3 +1,4 @@
+import { MAP_STOPS_MAX_REQUEST_SPAN_DEG } from '@railmeet/shared';
 import type { MapStopsQuery, StationFeatureCollection } from '@railmeet/validation';
 import { stationFeatureCollectionSchema } from '@railmeet/validation';
 
@@ -17,6 +18,27 @@ export type MapStopsBounds = {
   readonly maxLon: number;
   readonly maxLat: number;
 };
+
+/**
+ * Transitous MOTIS rejects oversized boxes; only request when the viewport is safe.
+ * Zoom gating is applied by the map (regional vs continental policy).
+ */
+export function isMapStopsViewportEligible(
+  bounds: MapStopsBounds,
+  options?: { readonly maxSpanDeg?: number },
+): boolean {
+  const maxSpan = options?.maxSpanDeg ?? MAP_STOPS_MAX_REQUEST_SPAN_DEG;
+  const latSpan = bounds.maxLat - bounds.minLat;
+  const lonSpan = bounds.maxLon - bounds.minLon;
+  return (
+    Number.isFinite(latSpan) &&
+    Number.isFinite(lonSpan) &&
+    latSpan > 0 &&
+    lonSpan > 0 &&
+    latSpan <= maxSpan &&
+    lonSpan <= maxSpan
+  );
+}
 
 /**
  * Build a map-stops query from MapLibre-style west/south/east/north bounds.

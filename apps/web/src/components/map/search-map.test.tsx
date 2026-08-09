@@ -41,6 +41,10 @@ let mapInstance: {
   getCanvas: () => { style: { cursor: string } };
   setPaintProperty: ReturnType<typeof vi.fn>;
   setLayoutProperty: ReturnType<typeof vi.fn>;
+  getStyle: () => { sources: Record<string, unknown>; layers: Array<{ id: string; type: string }> };
+  getZoom: () => number;
+  getTerrain: () => null;
+  moveLayer: ReturnType<typeof vi.fn>;
   _loadHandlers: Array<() => void>;
 } | null = null;
 
@@ -100,20 +104,25 @@ vi.mock('maplibre-gl', () => {
     setLayoutProperty = vi.fn();
     isStyleLoaded = () => false;
     loaded = () => false;
-    getStyle = () => ({ sources: {} });
     getContainer = () => {
       const el = document.createElement('div');
       el.appendChild(document.createElement('div'));
       return el;
     };
     getBounds = () => ({
-      getWest: () => 2,
-      getSouth: () => 48,
-      getEast: () => 3,
-      getNorth: () => 49,
+      getWest: () => 2.2,
+      getSouth: () => 48.7,
+      getEast: () => 2.5,
+      getNorth: () => 49.0,
     });
-    getZoom = () => 4;
+    getZoom = () => 11.5;
     getCanvas = () => ({ style: { cursor: '' } });
+    getTerrain = () => null;
+    moveLayer = vi.fn();
+    getStyle = () => ({
+      sources: {},
+      layers: [{ id: 'label_city', type: 'symbol' }],
+    });
     queryRenderedFeatures = () => [];
     style = { _loaded: true };
     on(event: string, layerOrCb: string | (() => void), maybeCb?: () => void) {
@@ -178,6 +187,15 @@ vi.mock('maplibre-gl', () => {
       LngLatBounds,
       AttributionControl: class {},
       NavigationControl: class {},
+      TerrainControl: class {
+        onAdd() {
+          const el = document.createElement('div');
+          el.className = 'maplibregl-ctrl-terrain';
+          return el;
+        }
+        onRemove() {}
+      },
+      setWorkerUrl: vi.fn(),
     },
     Map,
     Marker,
@@ -185,8 +203,57 @@ vi.mock('maplibre-gl', () => {
     LngLatBounds,
     AttributionControl: class {},
     NavigationControl: class {},
+    TerrainControl: class {
+      onAdd() {
+        const el = document.createElement('div');
+        el.className = 'maplibregl-ctrl-terrain';
+        return el;
+      }
+      onRemove() {}
+    },
+    setWorkerUrl: vi.fn(),
   };
 });
+
+vi.mock('@/lib/map-stops-client', () => ({
+  mapStopsQueryFromBounds: (
+    bounds: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+    zoom: number,
+  ) => ({ ...bounds, zoom }),
+  isMapStopsViewportEligible: (bounds: {
+    minLon: number;
+    minLat: number;
+    maxLon: number;
+    maxLat: number;
+  }) =>
+    bounds.maxLon - bounds.minLon <= 0.4 && bounds.maxLat - bounds.minLat <= 0.4,
+  fetchMapStops: vi.fn(async () => ({
+    ok: true,
+    data: {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [2.35, 48.86] },
+          properties: {
+            stopId: 'stop:paris-est',
+            name: 'Paris Est',
+            kind: 'rail',
+            importance: 'major',
+            modes: ['RAIL'],
+            parentId: null,
+          },
+        },
+      ],
+      metadata: {
+        truncated: false,
+        aggregated: false,
+        minimumDetailZoom: 12,
+        sourceFeatureCount: 1,
+      },
+    },
+  })),
+}));
 
 const emptyScene: MapScene = {
   markers: [],
@@ -383,9 +450,10 @@ describe('SearchMap route layers', () => {
     expect(layers.size).toBe(
       SEARCH_MAP_ROUTE_LAYER_IDS.length +
         SEARCH_MAP_ORIGIN_LAYER_IDS.length +
-        SEARCH_MAP_STATION_LAYER_IDS.length,
+        SEARCH_MAP_STATION_LAYER_IDS.length +
+        1, // hillshade
     );
-    expect(sources.size).toBe(3);
+    expect(sources.size).toBe(4); // routes, origins, stations, terrain dem
     expect(sources.has(SEARCH_MAP_ORIGIN_SOURCE_ID)).toBe(true);
     expect(sources.has(SEARCH_MAP_STATION_SOURCE_ID)).toBe(true);
     const clickHandlersAfter =
