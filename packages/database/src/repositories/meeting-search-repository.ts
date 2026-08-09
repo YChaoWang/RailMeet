@@ -18,6 +18,7 @@ import type {
   SearchCompletionOutcome,
   SearchKickoffResult,
 } from '../models.js';
+import { placeIdForProviderPlace } from '../place-identity.js';
 import {
   MEETING_SEARCH_AGGREGATE_TYPE,
   MEETING_SEARCH_CANDIDATES_REQUESTED_EVENT_TYPE,
@@ -186,18 +187,75 @@ export type MeetingSearchRepository = {
 export function createMeetingSearchRepository(db: Db): MeetingSearchRepository {
   return {
     async create(command) {
-      const originIds = [...new Set(command.participants.map((p) => p.originPlaceId))];
-      const existing = await db
-        .select({ id: places.id })
-        .from(places)
-        .where(inArray(places.id, originIds));
-      const existingIds = new Set(existing.map((row) => row.id));
-      const missing = originIds.filter((id) => !existingIds.has(id));
-      if (missing.length > 0) {
-        return { ok: false, error: placeNotFound(missing) };
+      const existingOriginIds = [
+        ...new Set(
+          command.participants.flatMap((participant) =>
+            participant.origin.kind === 'existing' ? [participant.origin.placeId] : [],
+          ),
+        ),
+      ];
+      if (existingOriginIds.length > 0) {
+        const existing = await db
+          .select({ id: places.id })
+          .from(places)
+          .where(inArray(places.id, existingOriginIds));
+        const existingIds = new Set(existing.map((row) => row.id));
+        const missing = existingOriginIds.filter((id) => !existingIds.has(id));
+        if (missing.length > 0) {
+          return { ok: false, error: placeNotFound(missing) };
+        }
       }
 
       const createdId = await db.transaction(async (tx) => {
+        const resolvedOrigins: string[] = [];
+        for (const participant of command.participants) {
+          if (participant.origin.kind === 'existing') {
+            resolvedOrigins.push(participant.origin.placeId);
+            continue;
+          }
+          const selection = participant.origin.selection;
+          const id = placeIdForProviderPlace(selection.provider, selection.providerPlaceId);
+          const now = new Date();
+          const [row] = await tx
+            .insert(places)
+            .values({
+              id,
+              name: selection.name,
+              kind: selection.kind,
+              countryCode: selection.countryCode,
+              timezone: selection.timezone,
+              location: {
+                x: selection.location.longitude,
+                y: selection.location.latitude,
+              },
+              parentCityId: null,
+              provider: selection.provider,
+              providerPlaceId: selection.providerPlaceId,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: [places.provider, places.providerPlaceId],
+              targetWhere: sql`${places.provider} IS NOT NULL AND ${places.providerPlaceId} IS NOT NULL`,
+              set: {
+                name: selection.name,
+                kind: selection.kind,
+                countryCode: selection.countryCode,
+                timezone: selection.timezone,
+                location: {
+                  x: selection.location.longitude,
+                  y: selection.location.latitude,
+                },
+                updatedAt: now,
+              },
+            })
+            .returning({ id: places.id });
+          if (!row) {
+            throw new Error('Failed to upsert origin place');
+          }
+          resolvedOrigins.push(row.id);
+        }
+
         const [search] = await tx
           .insert(meetingSearches)
           .values({
@@ -218,11 +276,11 @@ export function createMeetingSearchRepository(db: Db): MeetingSearchRepository {
         }
 
         await tx.insert(meetingSearchParticipants).values(
-          command.participants.map((participant) => ({
+          command.participants.map((participant, index) => ({
             meetingSearchId: search.id,
             participantId: participant.participantId,
             displayName: participant.displayName,
-            originPlaceId: participant.originPlaceId,
+            originPlaceId: resolvedOrigins[index]!,
             position: participant.position,
           })),
         );

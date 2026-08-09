@@ -20,13 +20,13 @@ type MigrationJournal = {
   }>;
 };
 
-describe('Phase 8 migration journal on fresh PostGIS', () => {
+describe('migration journal on fresh PostGIS', () => {
   let container: StartedPostgreSqlContainer;
   let database: Database;
 
   beforeAll(async () => {
     container = await new PostgreSqlContainer(POSTGIS_IMAGE)
-      .withDatabase('railmeet_migration_0006')
+      .withDatabase('railmeet_migration_journal')
       .withUsername('railmeet')
       .withPassword('railmeet')
       .start();
@@ -46,13 +46,13 @@ describe('Phase 8 migration journal on fresh PostGIS', () => {
     }
   }, 60_000);
 
-  it('applies the complete migration journal through 0006 to a fresh PostGIS database', async () => {
+  it('applies the complete migration journal through 0007 to a fresh PostGIS database', async () => {
     const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as MigrationJournal;
     expect(journal.entries.map((entry) => entry.tag)).toContain('0006_petite_flatman');
-    expect(journal.entries.at(-1)?.tag).toBe('0006_petite_flatman');
-    expect(journal.entries).toHaveLength(7);
+    expect(journal.entries.map((entry) => entry.tag)).toContain('0007_eager_lyja');
+    expect(journal.entries.at(-1)?.tag).toBe('0007_eager_lyja');
+    expect(journal.entries).toHaveLength(8);
 
-    // Pristine container: no RailMeet Phase 8 tables before the real migrator runs.
     const before = await database.db.execute(sql`
       SELECT to_regclass('public.meeting_search_candidate_evaluations') AS evaluations_table
     `);
@@ -60,18 +60,17 @@ describe('Phase 8 migration journal on fresh PostGIS', () => {
 
     await database.migrate();
 
-    // Drizzle records applied migrations in schema "drizzle" (not public).
     const applied = await database.db.execute(sql`
       SELECT created_at
       FROM "drizzle"."__drizzle_migrations"
       ORDER BY created_at ASC
     `);
-    expect(applied).toHaveLength(7);
+    expect(applied).toHaveLength(8);
     expect(applied.map((row) => Number(row['created_at']))).toEqual(
       journal.entries.map((entry) => entry.when),
     );
     expect(Number(applied.at(-1)?.['created_at'])).toBe(
-      journal.entries.find((entry) => entry.tag === '0006_petite_flatman')?.when,
+      journal.entries.find((entry) => entry.tag === '0007_eager_lyja')?.when,
     );
 
     const tables = await database.db.execute(sql`
@@ -84,36 +83,28 @@ describe('Phase 8 migration journal on fresh PostGIS', () => {
     expect(tables[0]?.['rankings_table']).toBe('meeting_search_candidate_rankings');
     expect(tables[0]?.['ranking_journeys_table']).toBe('meeting_search_candidate_ranking_journeys');
 
-    const columns = await database.db.execute(sql`
+    const placeProviderColumns = await database.db.execute(sql`
       SELECT column_name
       FROM information_schema.columns
       WHERE table_schema = 'public'
-        AND table_name = 'meeting_searches'
-        AND column_name IN (
-          'completed_at',
-          'failed_at',
-          'completion_outcome',
-          'failure_code',
-          'recommended_destination_place_id'
-        )
+        AND table_name = 'places'
+        AND column_name IN ('provider', 'provider_place_id')
       ORDER BY column_name
     `);
-    expect(columns.map((row) => row['column_name'])).toEqual([
-      'completed_at',
-      'completion_outcome',
-      'failed_at',
-      'failure_code',
-      'recommended_destination_place_id',
+    expect(placeProviderColumns.map((row) => row['column_name'])).toEqual([
+      'provider',
+      'provider_place_id',
     ]);
 
-    const feasibilityCheck = await database.db.execute(sql`
+    const providerIndex = await database.db.execute(sql`
       SELECT 1 AS ok
-      FROM pg_constraint
-      WHERE conname = 'meeting_search_candidate_evaluations_feasibility_chk'
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'places'
+        AND indexname = 'places_provider_place_uid'
     `);
-    expect(feasibilityCheck).toHaveLength(1);
+    expect(providerIndex).toHaveLength(1);
 
-    // Mapped host port (not a fixed published port).
     expect(container.getMappedPort(5432)).toBeGreaterThan(0);
     expect(container.getConnectionUri()).toContain(`:${container.getMappedPort(5432)}`);
   });

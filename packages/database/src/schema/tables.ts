@@ -11,6 +11,7 @@ import {
   PLACE_NAME_MAX_LENGTH,
   IANA_TIMEZONE_MAX_LENGTH,
   RANKING_MODES,
+  SEARCH_COMPLETION_OUTCOMES,
   SEARCH_STATUSES,
   TRANSPORT_MODES,
 } from '@railmeet/shared';
@@ -27,11 +28,12 @@ import {
   primaryKey,
   smallint,
   text,
+  time,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   date,
-  time,
 } from 'drizzle-orm/pg-core';
 
 import {
@@ -65,11 +67,7 @@ export const ROUTING_WORK_STATUSES = [
   'exhausted',
 ] as const;
 
-export const SEARCH_COMPLETION_OUTCOMES = [
-  'no_candidates',
-  'ranked',
-  'no_feasible_candidates',
-] as const;
+export { SEARCH_COMPLETION_OUTCOMES };
 
 export const CANDIDATE_FEASIBILITY_REASONS = [
   'feasible',
@@ -96,7 +94,8 @@ const transportModeSqlList = TRANSPORT_MODES.map((value) => `'${value}'`).join('
 /**
  * Canonical RailMeet places.
  * Coordinates are authoritative PostGIS points (lon/lat, SRID 4326).
- * Provider-specific stop IDs are intentionally absent from this table.
+ * Optional Motis/Transitous provider identity supports autocomplete upserts without
+ * storing raw geocode payloads.
  */
 export const places = pgTable(
   'places',
@@ -108,11 +107,18 @@ export const places = pgTable(
     timezone: text('timezone').notNull(),
     location: geometry('location', { type: 'point', mode: 'xy', srid: 4326 }).notNull(),
     parentCityId: text('parent_city_id'),
+    /** Provider namespace when this place was resolved from autocomplete (e.g. motis). */
+    provider: text('provider'),
+    /** Stable provider location id (MOTIS Match.id). Paired with provider. */
+    providerPlaceId: text('provider_place_id'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
     index('places_location_gix').using('gist', table.location),
+    uniqueIndex('places_provider_place_uid')
+      .on(table.provider, table.providerPlaceId)
+      .where(sql`${table.provider} IS NOT NULL AND ${table.providerPlaceId} IS NOT NULL`),
     foreignKey({
       columns: [table.parentCityId],
       foreignColumns: [table.id],
@@ -131,6 +137,14 @@ export const places = pgTable(
     check(
       'places_timezone_length_chk',
       sql`char_length(${table.timezone}) >= 1 AND char_length(${table.timezone}) <= ${sql.raw(String(IANA_TIMEZONE_MAX_LENGTH))}`,
+    ),
+    check(
+      'places_provider_pair_chk',
+      sql`(${table.provider} IS NULL AND ${table.providerPlaceId} IS NULL) OR (${table.provider} IS NOT NULL AND ${table.providerPlaceId} IS NOT NULL)`,
+    ),
+    check(
+      'places_provider_place_id_length_chk',
+      sql`${table.providerPlaceId} IS NULL OR (char_length(${table.providerPlaceId}) >= 1 AND char_length(${table.providerPlaceId}) <= 512)`,
     ),
     // Keep SQL text aligned with migrations (`ST_SRID("location")` / GeometryType)
     // so drizzle-kit does not emit a spurious ALTER on every generate.
@@ -525,12 +539,23 @@ export const meetingSearchRoutingWork = pgTable(
   ],
 );
 
+export type NormalizedEncodedRouteGeometryJson = {
+  readonly points: string;
+  readonly precision: number;
+  readonly length: number;
+};
+
 export type NormalizedJourneyLegJson = {
   readonly mode: string;
   readonly departureAt: string;
   readonly arrivalAt: string;
   readonly durationMinutes: number;
   readonly providerReference?: string;
+  /**
+   * Google Encoded Polyline from MOTIS. All three fields are present together, or the
+   * property is omitted. Never store partial geometry objects.
+   */
+  readonly geometry?: NormalizedEncodedRouteGeometryJson;
 };
 
 /**

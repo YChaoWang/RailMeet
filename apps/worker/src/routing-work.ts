@@ -178,6 +178,7 @@ export function createRoutingWorkProcessor(
             arrivalAt: leg.arrivalAt,
             durationMinutes: leg.durationMinutes,
             ...(leg.providerReference ? { providerReference: leg.providerReference } : {}),
+            ...(leg.geometry ? { geometry: leg.geometry } : {}),
           })),
           ...(journey.providerReference ? { providerReference: journey.providerReference } : {}),
         };

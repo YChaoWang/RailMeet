@@ -213,7 +213,7 @@ describe('Phase 7 recovery integration (real candidate/routing processors)', () 
     });
     const workerOpts = {
       url: redisUrl,
-      commandTimeoutMs: 5_000,
+      commandTimeoutMs: null,
       connectTimeoutMs: 5_000,
       maxRetriesPerRequest: null as null,
       enableOfflineQueue: true,
@@ -246,13 +246,13 @@ describe('Phase 7 recovery integration (real candidate/routing processors)', () 
         {
           participantId: 'a',
           displayName: 'A',
-          originPlaceId: 'place:berlin',
+          origin: { kind: 'existing', placeId: 'place:berlin' },
           position: 0,
         },
         {
           participantId: 'b',
           displayName: 'B',
-          originPlaceId: 'place:paris',
+          origin: { kind: 'existing', placeId: 'place:paris' },
           position: 1,
         },
       ],

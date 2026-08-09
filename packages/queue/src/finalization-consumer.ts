@@ -10,6 +10,7 @@ import {
 } from './contract.js';
 import { validateFinalizationRequestedJob } from './job-validation.js';
 import { classifyConsumerError, createWorkerCloseHandle } from './worker-close.js';
+import { logConsumerError } from './log-consumer-error.js';
 
 export type FinalizationJobResult = {
   readonly searchId: string;
@@ -125,13 +126,12 @@ export function createFinalizationConsumer(
   });
 
   worker.on('error', (error) => {
-    options.logger.error(
-      {
-        event: 'finalization_consumer_error',
-        errorCode: classifyConsumerError(error),
-      },
-      'Finalization consumer error',
-    );
+    logConsumerError(options.logger, {
+      event: 'finalization_consumer_error',
+      message: 'Finalization consumer error',
+      error,
+      errorCode: classifyConsumerError(error),
+    });
   });
 
   const closeHandle = createWorkerCloseHandle({

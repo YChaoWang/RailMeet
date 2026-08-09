@@ -10,6 +10,7 @@ import {
 } from './contract.js';
 import { validateMeetingSearchRequestedJob } from './job-validation.js';
 import { classifyConsumerError, createWorkerCloseHandle } from './worker-close.js';
+import { logConsumerError } from './log-consumer-error.js';
 
 export type MeetingSearchKickoffTransition = 'started' | 'already_started' | 'already_terminal';
 
@@ -141,13 +142,12 @@ export function createMeetingSearchConsumer(
   });
 
   worker.on('error', (error) => {
-    options.logger.error(
-      {
-        event: 'search_consumer_error',
-        errorCode: classifyConsumerError(error),
-      },
-      'Search consumer error',
-    );
+    logConsumerError(options.logger, {
+      event: 'search_consumer_error',
+      message: 'Search consumer error',
+      error,
+      errorCode: classifyConsumerError(error),
+    });
   });
 
   worker.on('failed', (job, error) => {

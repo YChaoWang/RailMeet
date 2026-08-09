@@ -44,6 +44,16 @@ at-least-once queue delivery
 - Retries never reset `started_at`.
 - Duplicate jobs do not enqueue Phase 6 downstream work (there is none yet).
 
+### Worker Redis connections
+
+Each BullMQ consumer uses a dedicated ioredis connection with:
+
+- `maxRetriesPerRequest: null` (BullMQ blocking-command requirement);
+- `commandTimeout` disabled — outbox publisher timeouts must not abort idle BRPOP/BZPOP waits;
+- `enableOfflineQueue: true` so workers recover across brief Redis blips.
+
+The outbox publisher keeps a separate fail-fast connection with a bounded `commandTimeout`.
+
 ### Worker concurrency and shutdown
 
 - Bounded local BullMQ concurrency (`SEARCH_CONSUMER_CONCURRENCY`).

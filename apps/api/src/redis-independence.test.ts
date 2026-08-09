@@ -16,7 +16,8 @@ describe('API Redis independence', () => {
     expect(pkg.dependencies).not.toHaveProperty('bullmq');
     expect(pkg.dependencies).not.toHaveProperty('ioredis');
     expect(pkg.dependencies).not.toHaveProperty('@railmeet/queue');
-    expect(pkg.dependencies).not.toHaveProperty('@railmeet/routing');
+    // Place autocomplete uses @railmeet/routing geocode adapter (no BullMQ).
+    expect(pkg.dependencies).toHaveProperty('@railmeet/routing');
   });
 
   it('builds without a queue publisher and keeps /health working', async () => {

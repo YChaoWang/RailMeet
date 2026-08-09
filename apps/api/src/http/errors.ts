@@ -70,6 +70,19 @@ export function mapServiceErrorToHttp(
         code: 'NOT_FOUND',
         message: 'Meeting search was not found',
       });
+    case 'results_not_ready':
+      return sendError(reply, request, 409, {
+        code: 'RESULTS_NOT_READY',
+        message: 'Meeting search results are not ready yet',
+      });
+    case 'search_failed':
+      return sendError(reply, request, 409, {
+        code: 'SEARCH_FAILED',
+        message: 'Meeting search failed before results were available',
+        ...(error.failureCode
+          ? { details: [{ path: 'failureCode', message: error.failureCode }] }
+          : {}),
+      });
     case 'conflict':
       return sendError(reply, request, 409, {
         code: 'CONFLICT',

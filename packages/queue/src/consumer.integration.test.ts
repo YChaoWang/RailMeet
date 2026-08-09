@@ -103,14 +103,14 @@ describe('meeting-search kickoff consumer integration', () => {
     });
     workerRedis = createRedisConnection({
       url: redisContainer.getConnectionUrl(),
-      commandTimeoutMs: 5_000,
+      commandTimeoutMs: null,
       connectTimeoutMs: 5_000,
       maxRetriesPerRequest: null,
       enableOfflineQueue: true,
     });
     workerRedisB = createRedisConnection({
       url: redisContainer.getConnectionUrl(),
-      commandTimeoutMs: 5_000,
+      commandTimeoutMs: null,
       connectTimeoutMs: 5_000,
       maxRetriesPerRequest: null,
       enableOfflineQueue: true,
@@ -145,13 +145,13 @@ describe('meeting-search kickoff consumer integration', () => {
         {
           participantId: 'a',
           displayName: 'A',
-          originPlaceId: 'place:berlin',
+          origin: { kind: 'existing', placeId: 'place:berlin' },
           position: 0,
         },
         {
           participantId: 'b',
           displayName: 'B',
-          originPlaceId: 'place:paris',
+          origin: { kind: 'existing', placeId: 'place:paris' },
           position: 1,
         },
       ],

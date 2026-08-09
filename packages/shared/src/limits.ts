@@ -24,6 +24,28 @@ export const PLACE_NAME_MAX_LENGTH = 200;
 /** Maximum length of an optional client-supplied place label after trimming. */
 export const PLACE_LABEL_MAX_LENGTH = 120;
 
+/** Minimum non-whitespace characters before place autocomplete queries run. */
+export const PLACE_SEARCH_QUERY_MIN_LENGTH = 2;
+
+/** Maximum place autocomplete query length after trimming. */
+export const PLACE_SEARCH_QUERY_MAX_LENGTH = 100;
+
+/** Maximum normalized suggestions returned to clients. */
+export const PLACE_SEARCH_RESULT_LIMIT = 8;
+
+/** Maximum length of a provider place identity (e.g. MOTIS Match.id). */
+export const PROVIDER_PLACE_ID_MAX_LENGTH = 512;
+
+/** Short-lived geocode cache TTL for identical normalized queries. */
+export const PLACE_GEOCODE_CACHE_TTL_MS = 30_000;
+
+/** Upper bound for a single encoded polyline `points` string from MOTIS. */
+export const ENCODED_POLYLINE_POINTS_MAX_LENGTH = 200_000;
+
+/** Inclusive bounds for MOTIS EncodedPolyline precision (v5 typically 6). */
+export const ENCODED_POLYLINE_PRECISION_MIN = 1;
+export const ENCODED_POLYLINE_PRECISION_MAX = 10;
+
 /** Maximum length of an IANA timezone identifier. */
 export const IANA_TIMEZONE_MAX_LENGTH = 64;
 

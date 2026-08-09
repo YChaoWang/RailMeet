@@ -4,13 +4,18 @@ import {
   type RankingJourneyInput,
   type RankingRoutingWorkInput,
 } from '@railmeet/search-engine';
-import type { SearchStatus } from '@railmeet/shared';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import type { RankingMode, SearchStatus } from '@railmeet/shared';
+import { RANKING_MODES } from '@railmeet/shared';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import type {
   CandidateFeasibilityReason,
   FinalizeMeetingSearchResult,
+  PlaceViewRecord,
+  RankedCandidateRecord,
+  RankedParticipantJourneyRecord,
+  RankedResultsReadModel,
   SearchCompletionOutcome,
 } from '../models.js';
 import {
@@ -23,6 +28,8 @@ import {
   meetingSearchParticipants,
   meetingSearchRoutingWork,
   meetingSearches,
+  places,
+  type NormalizedJourneyLegJson,
 } from '../schema/tables.js';
 import type * as schema from '../schema/index.js';
 
@@ -32,6 +39,13 @@ const TERMINAL_ROUTING = new Set(['succeeded', 'no_journeys', 'exhausted']);
 
 export type FinalizationRepository = {
   finalizeMeetingSearch: (searchId: string) => Promise<FinalizeMeetingSearchResult>;
+  /**
+   * Phase 9 read: load persisted rankings for a completed search.
+   * Uses a fixed number of queries (header + rankings + journeys + places).
+   * Never recomputes ranking or feasibility. Failed searches return `failed`
+   * without ranking rows.
+   */
+  loadRankedResults: (searchId: string) => Promise<RankedResultsReadModel>;
   listCandidateEvaluations: (searchId: string) => Promise<
     readonly {
       readonly destinationPlaceId: string;
@@ -352,6 +366,239 @@ export function createFinalizationRepository(db: Db): FinalizationRepository {
 
         return completeSearch(tx, searchId, 'ranked', recommendation);
       });
+    },
+
+    async loadRankedResults(searchId) {
+      // Query 1: search header
+      const [header] = await db
+        .select({
+          id: meetingSearches.id,
+          status: meetingSearches.status,
+          rankingMode: meetingSearches.rankingMode,
+          completionOutcome: meetingSearches.completionOutcome,
+          failureCode: meetingSearches.failureCode,
+          recommendedDestinationPlaceId: meetingSearches.recommendedDestinationPlaceId,
+        })
+        .from(meetingSearches)
+        .where(eq(meetingSearches.id, searchId))
+        .limit(1);
+
+      if (!header) {
+        return { kind: 'not_found' };
+      }
+
+      const status = header.status as SearchStatus;
+      if (status === 'failed' || status === 'cancelled') {
+        return {
+          kind: 'failed',
+          searchId,
+          failureCode: header.failureCode,
+        };
+      }
+      if (status !== 'completed') {
+        return { kind: 'not_ready', searchId, status };
+      }
+
+      const completionOutcome = header.completionOutcome as SearchCompletionOutcome | null;
+      if (!completionOutcome) {
+        return {
+          kind: 'failed',
+          searchId,
+          failureCode: 'INVARIANT_VIOLATION',
+        };
+      }
+
+      // Query 2: rankings ordered by mode → rank
+      const rankingRows = await db
+        .select()
+        .from(meetingSearchCandidateRankings)
+        .where(eq(meetingSearchCandidateRankings.searchId, searchId))
+        .orderBy(
+          asc(meetingSearchCandidateRankings.rankingMode),
+          asc(meetingSearchCandidateRankings.rank),
+        );
+
+      // Query 3: selected journeys joined with rankings so order follows persisted rank
+      // (mode → rank → participant ordinal), not destination ID.
+      const journeyRows = await db
+        .select({
+          rankingMode: meetingSearchCandidateRankingJourneys.rankingMode,
+          destinationPlaceId: meetingSearchCandidateRankingJourneys.destinationPlaceId,
+          rank: meetingSearchCandidateRankings.rank,
+          participantId: meetingSearchCandidateRankingJourneys.participantId,
+          participantDisplayName: meetingSearchParticipants.displayName,
+          participantPosition: meetingSearchParticipants.position,
+          originPlaceId: meetingSearchParticipants.originPlaceId,
+          departureAt: meetingSearchJourneys.departureAt,
+          arrivalAt: meetingSearchJourneys.arrivalAt,
+          durationMinutes: meetingSearchJourneys.durationMinutes,
+          transfers: meetingSearchJourneys.transfers,
+          transportModes: meetingSearchJourneys.transportModes,
+          legs: meetingSearchJourneys.legs,
+        })
+        .from(meetingSearchCandidateRankingJourneys)
+        .innerJoin(
+          meetingSearchCandidateRankings,
+          and(
+            eq(
+              meetingSearchCandidateRankingJourneys.searchId,
+              meetingSearchCandidateRankings.searchId,
+            ),
+            eq(
+              meetingSearchCandidateRankingJourneys.rankingMode,
+              meetingSearchCandidateRankings.rankingMode,
+            ),
+            eq(
+              meetingSearchCandidateRankingJourneys.destinationPlaceId,
+              meetingSearchCandidateRankings.destinationPlaceId,
+            ),
+          ),
+        )
+        .innerJoin(
+          meetingSearchJourneys,
+          eq(meetingSearchCandidateRankingJourneys.journeyId, meetingSearchJourneys.id),
+        )
+        .innerJoin(
+          meetingSearchParticipants,
+          and(
+            eq(meetingSearchParticipants.meetingSearchId, searchId),
+            eq(
+              meetingSearchParticipants.participantId,
+              meetingSearchCandidateRankingJourneys.participantId,
+            ),
+          ),
+        )
+        .where(eq(meetingSearchCandidateRankingJourneys.searchId, searchId))
+        .orderBy(
+          asc(meetingSearchCandidateRankings.rankingMode),
+          asc(meetingSearchCandidateRankings.rank),
+          asc(meetingSearchParticipants.position),
+        );
+
+      const placeIds = new Set<string>();
+      if (header.recommendedDestinationPlaceId) {
+        placeIds.add(header.recommendedDestinationPlaceId);
+      }
+      for (const row of rankingRows) {
+        placeIds.add(row.destinationPlaceId);
+      }
+      for (const row of journeyRows) {
+        placeIds.add(row.originPlaceId);
+        placeIds.add(row.destinationPlaceId);
+      }
+
+      // Query 4: place names + persisted coordinates for all referenced IDs (single IN query)
+      const placeById = new Map<string, { name: string; longitude: number; latitude: number }>();
+      const placeIdList = [...placeIds];
+      if (placeIdList.length > 0) {
+        const placeRows = await db
+          .select({ id: places.id, name: places.name, location: places.location })
+          .from(places)
+          .where(inArray(places.id, placeIdList));
+        for (const place of placeRows) {
+          placeById.set(place.id, {
+            name: place.name,
+            longitude: place.location.x,
+            latitude: place.location.y,
+          });
+        }
+      }
+
+      const placeView = (placeId: string): PlaceViewRecord => {
+        const found = placeById.get(placeId);
+        return {
+          placeId,
+          name: found?.name ?? null,
+          longitude: found?.longitude ?? null,
+          latitude: found?.latitude ?? null,
+        };
+      };
+
+      const journeysByKey = new Map<string, RankedParticipantJourneyRecord[]>();
+      for (const row of journeyRows) {
+        const key = `${row.rankingMode}\0${row.destinationPlaceId}`;
+        const list = journeysByKey.get(key) ?? [];
+        const legsJson = row.legs as readonly NormalizedJourneyLegJson[];
+        list.push({
+          participantId: row.participantId,
+          participantDisplayName: row.participantDisplayName,
+          participantPosition: row.participantPosition,
+          origin: placeView(row.originPlaceId),
+          destination: placeView(row.destinationPlaceId),
+          departureAt: row.departureAt,
+          arrivalAt: row.arrivalAt,
+          durationMinutes: row.durationMinutes,
+          transfers: row.transfers,
+          transportModes: [...row.transportModes],
+          legs: legsJson.map((leg) => ({
+            mode: leg.mode,
+            departureAt: new Date(leg.departureAt),
+            arrivalAt: new Date(leg.arrivalAt),
+            durationMinutes: leg.durationMinutes,
+            geometry: leg.geometry
+              ? {
+                  points: leg.geometry.points,
+                  precision: leg.geometry.precision,
+                  length: leg.geometry.length,
+                }
+              : null,
+          })),
+        });
+        journeysByKey.set(key, list);
+      }
+
+      // Re-sort journeys by participant position within each candidate (defensive).
+      for (const [key, list] of journeysByKey) {
+        journeysByKey.set(
+          key,
+          [...list].sort((a, b) => a.participantPosition - b.participantPosition),
+        );
+      }
+
+      const rankings: RankedCandidateRecord[] = rankingRows.map((row) => {
+        const key = `${row.rankingMode}\0${row.destinationPlaceId}`;
+        return {
+          rankingMode: row.rankingMode as RankingMode,
+          rank: row.rank,
+          destination: placeView(row.destinationPlaceId),
+          recommended:
+            header.recommendedDestinationPlaceId === row.destinationPlaceId &&
+            row.rankingMode === header.rankingMode,
+          totalDurationMinutes: row.totalDurationMinutes,
+          maxDurationMinutes: row.maxDurationMinutes,
+          durationRangeMinutes: row.durationRangeMinutes,
+          totalTransfers: row.totalTransfers,
+          maxTransfers: row.maxTransfers,
+          earliestArrivalAt: row.earliestArrivalAt,
+          latestArrivalAt: row.latestArrivalAt,
+          arrivalSpreadMs: row.arrivalSpreadMs,
+          journeys: journeysByKey.get(key) ?? [],
+        };
+      });
+
+      // Public deterministic mode order follows RANKING_MODES, then persisted rank.
+      const modeOrder = new Map(RANKING_MODES.map((mode, index) => [mode, index]));
+      rankings.sort((a, b) => {
+        const modeCmp =
+          (modeOrder.get(a.rankingMode) ?? Number.MAX_SAFE_INTEGER) -
+          (modeOrder.get(b.rankingMode) ?? Number.MAX_SAFE_INTEGER);
+        if (modeCmp !== 0) {
+          return modeCmp;
+        }
+        return a.rank - b.rank;
+      });
+
+      return {
+        kind: 'completed',
+        searchId,
+        completionOutcome,
+        rankingMode: header.rankingMode as RankingMode,
+        recommendedDestination: header.recommendedDestinationPlaceId
+          ? placeView(header.recommendedDestinationPlaceId)
+          : null,
+        rankings,
+        queryCount: placeIdList.length > 0 ? 4 : 3,
+      };
     },
 
     async listCandidateEvaluations(searchId) {

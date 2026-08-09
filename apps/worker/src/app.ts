@@ -45,11 +45,16 @@ export type BuildWorkerOptions = {
   readonly registerSignalHandlers?: boolean;
 };
 
-function workerRedis(url: string, commandTimeoutMs: number) {
+/**
+ * Redis options for BullMQ Workers.
+ * Dedicated connections per consumer; never inherit the outbox commandTimeout —
+ * blocking queue pops must wait longer than OUTBOX redisCommandTimeoutMs.
+ */
+function workerRedis(url: string, connectTimeoutMs: number) {
   return createRedisConnection({
     url,
-    commandTimeoutMs,
-    connectTimeoutMs: commandTimeoutMs,
+    connectTimeoutMs,
+    commandTimeoutMs: null,
     enableOfflineQueue: true,
     maxRetriesPerRequest: null,
   });

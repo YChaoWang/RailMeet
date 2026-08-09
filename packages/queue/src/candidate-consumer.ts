@@ -10,6 +10,7 @@ import {
 } from './contract.js';
 import { validateCandidatesRequestedJob } from './job-validation.js';
 import { classifyConsumerError, createWorkerCloseHandle } from './worker-close.js';
+import { logConsumerError } from './log-consumer-error.js';
 
 export type CandidateGenerationJobResult = {
   readonly searchId: string;
@@ -125,13 +126,12 @@ export function createCandidateConsumer(
   });
 
   worker.on('error', (error) => {
-    options.logger.error(
-      {
-        event: 'candidate_consumer_error',
-        errorCode: classifyConsumerError(error),
-      },
-      'Candidate consumer error',
-    );
+    logConsumerError(options.logger, {
+      event: 'candidate_consumer_error',
+      message: 'Candidate consumer error',
+      error,
+      errorCode: classifyConsumerError(error),
+    });
   });
 
   const closeHandle = createWorkerCloseHandle({

@@ -1,4 +1,10 @@
-import type { PlaceKind, RankingMode, SearchStatus, TransportMode } from '@railmeet/shared';
+import type {
+  PlaceKind,
+  RankingMode,
+  SearchCompletionOutcome,
+  SearchStatus,
+  TransportMode,
+} from '@railmeet/shared';
 
 import type { OutboxAggregateType, OutboxEventType, OutboxPayload } from './outbox.js';
 
@@ -20,6 +26,8 @@ export type PlaceRecord = {
   readonly timezone: string;
   readonly location: GeoPoint;
   readonly parentCityId: string | null;
+  readonly provider: string | null;
+  readonly providerPlaceId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
@@ -32,12 +40,28 @@ export type CreatePlaceCommand = {
   readonly timezone: string;
   readonly location: GeoPoint;
   readonly parentCityId?: string | null;
+  readonly provider?: string | null;
+  readonly providerPlaceId?: string | null;
 };
+
+export type UpsertProviderPlaceCommand = {
+  readonly provider: 'motis';
+  readonly providerPlaceId: string;
+  readonly name: string;
+  readonly kind: PlaceKind;
+  readonly countryCode: string;
+  readonly timezone: string;
+  readonly location: GeoPoint;
+};
+
+export type MeetingSearchOriginResolution =
+  | { readonly kind: 'existing'; readonly placeId: string }
+  | { readonly kind: 'providerSelection'; readonly selection: UpsertProviderPlaceCommand };
 
 export type CreateMeetingSearchParticipantCommand = {
   readonly participantId: string;
   readonly displayName: string;
-  readonly originPlaceId: string;
+  readonly origin: MeetingSearchOriginResolution;
   readonly position: number;
 };
 
@@ -68,7 +92,7 @@ export type MeetingSearchParticipantRecord = {
   readonly position: number;
 };
 
-export type SearchCompletionOutcome = 'no_candidates' | 'ranked' | 'no_feasible_candidates';
+export type { SearchCompletionOutcome };
 
 export type CandidateFeasibilityReason =
   | 'feasible'
@@ -207,12 +231,19 @@ export type RoutingWorkRecord = {
   readonly updatedAt: Date;
 };
 
+export type EncodedRouteGeometryRecord = {
+  readonly points: string;
+  readonly precision: number;
+  readonly length: number;
+};
+
 export type PersistedJourneyLeg = {
   readonly mode: string;
   readonly departureAt: Date;
   readonly arrivalAt: Date;
   readonly durationMinutes: number;
   readonly providerReference?: string;
+  readonly geometry?: EncodedRouteGeometryRecord;
 };
 
 export type PersistedJourneyRecord = {
@@ -266,3 +297,79 @@ export type MarkOutboxDeadLetterCommand = {
 
 export type ConditionalOutboxUpdateResult =
   { readonly outcome: 'updated' } | { readonly outcome: 'not_updated' };
+
+/**
+ * Place identity for Phase 9 read models.
+ * Coordinates come from persisted `places.location` only (never geocoded in the UI).
+ */
+export type PlaceViewRecord = {
+  readonly placeId: string;
+  readonly name: string | null;
+  readonly longitude: number | null;
+  readonly latitude: number | null;
+};
+
+export type RankedJourneyLegRecord = {
+  readonly mode: string;
+  readonly departureAt: Date;
+  readonly arrivalAt: Date;
+  readonly durationMinutes: number;
+  readonly geometry: EncodedRouteGeometryRecord | null;
+};
+
+export type RankedParticipantJourneyRecord = {
+  readonly participantId: string;
+  readonly participantDisplayName: string;
+  readonly participantPosition: number;
+  readonly origin: PlaceViewRecord;
+  readonly destination: PlaceViewRecord;
+  readonly departureAt: Date;
+  readonly arrivalAt: Date;
+  readonly durationMinutes: number;
+  readonly transfers: number;
+  readonly transportModes: readonly string[];
+  readonly legs: readonly RankedJourneyLegRecord[];
+};
+
+export type RankedCandidateRecord = {
+  readonly rankingMode: RankingMode;
+  readonly rank: number;
+  readonly destination: PlaceViewRecord;
+  readonly recommended: boolean;
+  readonly totalDurationMinutes: number;
+  readonly maxDurationMinutes: number;
+  readonly durationRangeMinutes: number;
+  readonly totalTransfers: number;
+  readonly maxTransfers: number;
+  readonly earliestArrivalAt: Date;
+  readonly latestArrivalAt: Date;
+  readonly arrivalSpreadMs: number;
+  readonly journeys: readonly RankedParticipantJourneyRecord[];
+};
+
+/**
+ * Phase 9 ranked-results read model. Built only from persisted Phase 8 rows.
+ * Failed searches never produce a `completed` payload.
+ */
+export type RankedResultsReadModel =
+  | { readonly kind: 'not_found' }
+  | {
+      readonly kind: 'not_ready';
+      readonly searchId: string;
+      readonly status: SearchStatus;
+    }
+  | {
+      readonly kind: 'failed';
+      readonly searchId: string;
+      readonly failureCode: string | null;
+    }
+  | {
+      readonly kind: 'completed';
+      readonly searchId: string;
+      readonly completionOutcome: SearchCompletionOutcome;
+      readonly rankingMode: RankingMode;
+      readonly recommendedDestination: PlaceViewRecord | null;
+      readonly rankings: readonly RankedCandidateRecord[];
+      /** Fixed query count used to assemble this payload (N+1 evidence). */
+      readonly queryCount: number;
+    };

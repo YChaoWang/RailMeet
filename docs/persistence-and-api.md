@@ -74,22 +74,24 @@ the job. See [outbox-dispatch.md](./outbox-dispatch.md).
 
 Versioned meeting-search routes:
 
-| Method | Path                                 | Success | Notes                                          |
-| ------ | ------------------------------------ | ------- | ---------------------------------------------- |
-| POST   | `/api/v1/meeting-searches`           | `202`   | Zod DTO → command; search + outbox; `Location` |
-| GET    | `/api/v1/meeting-searches/:searchId` | `200`   | Deliberate API projection — not Drizzle rows   |
-| GET    | `/health`                            | `200`   | Unversioned; backward compatible               |
+| Method | Path                                         | Success | Notes                                          |
+| ------ | -------------------------------------------- | ------- | ---------------------------------------------- |
+| POST   | `/api/v1/meeting-searches`                   | `202`   | Zod DTO → command; search + outbox; `Location` |
+| GET    | `/api/v1/meeting-searches/:searchId`         | `200`   | Summary including Phase 8 terminal fields      |
+| GET    | `/api/v1/meeting-searches/:searchId/results` | `200`   | Persisted rankings only when `completed`       |
+| GET    | `/health`                                    | `200`   | Unversioned; backward compatible               |
 
 Flow:
 
 ```text
-Fastify route → Zod validation → meeting-search service → repository TX → response mapper
+Fastify route → Zod validation → meeting-search service → repository reads → response mapper
 ```
 
 - Reuse `createMeetingSearchRequestSchema` as the request source of truth.
 - Response schemas strip unexpected properties (Zod default strip mode).
 - GET preserves participant order and deterministic transport-mode / country ordering.
-- No auth, no journey results, no fake progress or candidates.
+- Results reads use a fixed query budget (header + rankings + journeys + places).
+- No auth, no ranking recomputation, no Transitous on the read path.
 
 ### Errors and request IDs
 
@@ -98,6 +100,8 @@ Fastify route → Zod validation → meeting-search service → repository TX �
 | Invalid body/params/JSON | 400  | `VALIDATION_FAILED`       |
 | Unknown search           | 404  | `NOT_FOUND`               |
 | Uniqueness conflict      | 409  | `CONFLICT`                |
+| Results not ready yet    | 409  | `RESULTS_NOT_READY`       |
+| Search failed (results)  | 409  | `SEARCH_FAILED`           |
 | Unknown origin place     | 422  | `INVALID_PLACE_REFERENCE` |
 | Unexpected failure       | 500  | `INTERNAL_ERROR`          |
 | Database unavailable     | 503  | `SERVICE_UNAVAILABLE`     |

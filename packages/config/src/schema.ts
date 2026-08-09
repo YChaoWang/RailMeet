@@ -110,6 +110,15 @@ export const sharedEnvSchema = z.object({
 export const apiEnvSchema = sharedEnvSchema.extend({
   API_HOST: z.string().min(1).default('0.0.0.0'),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+  TRANSITOUS_USER_AGENT: transitousUserAgentSchema.default(TRANSITOUS_DEFAULTS.userAgent),
+  TRANSITOUS_TIMEOUT_MS: positiveInt(500, 60_000, 'TRANSITOUS_TIMEOUT_MS').default(
+    TRANSITOUS_DEFAULTS.timeoutMs,
+  ),
+  TRANSITOUS_MAX_RESPONSE_BYTES: positiveInt(
+    4_096,
+    10 * 1_048_576,
+    'TRANSITOUS_MAX_RESPONSE_BYTES',
+  ).default(TRANSITOUS_DEFAULTS.maxResponseBytes),
 });
 
 export const workerEnvSchema = sharedEnvSchema
@@ -253,6 +262,12 @@ export type ApiConfig = {
   transitousBaseUrl: string;
   host: string;
   port: number;
+  transitous: {
+    baseUrl: string;
+    userAgent: string;
+    timeoutMs: number;
+    maxResponseBytes: number;
+  };
 };
 
 export type OutboxDispatcherSettings = {
@@ -346,6 +361,12 @@ export function toApiConfig(env: ApiEnv): ApiConfig {
     transitousBaseUrl: env.TRANSITOUS_BASE_URL,
     host: env.API_HOST,
     port: env.API_PORT,
+    transitous: {
+      baseUrl: env.TRANSITOUS_BASE_URL,
+      userAgent: env.TRANSITOUS_USER_AGENT,
+      timeoutMs: env.TRANSITOUS_TIMEOUT_MS,
+      maxResponseBytes: env.TRANSITOUS_MAX_RESPONSE_BYTES,
+    },
   };
 }
 

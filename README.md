@@ -17,6 +17,7 @@ reliability, clear architecture, and incremental delivery.
 | [docs/search-kickoff-and-routing.md](./docs/search-kickoff-and-routing.md)                           | Kickoff consumer, retention, Transitous |
 | [docs/candidate-generation-and-routing-fanout.md](./docs/candidate-generation-and-routing-fanout.md) | Phase 7 candidates and journey fan-out  |
 | [docs/finalization-and-ranking.md](./docs/finalization-and-ranking.md)                               | Phase 8 fan-in, ranking, completion     |
+| [docs/search-and-results-ux.md](./docs/search-and-results-ux.md)                                     | Phase 9 results API and search UI       |
 
 ## Architecture (summary)
 
@@ -44,12 +45,13 @@ See [docs/architecture.md](./docs/architecture.md) for the full layout and depen
 - Deterministic ranking for `fairest`, `fastest-overall`, `fewest-transfers`, `arrive-together`
 - Durable `completed` / `failed` search outcomes with relational ranking persistence
 - Provider-neutral routing boundary + Transitous MOTIS 2 `/api/v5/plan` adapter
-- `POST/GET /api/v1/meeting-searches` with shared envelopes and request IDs
+- `POST/GET /api/v1/meeting-searches` and `GET …/results` with shared envelopes
+- Next.js search form + durable status/results pages (same-origin Route Handlers)
 - `/health`, Compose PostGIS + Redis, unit and integration tests
 
 `queued` means durably accepted. `running` means the async pipeline is in progress.
-`completed` / `failed` are Phase 8 terminal outcomes. There is no public results API or
-frontend ranking UI yet (Phase 9).
+`completed` / `failed` are Phase 8 terminal outcomes. The UI polls summary until terminal,
+then loads persisted rankings (Phase 9).
 
 ## Local setup
 
@@ -101,9 +103,9 @@ See [`.env.example`](./.env.example).
 | -------------------------- | ------------------------ | --------------------------------------- |
 | `DATABASE_URL`             | api, worker, migrate     | PostgreSQL connection string            |
 | `REDIS_URL`                | worker (api config only) | Redis for BullMQ                        |
-| `API_BASE_URL`             | api, worker              | Public API base URL                     |
+| `API_BASE_URL`             | api, worker, web proxy   | Fastify origin (web: server-only proxy) |
 | `API_HOST` / `API_PORT`    | api                      | Listen address                          |
-| `NEXT_PUBLIC_API_BASE_URL` | web                      | Browser-facing API URL                  |
+| `NEXT_PUBLIC_API_BASE_URL` | legacy tooling           | Deprecated for browser calls in Phase 9 |
 | `TRANSITOUS_BASE_URL`      | worker                   | MOTIS API root (`…/api`)                |
 | `TRANSITOUS_USER_AGENT`    | worker                   | Required identifying User-Agent         |
 | `LOG_LEVEL`                | all                      | Pino log level                          |

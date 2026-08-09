@@ -4,6 +4,7 @@ import {
   meetingSearchAcceptedEnvelopeSchema,
   meetingSearchDetailEnvelopeSchema,
   meetingSearchIdParamsSchema,
+  meetingSearchResultsEnvelopeSchema,
 } from '@railmeet/validation';
 
 import { mapServiceErrorToHttp } from '../http/errors.js';
@@ -59,6 +60,30 @@ export const meetingSearchRoutes: FastifyPluginAsyncZod<MeetingSearchRoutesOptio
     },
     async (request, reply) => {
       const result = await meetingSearchService.getSearchById(request.params.searchId);
+
+      if (!result.ok) {
+        return mapServiceErrorToHttp(reply, request, result.error);
+      }
+
+      return reply.status(200).send({
+        data: result.value,
+        meta: { requestId: request.id },
+      });
+    },
+  );
+
+  app.get(
+    '/api/v1/meeting-searches/:searchId/results',
+    {
+      schema: {
+        params: meetingSearchIdParamsSchema,
+        response: {
+          200: meetingSearchResultsEnvelopeSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await meetingSearchService.getSearchResults(request.params.searchId);
 
       if (!result.ok) {
         return mapServiceErrorToHttp(reply, request, result.error);

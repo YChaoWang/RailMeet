@@ -66,7 +66,16 @@ export type {
   RoutingWorkStatus,
   SearchCompletionOutcome,
   SearchKickoffResult,
+  UpsertProviderPlaceCommand,
+  MeetingSearchOriginResolution,
+  PlaceViewRecord,
+  RankedCandidateRecord,
+  RankedJourneyLegRecord,
+  RankedParticipantJourneyRecord,
+  RankedResultsReadModel,
 } from './models.js';
+
+export { placeIdForProviderPlace, placeKindFromSuggestionType } from './place-identity.js';
 
 export type { FinalizationRepository } from './repositories/finalization-repository.js';
 export type { MeetingSearchRepository } from './repositories/meeting-search-repository.js';

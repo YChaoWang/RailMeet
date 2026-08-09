@@ -8,7 +8,12 @@ export type CreateRedisConnectionOptions = {
    */
   readonly maxRetriesPerRequest?: number | null;
   readonly connectTimeoutMs?: number;
-  readonly commandTimeoutMs?: number;
+  /**
+   * Per-command timeout for non-blocking Redis clients (outbox publisher).
+   * Pass `null` for BullMQ Worker connections — blocking pops intentionally exceed
+   * the outbox command timeout and must not be aborted.
+   */
+  readonly commandTimeoutMs?: number | null;
   /** When false (default), commands fail immediately if the connection is down. */
   readonly enableOfflineQueue?: boolean;
   /** When true, do not reconnect after a connection failure (tests / fail-fast probes). */
@@ -16,7 +21,7 @@ export type CreateRedisConnectionOptions = {
 };
 
 /**
- * Creates an ioredis client for BullMQ Queue producers.
+ * Creates an ioredis client for BullMQ Queue producers or Workers.
  * Fail-fast command settings let the outbox retry scheduler take over when Redis is down.
  * Callers own close(); do not log the URL.
  */
@@ -25,7 +30,9 @@ export function createRedisConnection(options: CreateRedisConnectionOptions): Re
     maxRetriesPerRequest:
       options.maxRetriesPerRequest === undefined ? 1 : options.maxRetriesPerRequest,
     connectTimeout: options.connectTimeoutMs ?? 5_000,
-    commandTimeout: options.commandTimeoutMs ?? 5_000,
+    ...(options.commandTimeoutMs === null
+      ? {}
+      : { commandTimeout: options.commandTimeoutMs ?? 5_000 }),
     enableReadyCheck: true,
     enableOfflineQueue: options.enableOfflineQueue ?? false,
     retryStrategy: options.disableReconnect ? () => null : (times) => Math.min(times * 50, 500),

@@ -6,10 +6,16 @@
  */
 
 export type {
+  EncodedRouteGeometry,
   GeoCoordinates,
+  GeocodePlacesInput,
+  GeocodePlacesResult,
   JourneyLeg,
   JourneyLegMode,
   JourneyPlanner,
+  PlaceGeocoder,
+  PlaceSuggestion,
+  PlaceSuggestionType,
   PlanJourneyInput,
   PlanJourneyResult,
   PlannedJourney,
@@ -21,10 +27,20 @@ export {
   MOTIS_OPENAPI_PIN,
   MOTIS_PLAN_API_VERSION,
   assertPlanJourneyCoordinates,
+  motisEncodedPolylineSchema,
   normalizeMotisPlanResponse,
 } from './motis-normalize.js';
+
+export {
+  MOTIS_GEOCODE_API_VERSION,
+  MOTIS_GEOCODE_OPENAPI_PIN,
+  motisGeocodeResponseSchema,
+  normalizeMotisGeocodeResponse,
+} from './motis-geocode.js';
 
 export {
   createTransitousJourneyPlanner,
   type TransitousClientOptions,
 } from './transitous-client.js';
+
+export { createTransitousPlaceGeocoder } from './transitous-geocode.js';

@@ -127,13 +127,13 @@ describe('outbox to BullMQ integration', () => {
         {
           participantId: 'a',
           displayName: 'A',
-          originPlaceId: 'place:berlin',
+          origin: { kind: 'existing', placeId: 'place:berlin' },
           position: 0,
         },
         {
           participantId: 'b',
           displayName: 'B',
-          originPlaceId: 'place:paris',
+          origin: { kind: 'existing', placeId: 'place:paris' },
           position: 1,
         },
       ],

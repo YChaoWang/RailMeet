@@ -7,8 +7,9 @@ and normalized journey persistence. Phase 8 finalizes the pipeline: evaluate fea
 rank candidates for every supported ranking mode, persist relational results, and transition
 the search to `completed` or `failed`.
 
-Phase 8 does **not** expose a public results API or frontend. Phase 9 will read these
-persisted rows.
+Phase 8 does **not** own the public results UI. Phase 9 reads these persisted rows through
+`GET /api/v1/meeting-searches/:searchId` and `GET …/results`. See
+[search-and-results-ux.md](./search-and-results-ux.md).
 
 ## Decision
 

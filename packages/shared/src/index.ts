@@ -18,6 +18,14 @@ export {
   PLACE_ID_MAX_LENGTH,
   PLACE_LABEL_MAX_LENGTH,
   PLACE_NAME_MAX_LENGTH,
+  PLACE_SEARCH_QUERY_MIN_LENGTH,
+  PLACE_SEARCH_QUERY_MAX_LENGTH,
+  PLACE_SEARCH_RESULT_LIMIT,
+  PROVIDER_PLACE_ID_MAX_LENGTH,
+  PLACE_GEOCODE_CACHE_TTL_MS,
+  ENCODED_POLYLINE_POINTS_MAX_LENGTH,
+  ENCODED_POLYLINE_PRECISION_MIN,
+  ENCODED_POLYLINE_PRECISION_MAX,
 } from './limits.js';
 
 export { asNonEmptyStringTuple } from './tuple.js';
@@ -25,6 +33,24 @@ export { asNonEmptyStringTuple } from './tuple.js';
 export { RANKING_MODES, isRankingMode, type RankingMode } from './ranking-mode.js';
 export { TRANSPORT_MODES, isTransportMode, type TransportMode } from './transport-mode.js';
 export { SEARCH_STATUSES, isSearchStatus, type SearchStatus } from './search-status.js';
+export {
+  TERMINAL_SEARCH_STATUSES,
+  POLLING_SEARCH_STATUSES,
+  isTerminalSearchStatus,
+  shouldContinueSearchPolling,
+  shouldFetchSearchResults,
+  assertSearchStatusLifecycleCoverage,
+  type TerminalSearchStatus,
+  type PollingSearchStatus,
+} from './search-lifecycle.js';
+export {
+  SEARCH_COMPLETION_OUTCOMES,
+  SEARCH_FAILURE_CODES,
+  isSearchCompletionOutcome,
+  isSearchFailureCode,
+  type SearchCompletionOutcome,
+  type SearchFailureCode,
+} from './search-completion.js';
 export { API_ERROR_CODES, isApiErrorCode, type ApiErrorCode } from './api-error-codes.js';
 export { PLACE_KINDS, isPlaceKind, type PlaceKind } from './place-kind.js';
 

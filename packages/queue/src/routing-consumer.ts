@@ -10,6 +10,7 @@ import {
 } from './contract.js';
 import { validateRoutingRequestedJob } from './job-validation.js';
 import { classifyConsumerError, createWorkerCloseHandle } from './worker-close.js';
+import { logConsumerError } from './log-consumer-error.js';
 
 export type RoutingJobResult = {
   readonly searchId: string;
@@ -128,13 +129,12 @@ export function createRoutingConsumer(options: CreateRoutingConsumerOptions): Ro
   });
 
   worker.on('error', (error) => {
-    options.logger.error(
-      {
-        event: 'routing_consumer_error',
-        errorCode: classifyConsumerError(error),
-      },
-      'Routing consumer error',
-    );
+    logConsumerError(options.logger, {
+      event: 'routing_consumer_error',
+      message: 'Routing consumer error',
+      error,
+      errorCode: classifyConsumerError(error),
+    });
   });
 
   const closeHandle = createWorkerCloseHandle({

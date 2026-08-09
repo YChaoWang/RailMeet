@@ -94,13 +94,13 @@ describe('candidate generation persistence', () => {
         {
           participantId: 'a',
           displayName: 'A',
-          originPlaceId: originA,
+          origin: { kind: 'existing', placeId: originA },
           position: 0,
         },
         {
           participantId: 'b',
           displayName: 'B',
-          originPlaceId: originB,
+          origin: { kind: 'existing', placeId: originB },
           position: 1,
         },
       ],
@@ -242,13 +242,13 @@ describe('candidate generation persistence', () => {
         {
           participantId: 'a',
           displayName: 'A',
-          originPlaceId: 'place:does-not-exist',
+          origin: { kind: 'existing', placeId: 'place:does-not-exist' },
           position: 0,
         },
         {
           participantId: 'b',
           displayName: 'B',
-          originPlaceId: 'place:paris',
+          origin: { kind: 'existing', placeId: 'place:paris' },
           position: 1,
         },
       ],

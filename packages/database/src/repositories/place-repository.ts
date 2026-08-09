@@ -1,12 +1,14 @@
 import { isPlaceKind, type PlaceKind } from '@railmeet/shared';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
-import type { CreatePlaceCommand, PlaceRecord } from '../models.js';
+import type { CreatePlaceCommand, PlaceRecord, UpsertProviderPlaceCommand } from '../models.js';
+import { placeIdForProviderPlace } from '../place-identity.js';
 import type * as schema from '../schema/index.js';
 import { places } from '../schema/tables.js';
 
 type Db = PostgresJsDatabase<typeof schema>;
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 function assertPlaceKind(value: string): PlaceKind {
   if (!isPlaceKind(value)) {
@@ -27,6 +29,8 @@ function mapPlace(row: typeof places.$inferSelect): PlaceRecord {
       latitude: row.location.y,
     },
     parentCityId: row.parentCityId,
+    provider: row.provider,
+    providerPlaceId: row.providerPlaceId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -36,6 +40,11 @@ export type PlaceRepository = {
   create: (command: CreatePlaceCommand) => Promise<PlaceRecord>;
   findById: (id: string) => Promise<PlaceRecord | null>;
   findManyByIds: (ids: readonly string[]) => Promise<PlaceRecord[]>;
+  findByProviderPlace: (provider: string, providerPlaceId: string) => Promise<PlaceRecord | null>;
+  upsertFromProvider: (
+    command: UpsertProviderPlaceCommand,
+    executor?: Db | Tx,
+  ) => Promise<PlaceRecord>;
   deleteById: (id: string) => Promise<boolean>;
   hasSpatialIndex: () => Promise<boolean>;
 };
@@ -53,6 +62,8 @@ export function createPlaceRepository(db: Db): PlaceRepository {
           timezone: command.timezone,
           location: { x: command.location.longitude, y: command.location.latitude },
           parentCityId: command.parentCityId ?? null,
+          provider: command.provider ?? null,
+          providerPlaceId: command.providerPlaceId ?? null,
         })
         .returning();
 
@@ -83,6 +94,51 @@ export function createPlaceRepository(db: Db): PlaceRepository {
         const place = byId.get(id);
         return place ? [place] : [];
       });
+    },
+
+    async findByProviderPlace(provider, providerPlaceId) {
+      const row = await db.query.places.findFirst({
+        where: and(eq(places.provider, provider), eq(places.providerPlaceId, providerPlaceId)),
+      });
+      return row ? mapPlace(row) : null;
+    },
+
+    async upsertFromProvider(command, executor = db) {
+      const id = placeIdForProviderPlace(command.provider, command.providerPlaceId);
+      const now = new Date();
+      const [row] = await executor
+        .insert(places)
+        .values({
+          id,
+          name: command.name,
+          kind: command.kind,
+          countryCode: command.countryCode,
+          timezone: command.timezone,
+          location: { x: command.location.longitude, y: command.location.latitude },
+          parentCityId: null,
+          provider: command.provider,
+          providerPlaceId: command.providerPlaceId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [places.provider, places.providerPlaceId],
+          targetWhere: sql`${places.provider} IS NOT NULL AND ${places.providerPlaceId} IS NOT NULL`,
+          set: {
+            name: command.name,
+            kind: command.kind,
+            countryCode: command.countryCode,
+            timezone: command.timezone,
+            location: { x: command.location.longitude, y: command.location.latitude },
+            updatedAt: now,
+          },
+        })
+        .returning();
+
+      if (!row) {
+        throw new Error('Failed to upsert provider place');
+      }
+      return mapPlace(row);
     },
 
     async deleteById(id) {

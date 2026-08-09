@@ -90,6 +90,8 @@ export {
 
 export { createRedisConnection, closeRedisConnection } from './redis.js';
 
+export { logConsumerError, toLoggedError } from './log-consumer-error.js';
+
 export {
   createOutboxDispatcher,
   type DispatchCycleStats,

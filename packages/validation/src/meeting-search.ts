@@ -13,7 +13,7 @@ import {
 } from '@railmeet/shared';
 import { z } from 'zod';
 
-import { placeReferenceSchema } from './place.js';
+import { meetingSearchOriginSchema } from './place.js';
 import {
   calendarDateSchema,
   hasUniqueValues,
@@ -39,7 +39,7 @@ export const participantInputSchema = z
       .max(PARTICIPANT_NAME_MAX_LENGTH, {
         message: `Participant display name must be at most ${PARTICIPANT_NAME_MAX_LENGTH} characters`,
       }),
-    origin: placeReferenceSchema,
+    origin: meetingSearchOriginSchema,
   })
   .strict();
 

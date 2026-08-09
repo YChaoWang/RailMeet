@@ -1,6 +1,7 @@
 import { loadApiConfig } from '@railmeet/config';
 import { createDatabase } from '@railmeet/database';
 import { createLogger } from '@railmeet/observability';
+import { createTransitousPlaceGeocoder } from '@railmeet/routing';
 
 import { buildServer } from './app.js';
 
@@ -16,7 +17,15 @@ async function main(): Promise<void> {
     connectionString: config.databaseUrl,
   });
 
-  const app = await buildServer({ logger, database });
+  const placeGeocoder = createTransitousPlaceGeocoder({
+    baseUrl: config.transitous.baseUrl,
+    userAgent: config.transitous.userAgent,
+    timeoutMs: config.transitous.timeoutMs,
+    maxResponseBytes: config.transitous.maxResponseBytes,
+    logger,
+  });
+
+  const app = await buildServer({ logger, database, placeGeocoder });
 
   let shuttingDown = false;
 

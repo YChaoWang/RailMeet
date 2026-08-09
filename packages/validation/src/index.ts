@@ -9,7 +9,21 @@ export {
   transportModeSchema,
 } from './primitives.js';
 
-export { placeReferenceSchema } from './place.js';
+export {
+  placeReferenceSchema,
+  selectedPlaceOriginSchema,
+  meetingSearchOriginSchema,
+  placeSuggestionSchema,
+  placeSearchQuerySchema,
+  placeSearchDataSchema,
+  placeSuggestionTypeSchema,
+  isSelectedPlaceOrigin,
+  type PlaceReferenceInput,
+  type SelectedPlaceOrigin,
+  type MeetingSearchOrigin,
+  type PlaceSuggestionView,
+  type PlaceSearchData,
+} from './place.js';
 
 export {
   createMeetingSearchRequestSchema,
@@ -25,11 +39,18 @@ export {
   meetingSearchDetailEnvelopeSchema,
   meetingSearchIdParamsSchema,
   meetingSearchParticipantViewSchema,
+  meetingSearchPlaceViewSchema,
+  meetingSearchResultsDataSchema,
+  meetingSearchResultsEnvelopeSchema,
+  meetingSearchRankedCandidateViewSchema,
+  meetingSearchSelectedJourneyViewSchema,
   type MeetingSearchAcceptedData,
   type MeetingSearchAcceptedEnvelope,
   type MeetingSearchDetailData,
   type MeetingSearchDetailEnvelope,
   type MeetingSearchIdParams,
+  type MeetingSearchResultsData,
+  type MeetingSearchResultsEnvelope,
 } from './meeting-search-responses.js';
 
 export {

@@ -105,6 +105,15 @@ function mapJourney(row: typeof meetingSearchJourneys.$inferSelect): PersistedJo
     arrivalAt: new Date(leg.arrivalAt),
     durationMinutes: leg.durationMinutes,
     ...(leg.providerReference ? { providerReference: leg.providerReference } : {}),
+    ...(leg.geometry
+      ? {
+          geometry: {
+            points: leg.geometry.points,
+            precision: leg.geometry.precision,
+            length: leg.geometry.length,
+          },
+        }
+      : {}),
   }));
   return {
     id: row.id,
@@ -449,6 +458,15 @@ export function createSearchPipelineRepository(db: Db): SearchPipelineRepository
                   arrivalAt: leg.arrivalAt.toISOString(),
                   durationMinutes: leg.durationMinutes,
                   ...(leg.providerReference ? { providerReference: leg.providerReference } : {}),
+                  ...(leg.geometry
+                    ? {
+                        geometry: {
+                          points: leg.geometry.points,
+                          precision: leg.geometry.precision,
+                          length: leg.geometry.length,
+                        },
+                      }
+                    : {}),
                 })),
                 providerReference: journey.providerReference ?? null,
               })),

@@ -1,5 +1,6 @@
 import type { Database } from '@railmeet/database';
 import type { Logger } from '@railmeet/observability';
+import type { PlaceGeocoder } from '@railmeet/routing';
 import Fastify from 'fastify';
 import {
   serializerCompiler,
@@ -10,10 +11,15 @@ import { ZodError } from 'zod';
 
 import { isZodError, sendError, zodIssuesToDetails } from './http/errors.js';
 import { meetingSearchRoutes } from './routes/meeting-searches.js';
+import { placeSearchRoutes } from './routes/places.js';
 import {
   createMeetingSearchService,
   type MeetingSearchService,
 } from './services/meeting-search-service.js';
+import {
+  createPlaceSearchService,
+  type PlaceSearchService,
+} from './services/place-search-service.js';
 
 export type HealthResponse = {
   status: 'ok';
@@ -29,6 +35,9 @@ export type BuildServerOptions = {
   readonly genReqId?: () => string;
   /** Optional service override for unit/API tests with fakes. */
   readonly meetingSearchService?: MeetingSearchService;
+  readonly placeSearchService?: PlaceSearchService;
+  /** Optional geocoder used when placeSearchService is not provided. */
+  readonly placeGeocoder?: PlaceGeocoder;
 };
 
 /**
@@ -121,11 +130,25 @@ export async function buildServer(options: BuildServerOptions) {
   const meetingSearchService =
     options.meetingSearchService ??
     (options.database
-      ? createMeetingSearchService({ meetingSearches: options.database.meetingSearches })
+      ? createMeetingSearchService({
+          meetingSearches: options.database.meetingSearches,
+          places: options.database.places,
+          finalization: options.database.finalization,
+        })
       : undefined);
 
   if (meetingSearchService) {
     await app.register(meetingSearchRoutes, { meetingSearchService });
+  }
+
+  const placeSearchService =
+    options.placeSearchService ??
+    (options.placeGeocoder
+      ? createPlaceSearchService({ geocoder: options.placeGeocoder })
+      : undefined);
+
+  if (placeSearchService) {
+    await app.register(placeSearchRoutes, { placeSearchService });
   }
 
   if (options.database) {

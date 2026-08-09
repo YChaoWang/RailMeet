@@ -34,13 +34,13 @@ describe('meeting-search mapper', () => {
       {
         participantId: 'p-b',
         displayName: 'Blake',
-        originPlaceId: 'place:paris',
+        origin: { kind: 'existing', placeId: 'place:paris' },
         position: 0,
       },
       {
         participantId: 'p-a',
         displayName: 'Alex',
-        originPlaceId: 'place:berlin',
+        origin: { kind: 'existing', placeId: 'place:berlin' },
         position: 1,
       },
     ]);
@@ -57,7 +57,7 @@ describe('meeting-search mapper', () => {
   it('projects accepted and detail API shapes without internal IDs', () => {
     const record: MeetingSearchRecord = {
       id: '11111111-1111-4111-8111-111111111111',
-      status: 'queued',
+      status: 'completed',
       travelDate: '2026-06-15',
       earliestDepartureTime: '08:00',
       latestArrivalTime: '22:30',
@@ -76,9 +76,14 @@ describe('meeting-search mapper', () => {
       ],
       allowedTransportModes: ['train'],
       allowedCountryCodes: ['DE'],
-      startedAt: null,
+      startedAt: new Date('2026-06-01T10:01:00.000Z'),
+      completedAt: new Date('2026-06-01T10:05:00.000Z'),
+      failedAt: null,
+      completionOutcome: 'ranked',
+      failureCode: null,
+      recommendedDestinationPlaceId: 'place:munich',
       createdAt: new Date('2026-06-01T10:00:00.000Z'),
-      updatedAt: new Date('2026-06-01T10:00:00.000Z'),
+      updatedAt: new Date('2026-06-01T10:05:00.000Z'),
     };
 
     expect(toMeetingSearchAcceptedData(record)).toEqual({
@@ -87,11 +92,47 @@ describe('meeting-search mapper', () => {
       createdAt: '2026-06-01T10:00:00.000Z',
     });
 
-    const detail = toMeetingSearchDetailData(record);
+    const detail = toMeetingSearchDetailData(
+      record,
+      new Map([
+        [
+          'place:berlin',
+          {
+            placeId: 'place:berlin',
+            name: 'Berlin',
+            longitude: 13.405,
+            latitude: 52.52,
+          },
+        ],
+        [
+          'place:munich',
+          {
+            placeId: 'place:munich',
+            name: 'Munich',
+            longitude: 11.582,
+            latitude: 48.1351,
+          },
+        ],
+      ]),
+    );
     expect(detail.participants[0]).toEqual({
       id: 'p-a',
       displayName: 'Alex',
-      origin: { placeId: 'place:berlin' },
+      origin: {
+        placeId: 'place:berlin',
+        name: 'Berlin',
+        longitude: 13.405,
+        latitude: 52.52,
+      },
+    });
+    expect(detail.startedAt).toBe('2026-06-01T10:01:00.000Z');
+    expect(detail.completedAt).toBe('2026-06-01T10:05:00.000Z');
+    expect(detail.completionOutcome).toBe('ranked');
+    expect(detail.recommendedDestination).toEqual({
+      placeId: 'place:munich',
+      name: 'Munich',
+      longitude: 11.582,
+      latitude: 48.1351,
     });
     expect(detail).not.toHaveProperty('id');
     expect(JSON.stringify(detail)).not.toContain('position');

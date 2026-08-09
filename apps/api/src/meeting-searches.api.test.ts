@@ -2,6 +2,7 @@ import { createLogger } from '@railmeet/observability';
 import {
   meetingSearchAcceptedEnvelopeSchema,
   meetingSearchDetailEnvelopeSchema,
+  meetingSearchResultsEnvelopeSchema,
 } from '@railmeet/validation';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -45,19 +46,109 @@ const detailValue = {
   minTransferDurationMinutes: 5,
   rankingMode: 'fairest' as const,
   participants: [
-    { id: 'p1', displayName: 'Alex', origin: { placeId: 'place:berlin' } },
-    { id: 'p2', displayName: 'Blake', origin: { placeId: 'place:paris' } },
+    { id: 'p1', displayName: 'Alex', origin: { placeId: 'place:berlin', name: 'Berlin' } },
+    { id: 'p2', displayName: 'Blake', origin: { placeId: 'place:paris', name: 'Paris' } },
   ],
   allowedTransportModes: ['bus', 'train'] as Array<'bus' | 'train'>,
   allowedCountryCodes: ['DE', 'FR'],
   createdAt: '2026-06-01T12:00:00.000Z',
   updatedAt: '2026-06-01T12:00:00.000Z',
+  startedAt: null,
+  completedAt: null,
+  failedAt: null,
+  completionOutcome: null,
+  failureCode: null,
+  recommendedDestination: null,
+};
+
+const resultsValue = {
+  searchId: '44444444-4444-4444-8444-444444444444',
+  status: 'completed' as const,
+  completionOutcome: 'ranked' as const,
+  rankingMode: 'fairest' as const,
+  recommendedDestination: { placeId: 'place:munich', name: 'Munich' },
+  rankings: [
+    {
+      rankingMode: 'arrive-together' as const,
+      rank: 1,
+      destination: { placeId: 'place:munich', name: 'Munich' },
+      recommended: false,
+      totalDurationMinutes: 120,
+      maxDurationMinutes: 70,
+      durationRangeMinutes: 20,
+      totalTransfers: 1,
+      maxTransfers: 1,
+      earliestArrivalAt: '2026-06-15T10:00:00.000Z',
+      latestArrivalAt: '2026-06-15T10:10:00.000Z',
+      arrivalSpreadMs: 600_000,
+      journeys: [
+        {
+          participantId: 'p1',
+          participantDisplayName: 'Alex',
+          participantPosition: 0,
+          origin: { placeId: 'place:berlin', name: 'Berlin' },
+          destination: { placeId: 'place:munich', name: 'Munich' },
+          departureAt: '2026-06-15T08:00:00.000Z',
+          arrivalAt: '2026-06-15T10:00:00.000Z',
+          durationMinutes: 120,
+          transfers: 0,
+          transportModes: ['train'],
+          legs: [
+            {
+              mode: 'train',
+              departureAt: '2026-06-15T08:00:00.000Z',
+              arrivalAt: '2026-06-15T10:00:00.000Z',
+              durationMinutes: 120,
+              geometry: null,
+            },
+          ],
+        },
+        {
+          participantId: 'p2',
+          participantDisplayName: 'Blake',
+          participantPosition: 1,
+          origin: { placeId: 'place:paris', name: 'Paris' },
+          destination: { placeId: 'place:munich', name: 'Munich' },
+          departureAt: '2026-06-15T08:10:00.000Z',
+          arrivalAt: '2026-06-15T10:10:00.000Z',
+          durationMinutes: 120,
+          transfers: 1,
+          transportModes: ['train'],
+          legs: [
+            {
+              mode: 'train',
+              departureAt: '2026-06-15T08:10:00.000Z',
+              arrivalAt: '2026-06-15T10:10:00.000Z',
+              durationMinutes: 120,
+              geometry: null,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      rankingMode: 'fairest' as const,
+      rank: 1,
+      destination: { placeId: 'place:munich', name: 'Munich' },
+      recommended: true,
+      totalDurationMinutes: 140,
+      maxDurationMinutes: 75,
+      durationRangeMinutes: 10,
+      totalTransfers: 2,
+      maxTransfers: 1,
+      earliestArrivalAt: '2026-06-15T09:10:00.000Z',
+      latestArrivalAt: '2026-06-15T09:20:00.000Z',
+      arrivalSpreadMs: 600_000,
+      journeys: [],
+    },
+  ],
 };
 
 function createFakeService(overrides: Partial<MeetingSearchService> = {}): MeetingSearchService {
   return {
     createAcceptedSearch: vi.fn().mockResolvedValue({ ok: true, value: acceptedValue }),
     getSearchById: vi.fn().mockResolvedValue({ ok: true, value: detailValue }),
+    getSearchResults: vi.fn().mockResolvedValue({ ok: true, value: resultsValue }),
     ...overrides,
   };
 }
@@ -245,6 +336,45 @@ describe('meeting-search API', () => {
     await app.close();
   });
 
+  it('GET summary returns every lifecycle status safely', async () => {
+    const statuses = [
+      'queued',
+      'running',
+      'partially-completed',
+      'completed',
+      'failed',
+      'cancelling',
+      'cancelled',
+    ] as const;
+    for (const status of statuses) {
+      const app = await buildTestApp(
+        createFakeService({
+          getSearchById: vi.fn().mockResolvedValue({
+            ok: true,
+            value: {
+              ...detailValue,
+              status,
+              completionOutcome: status === 'completed' ? 'ranked' : null,
+              failureCode: status === 'failed' ? 'ROUTING_TECHNICAL_FAILURE' : null,
+              completedAt: status === 'completed' ? '2026-06-01T12:05:00.000Z' : null,
+              failedAt: status === 'failed' ? '2026-06-01T12:05:00.000Z' : null,
+            },
+          }),
+        }),
+      );
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/meeting-searches/${detailValue.searchId}`,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.status).toBe(status);
+      expect(body.error).toBeUndefined();
+      expect(JSON.stringify(body)).not.toMatch(/stack|SELECT |providerPayload|BullMQ|redis/i);
+      await app.close();
+    }
+  });
+
   it('GET returns 404 for missing search', async () => {
     const app = await buildTestApp(
       createFakeService({
@@ -268,6 +398,220 @@ describe('meeting-search API', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/api/v1/meeting-searches/not-a-uuid',
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('VALIDATION_FAILED');
+    await app.close();
+  });
+
+  it('GET results returns 200 with ranked payload and deterministic order', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/meeting-searches/${resultsValue.searchId}/results`,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(meetingSearchResultsEnvelopeSchema.safeParse(body).success).toBe(true);
+    expect(
+      body.data.rankings.map((row: { rankingMode: string; rank: number }) => [
+        row.rankingMode,
+        row.rank,
+      ]),
+    ).toEqual([
+      ['arrive-together', 1],
+      ['fairest', 1],
+    ]);
+    expect(
+      body.data.rankings[0].journeys.map((j: { participantId: string }) => j.participantId),
+    ).toEqual(['p1', 'p2']);
+    expect(JSON.stringify(body)).not.toMatch(/stack|SELECT |providerPayload/i);
+    await app.close();
+  });
+
+  it('GET results returns 409 RESULTS_NOT_READY while queued or running', async () => {
+    const app = await buildTestApp(
+      createFakeService({
+        getSearchResults: vi.fn().mockResolvedValue({
+          ok: false,
+          error: { kind: 'results_not_ready', searchId: detailValue.searchId },
+        }),
+      }),
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/meeting-searches/${detailValue.searchId}/results`,
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe('RESULTS_NOT_READY');
+    await app.close();
+  });
+
+  it('GET results returns 409 SEARCH_FAILED without ranking rows', async () => {
+    const app = await buildTestApp(
+      createFakeService({
+        getSearchResults: vi.fn().mockResolvedValue({
+          ok: false,
+          error: {
+            kind: 'search_failed',
+            searchId: detailValue.searchId,
+            failureCode: 'ROUTING_TECHNICAL_FAILURE',
+          },
+        }),
+      }),
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/meeting-searches/${detailValue.searchId}/results`,
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe('SEARCH_FAILED');
+    expect(response.json().error.details?.[0]?.message).toBe('ROUTING_TECHNICAL_FAILURE');
+    expect(response.json()).not.toHaveProperty('data');
+    await app.close();
+  });
+
+  it('GET results returns 409 SEARCH_FAILED for cancelled searches', async () => {
+    const app = await buildTestApp(
+      createFakeService({
+        getSearchResults: vi.fn().mockResolvedValue({
+          ok: false,
+          error: {
+            kind: 'search_failed',
+            searchId: detailValue.searchId,
+            failureCode: null,
+          },
+        }),
+      }),
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/meeting-searches/${detailValue.searchId}/results`,
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe('SEARCH_FAILED');
+    expect(response.json()).not.toHaveProperty('data');
+    await app.close();
+  });
+
+  it('GET results returns empty completed payloads for no_candidates and no_feasible_candidates', async () => {
+    for (const completionOutcome of ['no_candidates', 'no_feasible_candidates'] as const) {
+      const app = await buildTestApp(
+        createFakeService({
+          getSearchResults: vi.fn().mockResolvedValue({
+            ok: true,
+            value: {
+              ...resultsValue,
+              completionOutcome,
+              recommendedDestination: null,
+              rankings: [],
+            },
+          }),
+        }),
+      );
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/v1/meeting-searches/${resultsValue.searchId}/results`,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(meetingSearchResultsEnvelopeSchema.safeParse(body).success).toBe(true);
+      expect(body.data.completionOutcome).toBe(completionOutcome);
+      expect(body.data.rankings).toEqual([]);
+      expect(body.data.status).toBe('completed');
+      await app.close();
+    }
+  });
+
+  it('GET results preserves multi-candidate rank and participant ordinal order', async () => {
+    const ordered = {
+      ...resultsValue,
+      rankings: [
+        {
+          ...resultsValue.rankings[1]!,
+          rank: 1,
+          destination: { placeId: 'place:munich', name: 'Munich' },
+          journeys: [
+            {
+              participantId: 'p1',
+              participantDisplayName: 'Alex',
+              participantPosition: 0,
+              origin: { placeId: 'place:berlin', name: 'Berlin' },
+              destination: { placeId: 'place:munich', name: 'Munich' },
+              departureAt: '2026-06-15T08:00:00.000Z',
+              arrivalAt: '2026-06-15T10:00:00.000Z',
+              durationMinutes: 120,
+              transfers: 0,
+              transportModes: ['train'],
+              legs: [],
+            },
+            {
+              participantId: 'p2',
+              participantDisplayName: 'Blake',
+              participantPosition: 1,
+              origin: { placeId: 'place:paris', name: 'Paris' },
+              destination: { placeId: 'place:munich', name: 'Munich' },
+              departureAt: '2026-06-15T08:10:00.000Z',
+              arrivalAt: '2026-06-15T10:10:00.000Z',
+              durationMinutes: 120,
+              transfers: 1,
+              transportModes: ['train'],
+              legs: [],
+            },
+          ],
+        },
+        {
+          ...resultsValue.rankings[1]!,
+          rank: 2,
+          recommended: false,
+          destination: { placeId: 'place:cologne', name: 'Cologne' },
+          journeys: [],
+        },
+      ],
+    };
+    const app = await buildTestApp(
+      createFakeService({
+        getSearchResults: vi.fn().mockResolvedValue({ ok: true, value: ordered }),
+      }),
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/meeting-searches/${resultsValue.searchId}/results`,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.data.rankings.map((row: { rank: number }) => row.rank)).toEqual([1, 2]);
+    expect(
+      body.data.rankings[0].journeys.map(
+        (journey: { participantPosition: number }) => journey.participantPosition,
+      ),
+    ).toEqual([0, 1]);
+    await app.close();
+  });
+
+  it('GET results returns 404 for unknown search', async () => {
+    const app = await buildTestApp(
+      createFakeService({
+        getSearchResults: vi.fn().mockResolvedValue({
+          ok: false,
+          error: { kind: 'not_found', searchId: detailValue.searchId },
+        }),
+      }),
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/meeting-searches/${detailValue.searchId}/results`,
+    });
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe('NOT_FOUND');
+    await app.close();
+  });
+
+  it('GET results returns 400 for malformed search ID', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/meeting-searches/not-a-uuid/results',
     });
     expect(response.statusCode).toBe(400);
     expect(response.json().error.code).toBe('VALIDATION_FAILED');

@@ -104,7 +104,7 @@ describe('Phase 8 finalization recovery (real processor)', () => {
     await assertRedisMaxmemoryPolicyNoeviction(redis);
     const workerOpts = {
       url: redisUrl,
-      commandTimeoutMs: 5_000,
+      commandTimeoutMs: null,
       connectTimeoutMs: 5_000,
       maxRetriesPerRequest: null as null,
       enableOfflineQueue: true,
@@ -139,13 +139,13 @@ describe('Phase 8 finalization recovery (real processor)', () => {
         {
           participantId: 'a',
           displayName: 'A',
-          originPlaceId: 'place:berlin',
+          origin: { kind: 'existing', placeId: 'place:berlin' },
           position: 0,
         },
         {
           participantId: 'b',
           displayName: 'B',
-          originPlaceId: 'place:paris',
+          origin: { kind: 'existing', placeId: 'place:paris' },
           position: 1,
         },
       ],

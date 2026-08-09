@@ -1,9 +1,15 @@
 import { z } from 'zod';
 
-import { isTransportMode, type TransportMode } from '@railmeet/shared';
+import {
+  ENCODED_POLYLINE_POINTS_MAX_LENGTH,
+  ENCODED_POLYLINE_PRECISION_MAX,
+  ENCODED_POLYLINE_PRECISION_MIN,
+  isTransportMode,
+  type TransportMode,
+} from '@railmeet/shared';
 
 import { RoutingError } from './errors.js';
-import type { JourneyLeg, JourneyLegMode, PlannedJourney } from './types.js';
+import type { EncodedRouteGeometry, JourneyLeg, JourneyLegMode, PlannedJourney } from './types.js';
 
 /**
  * Pinned MOTIS OpenAPI surface used by this adapter:
@@ -31,6 +37,19 @@ export function assertPlanJourneyCoordinates(input: {
 
 const motisModeSchema = z.string();
 
+/** MOTIS EncodedPolyline — precision is not hard-coded (v5 typically uses 6). */
+export const motisEncodedPolylineSchema = z
+  .object({
+    points: z.string().min(1).max(ENCODED_POLYLINE_POINTS_MAX_LENGTH),
+    precision: z
+      .number()
+      .int()
+      .min(ENCODED_POLYLINE_PRECISION_MIN)
+      .max(ENCODED_POLYLINE_PRECISION_MAX),
+    length: z.number().int().nonnegative(),
+  })
+  .strict();
+
 const motisLegSchema = z
   .object({
     mode: motisModeSchema,
@@ -39,6 +58,7 @@ const motisLegSchema = z
     duration: z.number().finite().nonnegative(),
     tripId: z.string().optional(),
     routeId: z.string().optional(),
+    legGeometry: motisEncodedPolylineSchema.optional(),
   })
   .passthrough();
 
@@ -93,6 +113,25 @@ function parseInstant(value: string, label: string): Date {
   return date;
 }
 
+function normalizeLegGeometry(raw: unknown): EncodedRouteGeometry | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const parsed = motisEncodedPolylineSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new RoutingError(
+      'PROVIDER_CONTRACT_FAILURE',
+      'provider_contract',
+      'Provider legGeometry failed schema validation',
+    );
+  }
+  return {
+    points: parsed.data.points,
+    precision: parsed.data.precision,
+    length: parsed.data.length,
+  };
+}
+
 export function normalizeMotisPlanResponse(payload: unknown): readonly PlannedJourney[] {
   const parsed = motisPlanResponseSchema.safeParse(payload);
   if (!parsed.success) {
@@ -125,11 +164,13 @@ export function normalizeMotisPlanResponse(payload: unknown): readonly PlannedJo
         );
       }
       const providerReference = leg.tripId ?? leg.routeId;
+      const geometry = normalizeLegGeometry(leg.legGeometry);
       const mapped: JourneyLeg = {
         mode: mapMode(leg.mode),
         departureAt: legDeparture,
         arrivalAt: legArrival,
         durationMinutes: Math.max(0, Math.round(leg.duration / 60)),
+        ...(geometry ? { geometry } : {}),
       };
       if (providerReference) {
         return { ...mapped, providerReference };

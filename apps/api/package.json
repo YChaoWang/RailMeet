@@ -16,6 +16,7 @@
     "@railmeet/config": "workspace:*",
     "@railmeet/database": "workspace:^",
     "@railmeet/observability": "workspace:*",
+    "@railmeet/routing": "workspace:^",
     "@railmeet/shared": "workspace:^",
     "@railmeet/validation": "workspace:^",
     "fastify": "^5.4.0",
