@@ -39,6 +39,36 @@ export const PROVIDER_PLACE_ID_MAX_LENGTH = 512;
 /** Short-lived geocode cache TTL for identical normalized queries. */
 export const PLACE_GEOCODE_CACHE_TTL_MS = 30_000;
 
+/** Viewport map-stops cache TTL (identical quantized bounds + zoom). */
+export const MAP_STOPS_CACHE_TTL_MS = 10 * 60 * 1000;
+
+/** Upper bound on in-memory map-stops cache entries (LRU eviction). */
+export const MAP_STOPS_CACHE_MAX_ENTRIES = 200;
+
+/** Decimal places used when quantizing viewport bounds for cache keys. */
+export const MAP_STOPS_BOUNDS_QUANTIZE_DECIMALS = 3;
+
+/** Soft limit on station features returned for a viewport.
+ * Larger responses are truncated to major/regional stops.
+ */
+export const MAP_STOPS_FEATURE_SOFT_LIMIT = 1500;
+
+/** Provider HTTP body size cap for viewport map-stops (dense cities exceed plan payloads). */
+export const MAP_STOPS_MAX_RESPONSE_BYTES = 8 * 1_048_576;
+
+/** Zoom at which detailed (local) stops are expected; larger boxes are rejected. */
+export const MAP_STOPS_DETAILED_ZOOM_MIN = 12;
+
+/** Max lat/lon span (degrees) allowed when zoom >= MAP_STOPS_DETAILED_ZOOM_MIN. */
+export const MAP_STOPS_DETAILED_MAX_SPAN_DEG = 0.5;
+
+/** Suggested minimum zoom when the API returns an aggregated/truncated subset. */
+export const MAP_STOPS_MINIMUM_DETAIL_ZOOM = 12;
+
+/** Importance thresholds for MOTIS Place.importance → major/regional/local. */
+export const MAP_STOPS_IMPORTANCE_MAJOR_MIN = 0.04;
+export const MAP_STOPS_IMPORTANCE_REGIONAL_MIN = 0.01;
+
 /** Upper bound for a single encoded polyline `points` string from MOTIS. */
 export const ENCODED_POLYLINE_POINTS_MAX_LENGTH = 200_000;
 

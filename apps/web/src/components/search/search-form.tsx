@@ -32,24 +32,50 @@ import { createMeetingSearch } from '@/lib/meeting-search-client';
 import { travelerColorAt, travelerLetterAt } from '@/lib/traveler-identity';
 
 export type ParticipantDraft = {
+  /** Stable React/map identity for this draft row — never reuse array index. */
   readonly key: string;
   id: string;
   displayName: string;
   originText: string;
   originSelected: PlaceSuggestionView | null;
+  readonly letter: string;
+  readonly color: string;
 };
 
 type FieldErrors = Record<string, string>;
 
-function newParticipant(index: number): ParticipantDraft {
+let travelerIdentitySeq = 0;
+
+function allocateTravelerIdentity(): { letter: string; color: string; seq: number } {
+  const seq = travelerIdentitySeq;
+  travelerIdentitySeq += 1;
+  return {
+    seq,
+    letter: travelerLetterAt(seq),
+    color: travelerColorAt(seq),
+  };
+}
+
+function newParticipant(): ParticipantDraft {
+  const identity = allocateTravelerIdentity();
   return {
     key: crypto.randomUUID(),
-    id: `traveler-${index + 1}`,
+    id: `traveler-${identity.seq + 1}`,
     displayName: '',
     originText: '',
     originSelected: null,
+    letter: identity.letter,
+    color: identity.color,
   };
 }
+
+export type ParticipantsUpdater =
+  ParticipantDraft[] | ((previous: ParticipantDraft[]) => ParticipantDraft[]);
+
+export type SearchFormProps = {
+  readonly participants: ParticipantDraft[];
+  readonly onParticipantsChange: (next: ParticipantsUpdater) => void;
+};
 
 function toSelectedOrigin(suggestion: PlaceSuggestionView): SelectedPlaceOrigin {
   return {
@@ -72,16 +98,11 @@ const RANKING_OPTIONS: { value: RankingMode; label: string }[] = [
   { value: 'arrive-together', label: 'Arrive together' },
 ];
 
-export type SearchFormProps = {
-  readonly participants: ParticipantDraft[];
-  readonly onParticipantsChange: (participants: ParticipantDraft[]) => void;
-};
-
 export function SearchForm({ participants, onParticipantsChange }: SearchFormProps) {
   const router = useRouter();
   const formId = useId();
   const submittingRef = useRef(false);
-  const [travelDate, setTravelDate] = useState('2026-06-15');
+  const [travelDate, setTravelDate] = useState('2026-09-15');
   const [earliestDepartureTime, setEarliestDepartureTime] = useState('08:00');
   const [latestArrivalTime, setLatestArrivalTime] = useState('22:00');
   const [arrivalDayOffset, setArrivalDayOffset] = useState<'0' | '1'>('0');
@@ -115,7 +136,9 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
   };
 
   const updateParticipant = (key: string, patch: Partial<ParticipantDraft>) => {
-    onParticipantsChange(participants.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    onParticipantsChange((previous) =>
+      previous.map((row) => (row.key === key ? { ...row, ...patch } : row)),
+    );
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -225,12 +248,14 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             <div className="flex items-center gap-2">
               <span
                 className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-white"
-                style={{ backgroundColor: travelerColorAt(index) }}
+                style={{ backgroundColor: participant.color }}
                 aria-hidden
               >
-                {travelerLetterAt(index)}
+                {participant.letter}
               </span>
-              <span className="text-xs font-medium text-ink-700">Traveler {index + 1}</span>
+              <span className="text-xs font-medium text-ink-700">
+                Traveler {participant.letter}
+              </span>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor={`${participant.key}-name`}>Display name</Label>
@@ -302,9 +327,7 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             variant="secondary"
             size="sm"
             disabled={participants.length >= PARTICIPANT_COUNT_MAX || pending}
-            onClick={() =>
-              onParticipantsChange([...participants, newParticipant(participants.length)])
-            }
+            onClick={() => onParticipantsChange((previous) => [...previous, newParticipant()])}
           >
             Add traveler
           </Button>
@@ -313,7 +336,7 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             variant="outline"
             size="sm"
             disabled={participants.length <= PARTICIPANT_COUNT_MIN || pending}
-            onClick={() => onParticipantsChange(participants.slice(0, -1))}
+            onClick={() => onParticipantsChange((previous) => previous.slice(0, -1))}
           >
             Remove last
           </Button>
@@ -461,5 +484,31 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
 }
 
 export function createInitialParticipants(): ParticipantDraft[] {
-  return [newParticipant(0), newParticipant(1)];
+  // Stable keys/letters for SSR + hydration — do not use crypto.randomUUID() here.
+  travelerIdentitySeq = 2;
+  return [
+    {
+      key: 'draft-traveler-a',
+      id: 'traveler-1',
+      displayName: '',
+      originText: '',
+      originSelected: null,
+      letter: 'A',
+      color: travelerColorAt(0),
+    },
+    {
+      key: 'draft-traveler-b',
+      id: 'traveler-2',
+      displayName: '',
+      originText: '',
+      originSelected: null,
+      letter: 'B',
+      color: travelerColorAt(1),
+    },
+  ];
+}
+
+/** Test helper: reset the draft identity counter between tests. */
+export function resetTravelerIdentitySeqForTests(): void {
+  travelerIdentitySeq = 0;
 }

@@ -7,18 +7,26 @@
 
 export type {
   EncodedRouteGeometry,
+  FetchMapStopsInput,
   GeoCoordinates,
   GeocodePlacesInput,
   GeocodePlacesResult,
   JourneyLeg,
   JourneyLegMode,
   JourneyPlanner,
+  MapStopsClient,
   PlaceGeocoder,
   PlaceSuggestion,
   PlaceSuggestionType,
   PlanJourneyInput,
   PlanJourneyResult,
   PlannedJourney,
+  StationFeature,
+  StationFeatureCollection,
+  StationFeatureCollectionMetadata,
+  StationFeatureProperties,
+  StationImportance,
+  StationKind,
 } from './types.js';
 
 export { RoutingError, type RoutingErrorClass, type RoutingErrorCode } from './errors.js';
@@ -39,8 +47,19 @@ export {
 } from './motis-geocode.js';
 
 export {
+  MOTIS_MAP_STOPS_API_VERSION,
+  MOTIS_MAP_STOPS_OPENAPI_PIN,
+  motisMapStopsResponseSchema,
+  normalizeMotisMapStopsResponse,
+  stationImportanceFromScore,
+  stationKindFromModes,
+} from './motis-map-stops.js';
+
+export {
   createTransitousJourneyPlanner,
   type TransitousClientOptions,
 } from './transitous-client.js';
 
 export { createTransitousPlaceGeocoder } from './transitous-geocode.js';
+
+export { createTransitousMapStopsClient } from './transitous-map-stops.js';

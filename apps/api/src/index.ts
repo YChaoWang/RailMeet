@@ -1,7 +1,11 @@
 import { loadApiConfig } from '@railmeet/config';
 import { createDatabase } from '@railmeet/database';
 import { createLogger } from '@railmeet/observability';
-import { createTransitousPlaceGeocoder } from '@railmeet/routing';
+import {
+  createTransitousMapStopsClient,
+  createTransitousPlaceGeocoder,
+} from '@railmeet/routing';
+import { MAP_STOPS_MAX_RESPONSE_BYTES } from '@railmeet/shared';
 
 import { buildServer } from './app.js';
 
@@ -17,15 +21,22 @@ async function main(): Promise<void> {
     connectionString: config.databaseUrl,
   });
 
-  const placeGeocoder = createTransitousPlaceGeocoder({
+  const transitousOptions = {
     baseUrl: config.transitous.baseUrl,
     userAgent: config.transitous.userAgent,
     timeoutMs: config.transitous.timeoutMs,
     maxResponseBytes: config.transitous.maxResponseBytes,
     logger,
+  } as const;
+
+  const placeGeocoder = createTransitousPlaceGeocoder(transitousOptions);
+  const mapStopsClient = createTransitousMapStopsClient({
+    ...transitousOptions,
+    // Dense European viewports exceed the journey-plan response budget.
+    maxResponseBytes: Math.max(transitousOptions.maxResponseBytes, MAP_STOPS_MAX_RESPONSE_BYTES),
   });
 
-  const app = await buildServer({ logger, database, placeGeocoder });
+  const app = await buildServer({ logger, database, placeGeocoder, mapStopsClient });
 
   let shuttingDown = false;
 

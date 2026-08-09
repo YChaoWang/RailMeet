@@ -16,7 +16,7 @@ describe('API Redis independence', () => {
     expect(pkg.dependencies).not.toHaveProperty('bullmq');
     expect(pkg.dependencies).not.toHaveProperty('ioredis');
     expect(pkg.dependencies).not.toHaveProperty('@railmeet/queue');
-    // Place autocomplete uses @railmeet/routing geocode adapter (no BullMQ).
+    // Place autocomplete + viewport map stops use @railmeet/routing Transitous adapters (no BullMQ).
     expect(pkg.dependencies).toHaveProperty('@railmeet/routing');
   });
 

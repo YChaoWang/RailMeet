@@ -40,22 +40,28 @@ The map is the primary workspace.
 | --------------- | --------------------------------------------------------------------------------- |
 | Desktop (~1440) | Full-bleed MapLibre map; ~400px left overlay panel with brand + controls          |
 | Tablet (~768)   | Same left-panel pattern                                                           |
-| Mobile (~390)   | Full-screen map; single bottom sheet (collapsed / expanded) with safe-area insets |
+| Mobile (~390)   | Full-screen map; single bottom sheet (collapsed / expanded / drag) with safe-area |
 
 Lifecycle status, search form, ranking modes, candidates, and journey details render inside
-the panel. The map shell stays mounted across polling and transient network errors.
+the panel. The map shell stays mounted across polling and transient network errors. Draft
+origins appear on the map as soon as a place suggestion is selected (no routes before create).
 
 ### Markers and routes (persisted data only)
 
 Place views on summary and results include optional `longitude` / `latitude` from
 `places.location` (PostGIS). The UI:
 
-- draws distinct origin markers for travelers with coordinates;
+- draws distinct origin markers (stable letter + color) for travelers with coordinates;
 - draws candidate meeting-point markers for the active ranking mode;
-- emphasizes the selected candidate;
-- draws **real** selected-candidate journey geometry from persisted MOTIS EncodedPolyline
-  fields (never fabricated straight lines);
-- fits bounds to available markers and decoded route coordinates.
+- emphasizes the selected candidate destination;
+- draws **every traveler’s** real selected-candidate journey geometry simultaneously from
+  persisted MOTIS EncodedPolyline fields (transit solid, walk dashed; never fabricated
+  straight lines);
+- highlights one traveler’s full route while dimming others;
+- shows accessible popups (traveler journey summary / meeting arrival spread) and a compact
+  letter+name legend;
+- fits bounds to markers and decoded route coordinates once per geometry identity, with
+  sheet/panel-aware padding — emphasis and manual pan/zoom do not repeatedly reset the camera.
 
 Missing coordinates omit that marker; missing leg geometry omits that segment only.
 
@@ -154,8 +160,12 @@ pnpm --filter @railmeet/api test
 pnpm --filter @railmeet/database test:integration
 ```
 
-MapLibre is stubbed in unit tests (`disableMap` / module mock). Markers are asserted via
-`buildMapScene` (API-derived only; empty `routeLines`).
+MapLibre is stubbed in unit tests (`disableMap` / module mock). Draft markers are asserted via
+the real `SearchPlannerPage` wiring (autocomplete select → live scene → SearchMap props)
+before any create-search call. Results markers/routes still come from `buildMapScene`.
+
+Station/railway context uses OpenFreeMap Liberty basemap layers (`road_*_rail`, `poi_transit`);
+no viewport station API is required for Phase 9.
 
 ## Out of scope
 

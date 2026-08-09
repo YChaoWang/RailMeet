@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { RankingMode } from '@railmeet/shared';
 import type { MeetingSearchDetailData } from '@railmeet/validation';
 
-import { PlannerWorkspace } from '@/components/planner/planner-workspace';
+import { usePlannerMap } from '@/components/search/planner-map-context';
 import { SearchResultsView } from '@/components/search/search-results-view';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -32,13 +32,15 @@ function summaryFromState(state: SearchPageViewState): MeetingSearchDetailData |
   }
 }
 
-export function SearchStatusPage({
-  searchId,
-  disableMap = false,
-}: {
-  readonly searchId: string;
-  readonly disableMap?: boolean;
-}) {
+export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
+  const {
+    setScene,
+    setPanelTitle,
+    setCollapseSheetWhen,
+    setSheetExpanded,
+    setCandidateSelectHandler,
+    setTravelerSelectHandler,
+  } = usePlannerMap();
   const { state, retry } = useSearchPolling(searchId);
   const [rankingMode, setRankingMode] = useState<RankingMode>('fairest');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -97,13 +99,42 @@ export function SearchStatusPage({
     [summary, results, rankingMode, selectedKey, emphasizedParticipantId],
   );
 
+  useEffect(() => {
+    setPanelTitle(panelTitleFor(state.kind));
+  }, [state.kind, setPanelTitle]);
+
+  useEffect(() => {
+    // Keep draft traveler markers on the persistent map until the first search summary arrives.
+    if (
+      (state.kind === 'loading' || state.kind === 'not_found') &&
+      scene.markers.length === 0 &&
+      scene.routeLines.length === 0
+    ) {
+      return;
+    }
+    setScene(scene);
+  }, [scene, setScene, state.kind]);
+
+  useEffect(() => {
+    setCollapseSheetWhen(results?.searchId ?? null);
+    if (!results) {
+      setSheetExpanded(true);
+    }
+  }, [results?.searchId, results, setCollapseSheetWhen, setSheetExpanded]);
+
+  useEffect(() => {
+    setCandidateSelectHandler(setSelectedKey);
+    setTravelerSelectHandler((participantId) => {
+      setEmphasizedParticipantId((current) => (current === participantId ? null : participantId));
+    });
+    return () => {
+      setCandidateSelectHandler(null);
+      setTravelerSelectHandler(null);
+    };
+  }, [setCandidateSelectHandler, setTravelerSelectHandler]);
+
   return (
-    <PlannerWorkspace
-      scene={scene}
-      panelTitle={panelTitleFor(state.kind)}
-      disableMap={disableMap}
-      onCandidateSelect={setSelectedKey}
-    >
+    <>
       {renderPanelBody({
         state,
         retry,
@@ -115,7 +146,7 @@ export function SearchStatusPage({
         emphasizedParticipantId,
         setEmphasizedParticipantId,
       })}
-    </PlannerWorkspace>
+    </>
   );
 }
 
@@ -159,22 +190,20 @@ function RouteLegend({
   readonly emphasizedParticipantId: string | null;
   readonly onSelect: (participantId: string | null) => void;
 }) {
-  const travelers = new Map<string, { letter: string; color: string; participantId: string }>();
-  for (const segment of scene.routeLines) {
-    travelers.set(segment.participantId, {
-      participantId: segment.participantId,
-      letter: segment.letter,
-      color: segment.color,
-    });
-  }
-  if (travelers.size === 0) {
+  const travelers =
+    scene.routeLines.length > 0
+      ? scene.legend.filter((entry) =>
+          scene.routeLines.some((segment) => segment.participantId === entry.participantId),
+        )
+      : [];
+  if (travelers.length === 0) {
     return null;
   }
   return (
     <div className="space-y-1" data-testid="route-legend">
       <p className="text-xs font-medium uppercase tracking-wide text-ink-700">Routes</p>
       <ul className="flex flex-wrap gap-2">
-        {[...travelers.values()].map((traveler) => {
+        {travelers.map((traveler) => {
           const active =
             !emphasizedParticipantId || emphasizedParticipantId === traveler.participantId;
           return (
@@ -199,7 +228,9 @@ function RouteLegend({
                 >
                   {traveler.letter}
                 </span>
-                Traveler {traveler.letter}
+                <span>
+                  {traveler.letter} · {traveler.displayName}
+                </span>
               </button>
             </li>
           );

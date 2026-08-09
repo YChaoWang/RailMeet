@@ -21,6 +21,7 @@ import {
   rankingsForMode,
 } from '@/lib/search-view-model';
 import { candidateSelectionKey, type MapMissingGeometryNote } from '@/lib/map-markers';
+import { travelerColorAt, travelerLetterAt } from '@/lib/traveler-identity';
 import { cn } from '@/lib/utils';
 
 function placeLabel(place: { placeId: string; name?: string | undefined }): string {
@@ -164,6 +165,8 @@ export function SearchResultsView({
                             const emphasized =
                               !emphasizedParticipantId ||
                               emphasizedParticipantId === journey.participantId;
+                            const letter = travelerLetterAt(journey.participantPosition);
+                            const color = travelerColorAt(journey.participantPosition);
                             return (
                               <div
                                 key={`legs-${journey.participantId}`}
@@ -171,7 +174,8 @@ export function SearchResultsView({
                               >
                                 <button
                                   type="button"
-                                  className="font-medium text-ink-900 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                                  className="inline-flex items-center gap-2 font-medium text-ink-900 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                                  aria-pressed={emphasizedParticipantId === journey.participantId}
                                   onClick={() =>
                                     onEmphasizeParticipant?.(
                                       emphasizedParticipantId === journey.participantId
@@ -180,6 +184,13 @@ export function SearchResultsView({
                                     )
                                   }
                                 >
+                                  <span
+                                    className="grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold text-white"
+                                    style={{ backgroundColor: color }}
+                                    aria-hidden
+                                  >
+                                    {letter}
+                                  </span>
                                   {journey.participantDisplayName}
                                 </button>
                                 <p className="text-xs text-ink-700">

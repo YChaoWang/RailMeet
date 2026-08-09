@@ -26,6 +26,23 @@ export {
 } from './place.js';
 
 export {
+  stationKindSchema,
+  stationImportanceSchema,
+  stationFeaturePropertiesSchema,
+  stationFeatureSchema,
+  stationFeatureCollectionMetadataSchema,
+  stationFeatureCollectionSchema,
+  mapStopsQuerySchema,
+  type StationKind,
+  type StationImportance,
+  type StationFeatureProperties,
+  type StationFeature,
+  type StationFeatureCollectionMetadata,
+  type StationFeatureCollection,
+  type MapStopsQuery,
+} from './map-stops.js';
+
+export {
   createMeetingSearchRequestSchema,
   participantInputSchema,
   type CreateMeetingSearchRequest,

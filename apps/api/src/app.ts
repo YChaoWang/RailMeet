@@ -1,6 +1,6 @@
 import type { Database } from '@railmeet/database';
 import type { Logger } from '@railmeet/observability';
-import type { PlaceGeocoder } from '@railmeet/routing';
+import type { MapStopsClient, PlaceGeocoder } from '@railmeet/routing';
 import Fastify from 'fastify';
 import {
   serializerCompiler,
@@ -10,8 +10,13 @@ import {
 import { ZodError } from 'zod';
 
 import { isZodError, sendError, zodIssuesToDetails } from './http/errors.js';
+import { mapStopsRoutes } from './routes/map-stops.js';
 import { meetingSearchRoutes } from './routes/meeting-searches.js';
 import { placeSearchRoutes } from './routes/places.js';
+import {
+  createMapStopsService,
+  type MapStopsService,
+} from './services/map-stops-service.js';
 import {
   createMeetingSearchService,
   type MeetingSearchService,
@@ -38,6 +43,9 @@ export type BuildServerOptions = {
   readonly placeSearchService?: PlaceSearchService;
   /** Optional geocoder used when placeSearchService is not provided. */
   readonly placeGeocoder?: PlaceGeocoder;
+  readonly mapStopsService?: MapStopsService;
+  /** Optional map-stops client used when mapStopsService is not provided. */
+  readonly mapStopsClient?: MapStopsClient;
 };
 
 /**
@@ -149,6 +157,16 @@ export async function buildServer(options: BuildServerOptions) {
 
   if (placeSearchService) {
     await app.register(placeSearchRoutes, { placeSearchService });
+  }
+
+  const mapStopsService =
+    options.mapStopsService ??
+    (options.mapStopsClient
+      ? createMapStopsService({ mapStopsClient: options.mapStopsClient })
+      : undefined);
+
+  if (mapStopsService) {
+    await app.register(mapStopsRoutes, { mapStopsService });
   }
 
   if (options.database) {

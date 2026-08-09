@@ -15,6 +15,16 @@ vi.mock('@/components/map/search-map', () => ({
   SearchMap: () => <div data-testid="search-map-stub" />,
 }));
 
+vi.mock('@/hooks/use-search-polling', () => ({
+  useSearchPolling: vi.fn(),
+}));
+
+import { PlannerMapProvider } from '@/components/search/planner-map-context';
+import { useSearchPolling } from '@/hooks/use-search-polling';
+import { SearchStatusPage } from './search-status-page';
+
+const mockedPolling = vi.mocked(useSearchPolling);
+
 const summary = {
   searchId: '44444444-4444-4444-8444-444444444444',
   status: 'queued' as const,
@@ -50,18 +60,13 @@ const summary = {
   recommendedDestination: null,
 };
 
-vi.mock('@/hooks/use-search-polling', () => ({
-  useSearchPolling: vi.fn(),
-}));
-
-import { useSearchPolling } from '@/hooks/use-search-polling';
-import { SearchStatusPage } from './search-status-page';
-
-const mockedPolling = vi.mocked(useSearchPolling);
-
 function renderState(state: SearchPageViewState) {
   mockedPolling.mockReturnValue({ state, retry: vi.fn() });
-  return render(<SearchStatusPage searchId={summary.searchId} disableMap />);
+  return render(
+    <PlannerMapProvider disableMap>
+      <SearchStatusPage searchId={summary.searchId} />
+    </PlannerMapProvider>,
+  );
 }
 
 describe('SearchStatusPage map-first surfaces', () => {

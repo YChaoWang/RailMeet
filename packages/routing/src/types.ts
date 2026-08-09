@@ -96,3 +96,56 @@ export type GeocodePlacesResult = {
 export type PlaceGeocoder = {
   geocodePlaces: (input: GeocodePlacesInput) => Promise<GeocodePlacesResult>;
 };
+
+/** Viewport station kind derived from MOTIS Place.modes. */
+export type StationKind = 'rail' | 'metro' | 'tram' | 'bus' | 'ferry' | 'other';
+
+/** Coarse importance bucket from MOTIS Place.importance. */
+export type StationImportance = 'major' | 'regional' | 'local';
+
+export type StationFeatureProperties = {
+  readonly stopId: string;
+  readonly name: string;
+  readonly kind: StationKind;
+  readonly importance: StationImportance;
+  readonly modes: readonly string[];
+  readonly parentId: string | null;
+};
+
+export type StationFeature = {
+  readonly type: 'Feature';
+  readonly geometry: {
+    readonly type: 'Point';
+    /** GeoJSON order: [longitude, latitude]. */
+    readonly coordinates: readonly [number, number];
+  };
+  readonly properties: StationFeatureProperties;
+};
+
+export type StationFeatureCollectionMetadata = {
+  readonly truncated: boolean;
+  readonly aggregated: boolean;
+  readonly minimumDetailZoom: number | null;
+  readonly sourceFeatureCount: number;
+};
+
+/**
+ * Normalized viewport stations. Provider Place objects must not leak through this shape.
+ */
+export type StationFeatureCollection = {
+  readonly type: 'FeatureCollection';
+  readonly features: readonly StationFeature[];
+  readonly metadata: StationFeatureCollectionMetadata;
+};
+
+export type FetchMapStopsInput = {
+  readonly minLat: number;
+  readonly minLon: number;
+  readonly maxLat: number;
+  readonly maxLon: number;
+  readonly signal?: AbortSignal;
+};
+
+export type MapStopsClient = {
+  fetchMapStops: (input: FetchMapStopsInput) => Promise<StationFeatureCollection>;
+};
