@@ -1,3 +1,5 @@
+import { ARRIVAL_TOLERANCE_MS } from '@railmeet/shared';
+
 import type { RankingJourneyInput, SelectedParticipantJourney } from './ranking-types.js';
 
 export class RankingInputError extends Error {
@@ -132,6 +134,8 @@ type TimedJourney = RankingJourneyInput & { readonly arrivalMs: number };
 
 type JourneySetScore = {
   readonly spread: number;
+  readonly arrivalPenalty: number;
+  readonly maxDuration: number;
   readonly totalDuration: number;
   readonly totalTransfers: number;
   readonly latestArrival: number;
@@ -150,8 +154,11 @@ function scoreJourneySet(
   );
   const earliestArrival = Math.min(...selected.map((j) => j.arrivalAt.getTime()));
   const latestArrival = Math.max(...selected.map((j) => j.arrivalAt.getTime()));
+  const spread = latestArrival - earliestArrival;
   return {
-    spread: latestArrival - earliestArrival,
+    spread,
+    arrivalPenalty: Math.max(0, spread - ARRIVAL_TOLERANCE_MS),
+    maxDuration: Math.max(...selected.map((j) => j.durationMinutes)),
     totalDuration: selected.reduce((sum, j) => sum + j.durationMinutes, 0),
     totalTransfers: selected.reduce((sum, j) => sum + j.transfers, 0),
     latestArrival,
@@ -163,25 +170,33 @@ function scoreJourneySet(
 
 function isBetterJourneySet(candidate: JourneySetScore, best: JourneySetScore): boolean {
   return (
-    candidate.spread < best.spread ||
-    (candidate.spread === best.spread && candidate.totalDuration < best.totalDuration) ||
-    (candidate.spread === best.spread &&
+    candidate.arrivalPenalty < best.arrivalPenalty ||
+    (candidate.arrivalPenalty === best.arrivalPenalty &&
+      candidate.maxDuration < best.maxDuration) ||
+    (candidate.arrivalPenalty === best.arrivalPenalty &&
+      candidate.maxDuration === best.maxDuration &&
+      candidate.totalDuration < best.totalDuration) ||
+    (candidate.arrivalPenalty === best.arrivalPenalty &&
+      candidate.maxDuration === best.maxDuration &&
       candidate.totalDuration === best.totalDuration &&
       candidate.totalTransfers < best.totalTransfers) ||
-    (candidate.spread === best.spread &&
+    (candidate.arrivalPenalty === best.arrivalPenalty &&
+      candidate.maxDuration === best.maxDuration &&
       candidate.totalDuration === best.totalDuration &&
       candidate.totalTransfers === best.totalTransfers &&
+      candidate.spread < best.spread) ||
+    (candidate.arrivalPenalty === best.arrivalPenalty &&
+      candidate.maxDuration === best.maxDuration &&
+      candidate.totalDuration === best.totalDuration &&
+      candidate.totalTransfers === best.totalTransfers &&
+      candidate.spread === best.spread &&
       candidate.latestArrival < best.latestArrival) ||
-    (candidate.spread === best.spread &&
+    (candidate.arrivalPenalty === best.arrivalPenalty &&
+      candidate.maxDuration === best.maxDuration &&
       candidate.totalDuration === best.totalDuration &&
       candidate.totalTransfers === best.totalTransfers &&
+      candidate.spread === best.spread &&
       candidate.latestArrival === best.latestArrival &&
-      candidate.earliestArrival < best.earliestArrival) ||
-    (candidate.spread === best.spread &&
-      candidate.totalDuration === best.totalDuration &&
-      candidate.totalTransfers === best.totalTransfers &&
-      candidate.latestArrival === best.latestArrival &&
-      candidate.earliestArrival === best.earliestArrival &&
       compareJourneyIdTuples(candidate.journeyIds, best.journeyIds) < 0)
   );
 }
@@ -224,33 +239,18 @@ function findMinimumArrivalSpread(
 }
 
 /**
- * Smallest arrival-range covering one journey per participant, then secondary
- * objectives inside each minimum-spread window.
+ * Arrive-together journey selection with a shared arrival tolerance.
  *
- * Algorithm (polynomial):
- * 1. Sort journeys by absolute arrival instant (binary journeyId / participantId ties).
- * 2. Find the global minimum feasible arrival spread D with a covering sliding window.
- * 3. For each distinct lower endpoint L drawn from sorted arrival instants, consider
- *    the inclusive interval [L, L + D]. If every participant has ≥1 journey in range,
- *    pick one journey per participant by:
- *      duration → transfers → binary journeyId
- * 4. Keep the best constructed set under:
- *      spread → total duration → total transfers → latest arrival →
- *      earliest arrival → element-by-element journey-ID tuple
- *      (tuple order = binary-sorted participant ids).
- *
- * Correctness notes:
- * - D is the globally minimum feasible spread; every covering set has spread ≥ D.
- * - Any selected set inside [L, L + D] has spread ≤ D, hence exactly D, and must
- *   attain the window endpoints (earliest/latest fixed for that window).
- * - Duration and transfers are additive, so independent per-participant minima
- *   minimize the set totals; then binary-smallest journey IDs yield the
- *   lexicographically smallest participant-ordered ID tuple.
- * - Different windows are still compared with the full set comparator above.
- *
- * Complexity: O(T log T) sort + O(T) for D + O(T² · P) window scans and picks.
- * Space: O(T + P).
- * T = journeys for the candidate; P = participant count (runtime-enforced 2–6).
+ * 1. Sort journeys by absolute UTC arrival.
+ * 2. Find the global minimum covering spread D.
+ * 3. Evaluate inclusive windows of width
+ *      allowedWindowMs = max(ARRIVAL_TOLERANCE_MS, D)
+ *    that still cover every participant.
+ * 4. Inside each window pick duration → transfers → binary journeyId.
+ * 5. Keep the best set under
+ *      arrivalPenalty → maxDuration → totalDuration → totalTransfers →
+ *      arrivalSpread → latestArrival → element-wise journey-ID tuple
+ *    where arrivalPenalty = max(0, spread − ARRIVAL_TOLERANCE_MS).
  */
 export function selectArriveTogetherJourneys(
   journeysByParticipant: ReadonlyMap<string, readonly RankingJourneyInput[]>,
@@ -283,15 +283,15 @@ export function selectArriveTogetherJourneys(
   );
 
   const minSpread = findMinimumArrivalSpread(timed, participantIds.length);
+  const allowedWindowMs = Math.max(ARRIVAL_TOLERANCE_MS, minSpread);
   let best: JourneySetScore | undefined;
 
-  // Lower endpoints are the distinct arrival instants of sorted journeys.
   for (let leftIndex = 0; leftIndex < timed.length; leftIndex += 1) {
     if (leftIndex > 0 && timed[leftIndex]!.arrivalMs === timed[leftIndex - 1]!.arrivalMs) {
       continue;
     }
     const lower = timed[leftIndex]!.arrivalMs;
-    const upper = lower + minSpread;
+    const upper = lower + allowedWindowMs;
 
     const optionsByParticipant = new Map<string, TimedJourney[]>();
     for (const journey of timed) {

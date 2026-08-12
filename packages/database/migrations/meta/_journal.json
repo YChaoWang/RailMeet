@@ -57,6 +57,41 @@
       "when": 1786251387091,
       "tag": "0007_eager_lyja",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786269900000,
+      "tag": "0008_seed_meeting_cities",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786272000000,
+      "tag": "0009_meeting_city_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786273000000,
+      "tag": "0010_deactivate_legacy_fixture_cities",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786274000000,
+      "tag": "0011_catalog_ownership_namespaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786275000000,
+      "tag": "0012_meeting_city_eligibility_fields",
+      "breakpoints": true
     }
   ]
 }

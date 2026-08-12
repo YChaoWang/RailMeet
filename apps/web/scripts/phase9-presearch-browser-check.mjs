@@ -16,7 +16,8 @@ const VIEWPORTS = [
 
 function classifyUrl(url) {
   if (/\/api\/v1\/map\/stops/.test(url)) return 'map-stops';
-  if (/\/api\/v1\/meeting-searches/.test(url) || /\/v1\/meeting-searches/.test(url)) return 'create-search';
+  if (/\/api\/v1\/meeting-searches/.test(url) || /\/v1\/meeting-searches/.test(url))
+    return 'create-search';
   if (/\/plan(\?|$)/.test(url) || /\/api\/v1\/plan/.test(url)) return 'plan';
   if (/api\.transitous\.org/.test(url)) return 'transitous-direct';
   if (/motis/.test(url) && !/openfreemap|maplibre|localhost:3000/.test(url)) return 'motis-direct';
@@ -64,7 +65,8 @@ async function digMap(page) {
       markers,
       terrainBtn: Boolean(document.querySelector('.maplibregl-ctrl-terrain')),
       attrib: Boolean(document.querySelector('.maplibregl-ctrl-attrib')),
-      popup: document.querySelector('.maplibregl-popup-content')?.textContent?.slice(0, 120) ?? null,
+      popup:
+        document.querySelector('.maplibregl-popup-content')?.textContent?.slice(0, 120) ?? null,
       zoomIn: Boolean(document.querySelector('.maplibregl-ctrl-zoom-in')),
       autocompleteEnabled: !document
         .querySelector('input[aria-autocomplete="list"]')
@@ -106,11 +108,19 @@ async function runViewport(browser, vp) {
     if (!kind) return;
     counts[kind] += 1;
     if (kind === 'map-stops') {
-      mapStopUrls.push(r.url().replace(/https?:\/\/[^/]+/, '').slice(0, 160));
+      mapStopUrls.push(
+        r
+          .url()
+          .replace(/https?:\/\/[^/]+/, '')
+          .slice(0, 160),
+      );
     }
   });
 
-  await page.goto('http://localhost:3000/search', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.goto('http://localhost:3000/search', {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000,
+  });
   await page.waitForSelector('.maplibregl-canvas', { timeout: 45000 });
   await page.waitForFunction(
     () => document.querySelector('[data-style-ready]')?.getAttribute('data-style-ready') === '1',
@@ -119,14 +129,18 @@ async function runViewport(browser, vp) {
   );
 
   // Wait for initial station request to settle (ok/error/aggregated/zoom).
-  await page.waitForFunction(
-    () => {
-      const s = document.querySelector('[data-station-status]')?.getAttribute('data-station-status');
-      return s && s !== 'idle' && s !== 'loading';
-    },
-    null,
-    { timeout: 45000 },
-  ).catch(() => {});
+  await page
+    .waitForFunction(
+      () => {
+        const s = document
+          .querySelector('[data-station-status]')
+          ?.getAttribute('data-station-status');
+        return s && s !== 'idle' && s !== 'loading';
+      },
+      null,
+      { timeout: 45000 },
+    )
+    .catch(() => {});
   await page.waitForTimeout(2500);
 
   const initial = await digMap(page);
@@ -178,7 +192,10 @@ async function runViewport(browser, vp) {
   await terrain.click({ force: true, timeout: 10000 });
   await page.waitForTimeout(1200);
   const afterTerrainOff = await digMap(page);
-  await page.screenshot({ path: `${OUT}/${vp.name}-04-terrain-off-paris-marker.png`, fullPage: false });
+  await page.screenshot({
+    path: `${OUT}/${vp.name}-04-terrain-off-paris-marker.png`,
+    fullPage: false,
+  });
 
   // Second city quick check only on desktop to keep runtime down
   let londonOpt = null;

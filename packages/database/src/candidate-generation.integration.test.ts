@@ -1,4 +1,5 @@
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDatabase, type Database } from './client.js';
@@ -12,6 +13,51 @@ function withOrdinals<T extends { placeId: string; distanceMeters: number }>(
 
 const POSTGIS_IMAGE = 'ghcr.io/baosystems/postgis:16-3.5';
 
+/** Mark a seeded city as meeting-city-v2 eligible with an authoritative Transitous hub. */
+async function attachEligibleHub(database: Database, cityId: string, hubId: string): Promise<void> {
+  await database.db.execute(sql`
+    UPDATE places
+    SET
+      ownership = 'catalog:geonames',
+      population = 500000,
+      feature_code = 'PPLC',
+      provider = 'geonames',
+      provider_place_id = ${cityId},
+      active = true
+    WHERE id = ${cityId}
+  `);
+  await database.db.execute(sql`
+    INSERT INTO places (
+      id, name, kind, country_code, timezone, location,
+      ownership, provider, provider_place_id, active
+    )
+    SELECT
+      ${hubId},
+      ${`${cityId} hub`},
+      'station',
+      country_code,
+      timezone,
+      location,
+      'catalog:transitous',
+      'motis',
+      ${`motis-${hubId}`},
+      true
+    FROM places
+    WHERE id = ${cityId}
+    ON CONFLICT (id) DO UPDATE SET
+      ownership = EXCLUDED.ownership,
+      provider = EXCLUDED.provider,
+      provider_place_id = EXCLUDED.provider_place_id,
+      active = true
+  `);
+  await database.db.execute(sql`
+    INSERT INTO meeting_city_hubs (
+      city_place_id, hub_place_id, priority, distance_meters, match_method, source, regional, active
+    )
+    VALUES (${cityId}, ${hubId}, 0, 0, 'test-fixture', 'test', false, true)
+    ON CONFLICT (city_place_id, hub_place_id) DO UPDATE SET active = true, priority = 0
+  `);
+}
 describe('candidate generation persistence', () => {
   let container: StartedPostgreSqlContainer;
   let database: Database;
@@ -81,6 +127,12 @@ describe('candidate generation persistence', () => {
     ]) {
       await database.places.create(place);
     }
+
+    await attachEligibleHub(database, 'place:berlin', 'place:hub:berlin');
+    await attachEligibleHub(database, 'place:paris', 'place:hub:paris');
+    await attachEligibleHub(database, 'place:munich', 'place:hub:munich');
+    await attachEligibleHub(database, 'place:cologne', 'place:hub:cologne');
+    // Remote city stays ineligible / without hub so nearest-city discovery excludes it.
   }, 180_000);
 
   afterAll(async () => {
@@ -196,6 +248,50 @@ describe('candidate generation persistence', () => {
     );
     expect(routingEvents).toHaveLength(4);
     expect((await database.meetingSearches.findById(search.id))?.status).toBe('running');
+  });
+
+  it('fans out progressively by ordinal cap and expands waves idempotently', async () => {
+    const search = await createSearch('place:berlin', 'place:paris');
+    await database.searchPipeline.claimCandidateGeneration(search.id);
+
+    const nearest = await database.searchPipeline.findNearestCityCandidates(
+      ['place:berlin', 'place:paris'],
+      3,
+    );
+    expect(nearest.length).toBeGreaterThanOrEqual(2);
+    const ranked = withOrdinals(
+      nearest.map((row) => ({ placeId: row.placeId, distanceMeters: row.distanceMeters })),
+      nearest.length,
+    );
+
+    const waveOne = await database.searchPipeline.persistCandidatesAndFanOut({
+      searchId: search.id,
+      candidates: ranked.map((row) => ({
+        destinationPlaceId: row.placeId,
+        ordinal: row.ordinal,
+        distanceMeters: row.distanceMeters,
+      })),
+      participantIds: ['a', 'b'],
+      fanOutMaxOrdinal: 0,
+    });
+    expect(waveOne.candidateCount).toBe(ranked.length);
+    expect(waveOne.routingWorkCount).toBe(2);
+
+    const waveTwo = await database.searchPipeline.expandCandidateRoutingWave({
+      searchId: search.id,
+      fanOutMaxOrdinal: 1,
+      participantIds: ['a', 'b'],
+    });
+    expect(waveTwo.routingWorkCount).toBe(4);
+    expect(waveTwo.newRoutingWorkCount).toBe(2);
+
+    const waveTwoRepeat = await database.searchPipeline.expandCandidateRoutingWave({
+      searchId: search.id,
+      fanOutMaxOrdinal: 1,
+      participantIds: ['a', 'b'],
+    });
+    expect(waveTwoRepeat.routingWorkCount).toBe(4);
+    expect(waveTwoRepeat.newRoutingWorkCount).toBe(0);
   });
 
   it('represents zero usable candidates durably while keeping the search running', async () => {

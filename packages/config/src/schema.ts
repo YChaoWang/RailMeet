@@ -39,9 +39,9 @@ export const OUTBOX_DEFAULTS = {
 export const SEARCH_JOB_DEFAULTS = {
   consumerConcurrency: 2,
   candidateConsumerConcurrency: 2,
-  routingConsumerConcurrency: 4,
+  routingConsumerConcurrency: 2,
   finalizationConsumerConcurrency: 2,
-  candidateLimit: 8,
+  candidateLimit: 3,
   attempts: 5,
   backoffDelayMs: 2_000,
   /** BullMQ BackoffOptions.jitter fraction (0–1). */
@@ -107,19 +107,40 @@ export const sharedEnvSchema = z.object({
   TRANSITOUS_BASE_URL: z.string().url().default(TRANSITOUS_DEFAULTS.baseUrl),
 });
 
-export const apiEnvSchema = sharedEnvSchema.extend({
-  API_HOST: z.string().min(1).default('0.0.0.0'),
-  API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
-  TRANSITOUS_USER_AGENT: transitousUserAgentSchema.default(TRANSITOUS_DEFAULTS.userAgent),
-  TRANSITOUS_TIMEOUT_MS: positiveInt(500, 60_000, 'TRANSITOUS_TIMEOUT_MS').default(
-    TRANSITOUS_DEFAULTS.timeoutMs,
-  ),
-  TRANSITOUS_MAX_RESPONSE_BYTES: positiveInt(
-    4_096,
-    10 * 1_048_576,
-    'TRANSITOUS_MAX_RESPONSE_BYTES',
-  ).default(TRANSITOUS_DEFAULTS.maxResponseBytes),
-});
+export const apiEnvSchema = sharedEnvSchema
+  .extend({
+    API_HOST: z.string().min(1).default('0.0.0.0'),
+    API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+    /** Comma-separated browser origins allowed for CORS (production Vercel + local dev). */
+    WEB_ORIGIN: z.string().min(1).optional(),
+    TRANSITOUS_USER_AGENT: transitousUserAgentSchema.default(TRANSITOUS_DEFAULTS.userAgent),
+    TRANSITOUS_TIMEOUT_MS: positiveInt(500, 60_000, 'TRANSITOUS_TIMEOUT_MS').default(
+      TRANSITOUS_DEFAULTS.timeoutMs,
+    ),
+    TRANSITOUS_MAX_RESPONSE_BYTES: positiveInt(
+      4_096,
+      10 * 1_048_576,
+      'TRANSITOUS_MAX_RESPONSE_BYTES',
+    ).default(TRANSITOUS_DEFAULTS.maxResponseBytes),
+  })
+  .superRefine((env, ctx) => {
+    if (env.NODE_ENV === 'production') {
+      for (const [key, value] of [
+        ['DATABASE_URL', env.DATABASE_URL],
+        ['REDIS_URL', env.REDIS_URL],
+        ['API_BASE_URL', env.API_BASE_URL],
+        ['TRANSITOUS_BASE_URL', env.TRANSITOUS_BASE_URL],
+      ] as const) {
+        if (/localhost|127\.0\.0\.1/i.test(value)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} must not point at localhost when NODE_ENV=production`,
+          });
+        }
+      }
+    }
+  });
 
 export const workerEnvSchema = sharedEnvSchema
   .extend({
@@ -157,7 +178,7 @@ export const workerEnvSchema = sharedEnvSchema
       20,
       'SEARCH_FINALIZATION_CONSUMER_CONCURRENCY',
     ).default(SEARCH_JOB_DEFAULTS.finalizationConsumerConcurrency),
-    SEARCH_CANDIDATE_LIMIT: positiveInt(1, 20, 'SEARCH_CANDIDATE_LIMIT').default(
+    SEARCH_CANDIDATE_LIMIT: positiveInt(1, 3, 'SEARCH_CANDIDATE_LIMIT').default(
       SEARCH_JOB_DEFAULTS.candidateLimit,
     ),
     SEARCH_JOB_ATTEMPTS: positiveInt(1, 20, 'SEARCH_JOB_ATTEMPTS').default(
@@ -205,6 +226,22 @@ export const workerEnvSchema = sharedEnvSchema
     ).default(TRANSITOUS_DEFAULTS.maxResponseBytes),
   })
   .superRefine((env, ctx) => {
+    if (env.NODE_ENV === 'production') {
+      for (const [key, value] of [
+        ['DATABASE_URL', env.DATABASE_URL],
+        ['REDIS_URL', env.REDIS_URL],
+        ['API_BASE_URL', env.API_BASE_URL],
+        ['TRANSITOUS_BASE_URL', env.TRANSITOUS_BASE_URL],
+      ] as const) {
+        if (/localhost|127\.0\.0\.1/i.test(value)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} must not point at localhost when NODE_ENV=production`,
+          });
+        }
+      }
+    }
     const minimumLease = minimumOutboxLeaseMs({
       batchSize: env.OUTBOX_BATCH_SIZE,
       publishConcurrency: env.OUTBOX_PUBLISH_CONCURRENCY,
@@ -262,6 +299,7 @@ export type ApiConfig = {
   transitousBaseUrl: string;
   host: string;
   port: number;
+  webOrigins: readonly string[];
   transitous: {
     baseUrl: string;
     userAgent: string;
@@ -352,6 +390,10 @@ export function parseWithSchema<TSchema extends z.ZodTypeAny>(
 }
 
 export function toApiConfig(env: ApiEnv): ApiConfig {
+  const webOrigins =
+    env.WEB_ORIGIN?.split(',')
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0) ?? [];
   return {
     nodeEnv: env.NODE_ENV,
     logLevel: env.LOG_LEVEL,
@@ -361,6 +403,7 @@ export function toApiConfig(env: ApiEnv): ApiConfig {
     transitousBaseUrl: env.TRANSITOUS_BASE_URL,
     host: env.API_HOST,
     port: env.API_PORT,
+    webOrigins,
     transitous: {
       baseUrl: env.TRANSITOUS_BASE_URL,
       userAgent: env.TRANSITOUS_USER_AGENT,

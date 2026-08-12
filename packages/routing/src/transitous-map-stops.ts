@@ -19,14 +19,12 @@ function joinUrl(baseUrl: string, path: string): string {
  * - max = upper-left = (maxLat, minLon)
  */
 function assertValidBounds(input: FetchMapStopsInput): void {
-  if (
-    !(
-      Number.isFinite(input.minLat) &&
-      Number.isFinite(input.maxLat) &&
-      Number.isFinite(input.minLon) &&
-      Number.isFinite(input.maxLon)
-    )
-  ) {
+  if (!(
+    Number.isFinite(input.minLat) &&
+    Number.isFinite(input.maxLat) &&
+    Number.isFinite(input.minLon) &&
+    Number.isFinite(input.maxLon)
+  )) {
     throw new RoutingError('INVALID_REQUEST', 'permanent', 'Map stops bounds must be finite');
   }
   if (!(input.minLat < input.maxLat) || !(input.minLon < input.maxLon)) {

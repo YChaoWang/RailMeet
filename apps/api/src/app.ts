@@ -13,10 +13,7 @@ import { isZodError, sendError, zodIssuesToDetails } from './http/errors.js';
 import { mapStopsRoutes } from './routes/map-stops.js';
 import { meetingSearchRoutes } from './routes/meeting-searches.js';
 import { placeSearchRoutes } from './routes/places.js';
-import {
-  createMapStopsService,
-  type MapStopsService,
-} from './services/map-stops-service.js';
+import { createMapStopsService, type MapStopsService } from './services/map-stops-service.js';
 import {
   createMeetingSearchService,
   type MeetingSearchService,
@@ -36,6 +33,8 @@ export type BuildServerOptions = {
   readonly logger: Logger;
   /** Persistence handle. Required for meeting-search routes; optional only for health-only tests. */
   readonly database?: Database;
+  /** Allowed browser origins for CORS. Empty disables cross-origin access. */
+  readonly webOrigins?: readonly string[];
   /** Override for deterministic request IDs in tests. */
   readonly genReqId?: () => string;
   /** Optional service override for unit/API tests with fakes. */
@@ -67,6 +66,27 @@ export async function buildServer(options: BuildServerOptions) {
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  const allowedOrigins = new Set(options.webOrigins ?? []);
+  if (allowedOrigins.size > 0) {
+    app.addHook('onRequest', async (request, reply) => {
+      const origin = request.headers.origin;
+      if (origin && allowedOrigins.has(origin)) {
+        reply.header('Access-Control-Allow-Origin', origin);
+        reply.header('Vary', 'Origin');
+        reply.header('Access-Control-Allow-Credentials', 'true');
+      }
+      if (request.method === 'OPTIONS') {
+        reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        reply.header('Access-Control-Allow-Headers', 'Content-Type, Accept');
+        if (origin && allowedOrigins.has(origin)) {
+          reply.header('Access-Control-Allow-Origin', origin);
+        }
+        await reply.status(204).send();
+        return;
+      }
+    });
+  }
 
   app.addHook('onSend', async (request, reply, payload) => {
     void reply.header('x-request-id', request.id);

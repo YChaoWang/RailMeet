@@ -18,16 +18,26 @@ origins therefore cannot be stored and cannot enter candidate generation.
 
 ### Candidate-generation algorithm
 
-1. Resolve participant origin places (coordinates required).
-2. Compute a planar lon/lat centroid in SRID 4326:
+1. Verify **production** meeting-city catalog readiness (GeoNames cities + Transitous hubs with
+   provider stop IDs). Fixture-only catalogs fail with `CANDIDATE_CATALOG_NOT_READY`.
+2. Fail with typed codes if not ready (`CANDIDATE_CATALOG_NOT_READY` /
+   `CANDIDATES_HAVE_NO_ROUTING_TARGET`).
+3. Resolve participant origin places (coordinates required).
+4. Compute a planar lon/lat centroid in SRID 4326:
    `ST_SetSRID(ST_MakePoint(avg(ST_X), avg(ST_Y)), 4326)`.
-3. Select nearest `kind = city` places with GiST KNN:
+5. Select nearest **active** `kind = city` places with GiST KNN:
    `ORDER BY location <-> center, id ASC LIMIT n`.
-4. Persist ordinal = result order and geodesic `ST_Distance(...::geography)` for explanation.
+6. Attach a deterministic representative routing hub per city (`meeting_city_hubs`). Cities without
+   an authoritative hub are skipped (centroid fallback is disabled for production).
+7. Persist ordinal = result order and geodesic `ST_Distance(...::geography)` for explanation.
+8. **Progressive fan-out**: persist up to `SEARCH_LIMITS.maximumCandidates` (3) cities, but create
+   routing work only for ordinal `0` first. Finalization expands to ordinal `1`, then `2`, only when
+   the evaluated wave has no feasible candidate. Absolute plan budget: `maximumTotalPlanCalls = 18`.
 
-Geographic limitation: the centroid is a planar average on geometry SRID 4326, not a geodesic
-center. This is acceptable for Phase 7 candidate pooling and keeps the query index-friendly.
-Proximity is **not** final ranking.
+`allowedCountryCodes` applies only when the user supplies them. Origin countries are never
+inferred as an automatic filter.
+
+See [ADR 0005](./adr/0005-meeting-city-catalog.md) and `packages/catalog/README.md`.
 
 ### Deterministic ordering
 

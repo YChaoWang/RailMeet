@@ -40,6 +40,13 @@ export {
 } from './motis-normalize.js';
 
 export {
+  JOURNEY_TRANSPORT_MODE_ORDER,
+  collectJourneyTransportModes,
+  hasUnmappedTransitLegs,
+  mapMotisLegMode,
+} from './motis-mode.js';
+
+export {
   MOTIS_GEOCODE_API_VERSION,
   MOTIS_GEOCODE_OPENAPI_PIN,
   motisGeocodeResponseSchema,
@@ -59,6 +66,14 @@ export {
   createTransitousJourneyPlanner,
   type TransitousClientOptions,
 } from './transitous-client.js';
+
+export { buildPlanCacheKey } from './plan-cache-key.js';
+export {
+  createCachedJourneyPlanner,
+  type CachedJourneyPlannerOptions,
+  type PlanCacheRedis,
+} from './plan-cache.js';
+export { createConcurrencyLimitedJourneyPlanner } from './concurrency-limiter.js';
 
 export { createTransitousPlaceGeocoder } from './transitous-geocode.js';
 

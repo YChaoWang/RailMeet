@@ -4,6 +4,7 @@ import {
   type PlaceRepository,
   type SearchPipelineRepository,
 } from '@railmeet/database';
+import { evaluateCatalogReadiness, selectRoutingTarget } from '@railmeet/catalog';
 import type { Logger } from '@railmeet/observability';
 import {
   UnrecoverableError,
@@ -11,6 +12,7 @@ import {
   type CandidateGenerationProcessor,
 } from '@railmeet/queue';
 import { assignCandidateOrdinals } from '@railmeet/search-engine';
+import { SEARCH_LIMITS } from '@railmeet/shared';
 
 export type CreateCandidateGenerationProcessorOptions = {
   readonly meetingSearches: MeetingSearchRepository;
@@ -21,7 +23,7 @@ export type CreateCandidateGenerationProcessorOptions = {
 };
 
 /**
- * Phase 7 candidate processor: claim generation, PostGIS nearest cities, fan-out routing work.
+ * Phase 7/9 candidate processor: catalog readiness, nearest cities, hub targets, routing fan-out.
  * Does not call Transitous.
  */
 export function createCandidateGenerationProcessor(
@@ -62,6 +64,45 @@ export function createCandidateGenerationProcessor(
         throw new UnrecoverableError(`Meeting search not found: ${searchId}`);
       }
 
+      const catalogStatus = await options.searchPipeline.getMeetingCityCatalogStatus();
+      const readiness = evaluateCatalogReadiness({
+        activeCityCount: catalogStatus.activeCityCount,
+        activeHubCount: catalogStatus.activeHubCount,
+        citiesWithActiveHubs: catalogStatus.citiesWithActiveHubs,
+        sourceVersion: null,
+        fixtureCityCount: catalogStatus.fixtureCityCount,
+        productionCityCount: catalogStatus.productionCityCount,
+        productionHubCount: catalogStatus.productionHubCount,
+        hubsWithProviderStopId: catalogStatus.hubsWithProviderStopId,
+        tierEligibleCityCount: catalogStatus.tierEligibleCityCount,
+        eligibleHubbedCityCount: catalogStatus.eligibleHubbedCityCount,
+        tierEligibleWithoutHubCount: catalogStatus.tierEligibleWithoutHubCount,
+      });
+      if (!readiness.ready) {
+        await options.searchPipeline.completeCandidateGeneration(
+          searchId,
+          'failed_permanent',
+          readiness.code,
+        );
+        options.logger.error(
+          {
+            event: 'candidate_catalog_not_ready',
+            searchId,
+            jobId,
+            errorCode: readiness.code,
+            activeCityCount: readiness.activeCityCount,
+            activeHubCount: readiness.activeHubCount,
+          },
+          readiness.message,
+        );
+        return {
+          searchId,
+          outcome: 'failed_permanent',
+          candidateCount: 0,
+          routingWorkCount: 0,
+        };
+      }
+
       const originIds = search.participants.map((participant) => participant.originPlaceId);
       const origins = await options.places.findManyByIds(originIds);
       if (origins.length !== originIds.length) {
@@ -90,6 +131,9 @@ export function createCandidateGenerationProcessor(
       const nearest = await options.searchPipeline.findNearestCityCandidates(
         originIds,
         options.candidateLimit,
+        search.allowedCountryCodes.length > 0
+          ? { allowedCountryCodes: search.allowedCountryCodes }
+          : undefined,
       );
       const ranked = assignCandidateOrdinals(
         nearest.map((city) => ({
@@ -99,14 +143,104 @@ export function createCandidateGenerationProcessor(
         options.candidateLimit,
       );
 
+      if (ranked.length === 0) {
+        const errorCode =
+          search.allowedCountryCodes.length > 0
+            ? 'NO_CANDIDATES_MATCH_CONSTRAINTS'
+            : 'NO_CANDIDATES_IN_SEARCH_AREA';
+        // Empty candidate set is a domain completion path via finalization (no_candidates),
+        // not a permanent generation failure — persist zero candidates and succeed generation.
+        const fanOut = await options.searchPipeline.persistCandidatesAndFanOut({
+          searchId,
+          candidates: [],
+          participantIds: search.participants.map((participant) => participant.participantId),
+          fanOutMaxOrdinal: SEARCH_LIMITS.initialCandidates - 1,
+        });
+        options.logger.info(
+          {
+            event: 'candidates_generated_empty',
+            searchId,
+            jobId,
+            errorCode,
+          },
+          'No meeting cities matched the geographic search / constraints',
+        );
+        return {
+          searchId,
+          outcome: 'generated',
+          candidateCount: fanOut.candidateCount,
+          routingWorkCount: fanOut.routingWorkCount,
+        };
+      }
+
+      const hubs = await options.searchPipeline.listActiveHubsForCities(
+        ranked.map((city) => city.placeId),
+      );
+      const hubsByCity = new Map<string, Array<(typeof hubs)[number]>>();
+      for (const hub of hubs) {
+        const list = hubsByCity.get(hub.cityPlaceId) ?? [];
+        list.push(hub);
+        hubsByCity.set(hub.cityPlaceId, list);
+      }
+
+      const hubbedCandidates = ranked
+        .map((city) => {
+          const target = selectRoutingTarget(
+            (hubsByCity.get(city.placeId) ?? []).map((hub) => ({
+              hubPlaceId: hub.hubPlaceId,
+              priority: hub.priority,
+              distanceMeters: hub.distanceMeters,
+              regional: hub.regional,
+            })),
+            { allowCentroidFallback: false },
+          );
+          if (target.reason !== 'hub' || !target.hubPlaceId) {
+            return null;
+          }
+          return {
+            placeId: city.placeId,
+            distanceMeters: city.distanceMeters,
+            routingHubPlaceId: target.hubPlaceId,
+            routingTargetReason: 'hub' as const,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
+
+      if (hubbedCandidates.length === 0) {
+        const fanOut = await options.searchPipeline.persistCandidatesAndFanOut({
+          searchId,
+          candidates: [],
+          participantIds: search.participants.map((participant) => participant.participantId),
+          fanOutMaxOrdinal: SEARCH_LIMITS.initialCandidates - 1,
+        });
+        options.logger.info(
+          {
+            event: 'candidates_generated_empty',
+            searchId,
+            jobId,
+            errorCode: 'CANDIDATES_HAVE_NO_ROUTING_TARGET',
+          },
+          'Nearest cities lacked authoritative hubs; centroid fallback disabled',
+        );
+        return {
+          searchId,
+          outcome: 'generated',
+          candidateCount: fanOut.candidateCount,
+          routingWorkCount: fanOut.routingWorkCount,
+        };
+      }
+
       const fanOut = await options.searchPipeline.persistCandidatesAndFanOut({
         searchId,
-        candidates: ranked.map((city) => ({
+        candidates: hubbedCandidates.map((city, index) => ({
           destinationPlaceId: city.placeId,
-          ordinal: city.ordinal,
+          ordinal: index,
           distanceMeters: city.distanceMeters,
+          routingHubPlaceId: city.routingHubPlaceId,
+          routingTargetReason: city.routingTargetReason,
         })),
         participantIds: search.participants.map((participant) => participant.participantId),
+        fanOutMaxOrdinal: SEARCH_LIMITS.initialCandidates - 1,
       });
 
       options.logger.info(

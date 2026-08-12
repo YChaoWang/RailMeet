@@ -4,3 +4,6 @@ dist
 .turbo
 coverage
 pnpm-lock.yaml
+apps/web/public/maplibre/
+packages/catalog/data/cache/
+packages/catalog/data/artifacts/

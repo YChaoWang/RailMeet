@@ -178,6 +178,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@railmeet/catalog':
+        specifier: workspace:^
+        version: link:../../packages/catalog
       '@railmeet/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -196,6 +199,9 @@ importers:
       '@railmeet/search-engine':
         specifier: workspace:^
         version: link:../../packages/search-engine
+      '@railmeet/shared':
+        specifier: workspace:^
+        version: link:../../packages/shared
     devDependencies:
       '@testcontainers/postgresql':
         specifier: ^10.28.0
@@ -206,7 +212,41 @@ importers:
       bullmq:
         specifier: ^5.81.3
         version: 5.81.3
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
       testcontainers:
+        specifier: ^10.28.0
+        version: 10.28.0
+      tsx:
+        specifier: ^4.20.3
+        version: 4.23.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)(jiti@1.21.7)(jsdom@30.0.1)(tsx@4.23.11)(yaml@2.9.0)
+
+  packages/catalog:
+    dependencies:
+      '@railmeet/database':
+        specifier: workspace:^
+        version: link:../database
+      '@railmeet/shared':
+        specifier: workspace:^
+        version: link:../shared
+      dotenv:
+        specifier: ^16.5.0
+        version: 16.6.1
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@testcontainers/postgresql':
         specifier: ^10.28.0
         version: 10.28.0
       tsx:
@@ -309,6 +349,9 @@ importers:
       '@testcontainers/redis':
         specifier: ^10.28.0
         version: 10.28.0
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
       testcontainers:
         specifier: ^10.28.0
         version: 10.28.0

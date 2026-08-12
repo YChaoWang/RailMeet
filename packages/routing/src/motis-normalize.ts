@@ -4,12 +4,11 @@ import {
   ENCODED_POLYLINE_POINTS_MAX_LENGTH,
   ENCODED_POLYLINE_PRECISION_MAX,
   ENCODED_POLYLINE_PRECISION_MIN,
-  isTransportMode,
-  type TransportMode,
 } from '@railmeet/shared';
 
 import { RoutingError } from './errors.js';
-import type { EncodedRouteGeometry, JourneyLeg, JourneyLegMode, PlannedJourney } from './types.js';
+import { mapMotisLegMode } from './motis-mode.js';
+import type { EncodedRouteGeometry, JourneyLeg, PlannedJourney } from './types.js';
 
 /**
  * Pinned MOTIS OpenAPI surface used by this adapter:
@@ -58,7 +57,8 @@ const motisLegSchema = z
     duration: z.number().finite().nonnegative(),
     tripId: z.string().optional(),
     routeId: z.string().optional(),
-    legGeometry: motisEncodedPolylineSchema.optional(),
+    // Validated in normalizeLegGeometry — empty points must not fail the whole plan.
+    legGeometry: z.unknown().optional(),
   })
   .passthrough();
 
@@ -78,29 +78,6 @@ export const motisPlanResponseSchema = z
   })
   .passthrough();
 
-function mapMode(mode: string): JourneyLegMode {
-  const normalized = mode.trim().toLowerCase();
-  if (normalized === 'walk' || normalized === 'foot') {
-    return 'walk';
-  }
-  const aliases: Record<string, TransportMode> = {
-    rail: 'train',
-    train: 'train',
-    subway: 'metro',
-    metro: 'metro',
-    suburban: 'train',
-    tram: 'tram',
-    bus: 'bus',
-    ferry: 'ferry',
-    boat: 'ferry',
-  };
-  const mapped = aliases[normalized];
-  if (mapped && isTransportMode(mapped)) {
-    return mapped;
-  }
-  return 'other';
-}
-
 function parseInstant(value: string, label: string): Date {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -114,7 +91,18 @@ function parseInstant(value: string, label: string): Date {
 }
 
 function normalizeLegGeometry(raw: unknown): EncodedRouteGeometry | undefined {
-  if (raw === undefined) {
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+  // Transitous sometimes returns `{ points: "", precision, length: 0 }` for
+  // zero-length walk stubs; treat that as absent geometry rather than failing
+  // the entire participant × candidate plan (which would exhaust the search).
+  if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    'points' in raw &&
+    (raw as { points?: unknown }).points === ''
+  ) {
     return undefined;
   }
   const parsed = motisEncodedPolylineSchema.safeParse(raw);
@@ -142,48 +130,63 @@ export function normalizeMotisPlanResponse(payload: unknown): readonly PlannedJo
     );
   }
 
-  return parsed.data.itineraries.map((itinerary) => {
-    const departureAt = parseInstant(itinerary.startTime, 'journey start');
-    const arrivalAt = parseInstant(itinerary.endTime, 'journey end');
-    if (arrivalAt.getTime() < departureAt.getTime()) {
+  const journeys: PlannedJourney[] = [];
+  for (const itinerary of parsed.data.itineraries) {
+    try {
+      journeys.push(normalizeOneItinerary(itinerary));
+    } catch (error) {
+      // Isolate malformed itineraries so one bad legGeometry/instant does not
+      // abort sibling valid itineraries in the same plan response.
+      if (error instanceof RoutingError && error.code === 'PROVIDER_CONTRACT_FAILURE') {
+        continue;
+      }
+      throw error;
+    }
+  }
+  return journeys;
+}
+
+function normalizeOneItinerary(itinerary: z.infer<typeof motisItinerarySchema>): PlannedJourney {
+  const departureAt = parseInstant(itinerary.startTime, 'journey start');
+  const arrivalAt = parseInstant(itinerary.endTime, 'journey end');
+  if (arrivalAt.getTime() < departureAt.getTime()) {
+    throw new RoutingError(
+      'PROVIDER_CONTRACT_FAILURE',
+      'provider_contract',
+      'Journey arrival precedes departure',
+    );
+  }
+  const durationMinutes = Math.max(0, Math.round(itinerary.duration / 60));
+  const legs: JourneyLeg[] = itinerary.legs.map((leg) => {
+    const legDeparture = parseInstant(leg.startTime, 'leg start');
+    const legArrival = parseInstant(leg.endTime, 'leg end');
+    if (legArrival.getTime() < legDeparture.getTime()) {
       throw new RoutingError(
         'PROVIDER_CONTRACT_FAILURE',
         'provider_contract',
-        'Journey arrival precedes departure',
+        'Leg arrival precedes departure',
       );
     }
-    const durationMinutes = Math.max(0, Math.round(itinerary.duration / 60));
-    const legs: JourneyLeg[] = itinerary.legs.map((leg) => {
-      const legDeparture = parseInstant(leg.startTime, 'leg start');
-      const legArrival = parseInstant(leg.endTime, 'leg end');
-      if (legArrival.getTime() < legDeparture.getTime()) {
-        throw new RoutingError(
-          'PROVIDER_CONTRACT_FAILURE',
-          'provider_contract',
-          'Leg arrival precedes departure',
-        );
-      }
-      const providerReference = leg.tripId ?? leg.routeId;
-      const geometry = normalizeLegGeometry(leg.legGeometry);
-      const mapped: JourneyLeg = {
-        mode: mapMode(leg.mode),
-        departureAt: legDeparture,
-        arrivalAt: legArrival,
-        durationMinutes: Math.max(0, Math.round(leg.duration / 60)),
-        ...(geometry ? { geometry } : {}),
-      };
-      if (providerReference) {
-        return { ...mapped, providerReference };
-      }
-      return mapped;
-    });
-
-    return {
-      departureAt,
-      arrivalAt,
-      durationMinutes,
-      transfers: itinerary.transfers,
-      legs,
+    const providerReference = leg.tripId ?? leg.routeId;
+    const geometry = normalizeLegGeometry(leg.legGeometry);
+    const mapped: JourneyLeg = {
+      mode: mapMotisLegMode(leg.mode),
+      departureAt: legDeparture,
+      arrivalAt: legArrival,
+      durationMinutes: Math.max(0, Math.round(leg.duration / 60)),
+      ...(geometry ? { geometry } : {}),
     };
+    if (providerReference) {
+      return { ...mapped, providerReference };
+    }
+    return mapped;
   });
+
+  return {
+    departureAt,
+    arrivalAt,
+    durationMinutes,
+    transfers: itinerary.transfers,
+    legs,
+  };
 }

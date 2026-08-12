@@ -73,41 +73,24 @@ Durations use **integer minutes** (same unit as `meeting_search_journeys.duratio
 Arrival spread uses milliseconds between earliest and latest selected arrivals. All comparisons
 use UTC instants (`timestamptz` / `Date`), never `HH:mm` strings.
 
-| Mode               | Journey pick                                                                               | Candidate order                                                                       |
-| ------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| `fastest-overall`  | duration, transfers, arrival, departure, journeyId                                         | totalDur, maxDur, totalTransfers, arrivalSpread, ordinal, candidateId                 |
-| `fairest`          | same fastest journey pick                                                                  | maxDur, duration range, totalDur, totalTransfers, arrivalSpread, ordinal, candidateId |
-| `fewest-transfers` | transfers, duration, arrival, departure, journeyId                                         | totalTransfers, maxTransfers, totalDur, maxDur, ordinal, candidateId                  |
-| `arrive-together`  | smallest arrival-range cover; within each width-`D` window: duration, transfers, journeyId | arrivalSpread, totalDur, maxDur, totalTransfers, latestArrival, ordinal, candidateId  |
+| Mode               | Journey pick                                                                                         | Candidate order                                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `fastest-overall`  | duration, transfers, arrival, departure, journeyId                                                   | totalDur, maxDur, totalTransfers, arrivalSpread, ordinal, candidateId                                |
+| `fairest`          | same fastest journey pick                                                                            | maxDur, duration range, totalDur, totalTransfers, arrivalSpread, ordinal, candidateId                |
+| `fewest-transfers` | transfers, duration, arrival, departure, journeyId                                                   | totalTransfers, maxTransfers, totalDur, maxDur, ordinal, candidateId                                 |
+| `arrive-together`  | covering windows of width `max(tolerance, minSpread)`; within window: duration, transfers, journeyId | arrivalPenalty, maxDur, totalDur, totalTransfers, arrivalSpread, latestArrival, ordinal, candidateId |
 
 **Arrive-together:** sort journeys by absolute arrival instant. Find the global minimum
-feasible arrival spread `D` with a participant-covering sliding window. For each distinct
-lower endpoint `L` from sorted arrivals, consider `[L, L + D]`; if every participant has a
-journey in range, pick one journey per participant by
-`duration → transfers → binary journeyId` (no local arrival/departure tie-break), then keep
-the best set under
-`spread → total duration → total transfers → latest arrival → earliest arrival →`
-element-by-element journey-ID tuple (binary-sorted participant order; never a joined string).
+feasible arrival spread `D`. Evaluate inclusive windows of width
+`allowedWindowMs = max(ARRIVAL_TOLERANCE_MS, D)` (default tolerance **60 minutes**).
+Inside each covering window, pick one journey per participant by
+`duration → transfers → binary journeyId`, then keep the best set under
+`arrivalPenalty → max duration → total duration → total transfers → arrival spread →`
+`latest arrival →` element-by-element journey-ID tuple, where
+`arrivalPenalty = max(0, spread − ARRIVAL_TOLERANCE_MS)`.
 
-Why `duration → transfers → journeyId` is valid inside a width-`D` window:
-
-1. `D` is already the globally minimum possible covering spread.
-2. Every selected set inside an inclusive interval `[L, L + D]` has spread at most `D`.
-3. It cannot have spread below `D`, or `D` would not be minimal.
-4. Therefore every feasible selected set in that window has spread exactly `D`.
-5. A width-`D` set inside `[L, L + D]` must attain the window endpoints, so earliest and
-   latest arrival are fixed for that window (set-level keys 4–5 do not prefer one local
-   arrival/departure alternative inside the window).
-6. Duration and transfers are additive, so independently choosing each participant’s
-   minimum duration, then minimum transfers, minimizes the corresponding set totals.
-7. Once those values tie, independently choosing the binary-smallest journey ID for each
-   participant produces the lexicographically smallest participant-ordered ID tuple.
-8. Full set comparison across different windows still uses
-   `spread → total duration → total transfers → latest arrival → earliest arrival →`
-   element-by-element journey-ID tuple.
-
-Complexity: **O(T log T + T² · P)** time, **O(T + P)** space (`T` = journeys for the candidate,
-`P` = participants). This is polynomial; there is no Cartesian combination enumeration.
+Spreads within the tolerance are treated as equally synchronized so a nearby city with
+a 20-minute spread beats a distant city that only wins on a zero-minute spread.
 
 Feasible candidates receive unique ranks `1..N`. Rank 1 for the search’s `ranking_mode` is the
 primary recommendation. All four modes are always persisted so Phase 9 can switch views without

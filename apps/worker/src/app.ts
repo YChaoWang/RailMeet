@@ -17,7 +17,14 @@ import {
   type OutboxDispatcher,
   type RoutingConsumer,
 } from '@railmeet/queue';
-import { createTransitousJourneyPlanner, type JourneyPlanner } from '@railmeet/routing';
+import {
+  createCachedJourneyPlanner,
+  createConcurrencyLimitedJourneyPlanner,
+  createTransitousJourneyPlanner,
+  type JourneyPlanner,
+  type PlanCacheRedis,
+} from '@railmeet/routing';
+import { SEARCH_LIMITS } from '@railmeet/shared';
 
 import { createCandidateGenerationProcessor } from './candidate-generation.js';
 import { createFinalizationProcessor } from './finalization.js';
@@ -118,11 +125,33 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
     },
   });
 
-  const journeyPlanner = createTransitousJourneyPlanner({
+  const planCacheRedis = createRedisConnection({
+    url: options.config.redisUrl,
+    commandTimeoutMs: options.config.outbox.redisCommandTimeoutMs,
+    connectTimeoutMs: options.config.outbox.redisCommandTimeoutMs,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 1,
+  });
+
+  const planCacheAdapter: PlanCacheRedis = {
+    get: (key) => planCacheRedis.get(key),
+    set: (key, value, mode, ttlSeconds) => planCacheRedis.set(key, value, mode, ttlSeconds),
+  };
+
+  const transitousPlanner = createTransitousJourneyPlanner({
     baseUrl: options.config.transitous.baseUrl,
     userAgent: options.config.transitous.userAgent,
     timeoutMs: options.config.transitous.timeoutMs,
     maxResponseBytes: options.config.transitous.maxResponseBytes,
+    logger,
+  });
+
+  const journeyPlanner: JourneyPlanner = createCachedJourneyPlanner({
+    inner: createConcurrencyLimitedJourneyPlanner({
+      inner: transitousPlanner,
+      maxConcurrent: SEARCH_LIMITS.maximumConcurrentTransitousRequests,
+    }),
+    redis: planCacheAdapter,
     logger,
   });
 
@@ -226,6 +255,7 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
       await closeRedisConnection(candidateRedis);
       await closeRedisConnection(routingRedis);
       await closeRedisConnection(finalizationRedis);
+      await closeRedisConnection(planCacheRedis);
       await database.close();
       logger.info('Worker closed cleanly');
     },

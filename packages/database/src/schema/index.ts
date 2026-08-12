@@ -10,6 +10,8 @@ export {
   meetingSearchRoutingWork,
   meetingSearchTransportModes,
   meetingSearches,
+  meetingCityHubs,
+  catalogImportRuns,
   outboxEvents,
   places,
   CANDIDATE_FEASIBILITY_REASONS,

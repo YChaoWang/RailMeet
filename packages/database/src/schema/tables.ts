@@ -9,6 +9,7 @@ import {
   PLACE_ID_MAX_LENGTH,
   PLACE_KINDS,
   PLACE_NAME_MAX_LENGTH,
+  PLACE_OWNERSHIPS,
   IANA_TIMEZONE_MAX_LENGTH,
   RANKING_MODES,
   SEARCH_COMPLETION_OUTCOMES,
@@ -17,6 +18,7 @@ import {
 } from '@railmeet/shared';
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   doublePrecision,
   foreignKey,
@@ -87,6 +89,7 @@ const feasibilityReasonSqlList = CANDIDATE_FEASIBILITY_REASONS.map((value) => `'
 );
 
 const placeKindSqlList = PLACE_KINDS.map((value) => `'${value}'`).join(', ');
+const placeOwnershipSqlList = PLACE_OWNERSHIPS.map((value) => `'${value}'`).join(', ');
 const rankingModeSqlList = RANKING_MODES.map((value) => `'${value}'`).join(', ');
 const searchStatusSqlList = SEARCH_STATUSES.map((value) => `'${value}'`).join(', ');
 const transportModeSqlList = TRANSPORT_MODES.map((value) => `'${value}'`).join(', ');
@@ -111,11 +114,24 @@ export const places = pgTable(
     provider: text('provider'),
     /** Stable provider location id (MOTIS Match.id). Paired with provider. */
     providerPlaceId: text('provider_place_id'),
+    /**
+     * Record ownership. Catalog imports refresh catalog:* rows;
+     * manual and provider:motis rows are not overwritten by catalog refresh.
+     */
+    ownership: text('ownership').notNull().default('manual'),
+    sourceVersion: text('source_version'),
+    normalizedName: text('normalized_name'),
+    /** GeoNames population when known (source-owned). */
+    population: integer('population'),
+    /** GeoNames feature code when known (source-owned), e.g. PPLC. */
+    featureCode: text('feature_code'),
+    active: boolean('active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
     index('places_location_gix').using('gist', table.location),
+    index('places_ownership_active_idx').on(table.ownership, table.active),
     uniqueIndex('places_provider_place_uid')
       .on(table.provider, table.providerPlaceId)
       .where(sql`${table.provider} IS NOT NULL AND ${table.providerPlaceId} IS NOT NULL`),
@@ -133,6 +149,7 @@ export const places = pgTable(
       sql`char_length(${table.name}) >= 1 AND char_length(${table.name}) <= ${sql.raw(String(PLACE_NAME_MAX_LENGTH))}`,
     ),
     check('places_kind_chk', sql`${table.kind} IN (${sql.raw(placeKindSqlList)})`),
+    check('places_ownership_chk', sql`${table.ownership} IN (${sql.raw(placeOwnershipSqlList)})`),
     check('places_country_code_chk', sql`${table.countryCode} ~ '^[A-Z]{2}$'`),
     check(
       'places_timezone_length_chk',
@@ -156,6 +173,70 @@ export const places = pgTable(
       sql`ST_X("location") >= -180 AND ST_X("location") <= 180`,
     ),
     check('places_location_latitude_chk', sql`ST_Y("location") >= -90 AND ST_Y("location") <= 90`),
+  ],
+);
+
+/**
+ * Deterministic meeting-city → representative transit-hub associations.
+ * Candidate discovery remains city-based; routing uses the selected hub.
+ */
+export const meetingCityHubs = pgTable(
+  'meeting_city_hubs',
+  {
+    cityPlaceId: text('city_place_id')
+      .notNull()
+      .references(() => places.id, { onDelete: 'restrict' }),
+    hubPlaceId: text('hub_place_id')
+      .notNull()
+      .references(() => places.id, { onDelete: 'restrict' }),
+    priority: integer('priority').notNull(),
+    matchMethod: text('match_method').notNull(),
+    source: text('source').notNull(),
+    sourceVersion: text('source_version'),
+    regional: boolean('regional').notNull().default(false),
+    distanceMeters: doublePrecision('distance_meters'),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'meeting_city_hubs_pk',
+      columns: [table.cityPlaceId, table.hubPlaceId],
+    }),
+    uniqueIndex('meeting_city_hubs_city_priority_uid')
+      .on(table.cityPlaceId, table.priority)
+      .where(sql`${table.active} = true`),
+    index('meeting_city_hubs_hub_idx').on(table.hubPlaceId),
+    check('meeting_city_hubs_priority_chk', sql`${table.priority} >= 0`),
+    check(
+      'meeting_city_hubs_distance_chk',
+      sql`${table.distanceMeters} IS NULL OR ${table.distanceMeters} >= 0`,
+    ),
+    check('meeting_city_hubs_city_ne_hub_chk', sql`${table.cityPlaceId} <> ${table.hubPlaceId}`),
+  ],
+);
+
+/** Audit log for catalog import runs (not used during normal search runtime). */
+export const catalogImportRuns = pgTable(
+  'catalog_import_runs',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    source: text('source').notNull(),
+    sourceVersion: text('source_version').notNull(),
+    checksum: text('checksum'),
+    status: text('status').notNull(),
+    cityCount: integer('city_count').notNull().default(0),
+    hubCount: integer('hub_count').notNull().default(0),
+    associationCount: integer('association_count').notNull().default(0),
+    rejectedCount: integer('rejected_count').notNull().default(0),
+    deactivatedCount: integer('deactivated_count').notNull().default(0),
+    diagnostics: jsonb('diagnostics'),
+    startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true, mode: 'date' }),
+  },
+  (table) => [
+    check('catalog_import_runs_status_chk', sql`${table.status} IN ('succeeded', 'failed')`),
   ],
 );
 
@@ -481,6 +562,12 @@ export const meetingSearchCandidates = pgTable(
       .references(() => places.id, { onDelete: 'restrict' }),
     ordinal: integer('ordinal').notNull(),
     distanceMeters: doublePrecision('distance_meters').notNull(),
+    /** Representative hub used for routing; null when centroid fallback. */
+    routingHubPlaceId: text('routing_hub_place_id').references(() => places.id, {
+      onDelete: 'restrict',
+    }),
+    /** `hub` | `centroid_fallback` once candidate generation attaches a target. */
+    routingTargetReason: text('routing_target_reason'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
@@ -491,6 +578,19 @@ export const meetingSearchCandidates = pgTable(
     unique('meeting_search_candidates_search_ordinal_uid').on(table.searchId, table.ordinal),
     check('meeting_search_candidates_ordinal_chk', sql`${table.ordinal} >= 0`),
     check('meeting_search_candidates_distance_chk', sql`${table.distanceMeters} >= 0`),
+    check(
+      'meeting_search_candidates_routing_target_reason_chk',
+      sql`(
+        (${table.routingTargetReason} IS NULL AND ${table.routingHubPlaceId} IS NULL)
+        OR (
+          ${table.routingTargetReason} IN ('hub', 'centroid_fallback')
+          AND (
+            (${table.routingTargetReason} = 'hub' AND ${table.routingHubPlaceId} IS NOT NULL)
+            OR (${table.routingTargetReason} = 'centroid_fallback')
+          )
+        )
+      )`,
+    ),
   ],
 );
 

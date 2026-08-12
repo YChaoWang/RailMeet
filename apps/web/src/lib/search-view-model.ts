@@ -109,6 +109,14 @@ export function failureMessage(code: string | null | undefined): string {
       return 'Journey planning could not finish for every traveler.';
     case 'CANDIDATE_GENERATION_FAILED':
       return 'RailMeet could not build a set of meeting cities for this search.';
+    case 'CANDIDATE_CATALOG_NOT_READY':
+      return 'The meeting-city catalog is not ready yet. Import the catalog and try again.';
+    case 'NO_CANDIDATES_IN_SEARCH_AREA':
+      return 'No meeting cities were found near these travelers.';
+    case 'NO_CANDIDATES_MATCH_CONSTRAINTS':
+      return 'No meeting cities matched the selected country filters.';
+    case 'CANDIDATES_HAVE_NO_ROUTING_TARGET':
+      return 'Meeting cities are missing transit hubs required for journey planning.';
     case 'INVARIANT_VIOLATION':
       return 'The search reached an inconsistent state and was stopped safely.';
     default:

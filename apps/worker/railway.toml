@@ -1,0 +1,7 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm install && pnpm --filter @railmeet/worker build"
+
+[deploy]
+startCommand = "node --enable-source-maps dist/index.js"
+restartPolicyType = "ON_FAILURE"

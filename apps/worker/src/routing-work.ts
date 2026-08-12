@@ -6,7 +6,13 @@ import {
 } from '@railmeet/database';
 import type { Logger } from '@railmeet/observability';
 import { UnrecoverableError, type RoutingJobResult, type RoutingProcessor } from '@railmeet/queue';
-import { RoutingError, type JourneyPlanner } from '@railmeet/routing';
+import {
+  collectJourneyTransportModes,
+  hasUnmappedTransitLegs,
+  RoutingError,
+  type JourneyPlanner,
+} from '@railmeet/routing';
+import { SEARCH_LIMITS } from '@railmeet/shared';
 import { wallTimeInZoneToUtc } from '@railmeet/search-engine';
 
 export type CreateRoutingWorkProcessorOptions = {
@@ -107,20 +113,44 @@ export function createRoutingWorkProcessor(
         throw new UnrecoverableError(`Participant missing on search for routing work`);
       }
 
-      const [origin, destination] = await Promise.all([
+      const [origin, destinationPlace, candidates] = await Promise.all([
         options.places.findById(participant.originPlaceId),
         options.places.findById(work.destinationPlaceId),
+        options.searchPipeline.listCandidates(searchId),
       ]);
-      if (!origin || !destination) {
+      if (!origin || !destinationPlace) {
         await options.searchPipeline.markRoutingWorkExhausted(routingWorkId, 'PLACE_NOT_FOUND');
         throw new UnrecoverableError('Origin or destination place missing');
       }
+
+      const candidate = candidates.find(
+        (row) => row.destinationPlaceId === work.destinationPlaceId,
+      );
+      const routingTargetPlaceId = candidate?.routingHubPlaceId ?? work.destinationPlaceId;
+      const routingTarget =
+        routingTargetPlaceId === destinationPlace.id
+          ? destinationPlace
+          : ((await options.places.findById(routingTargetPlaceId)) ?? destinationPlace);
 
       const departureAt = wallTimeInZoneToUtc(
         search.travelDate,
         search.earliestDepartureTime,
         origin.timezone,
       );
+
+      const totalRoutingWork = await options.searchPipeline.countRoutingWorkForSearch(searchId);
+      if (totalRoutingWork > SEARCH_LIMITS.maximumTotalPlanCalls) {
+        await options.searchPipeline.markRoutingWorkExhausted(
+          routingWorkId,
+          'PLAN_BUDGET_EXCEEDED',
+        );
+        return {
+          searchId,
+          routingWorkId,
+          outcome: 'exhausted',
+          journeyCount: 0,
+        };
+      }
 
       let planResult;
       try {
@@ -130,8 +160,8 @@ export function createRoutingWorkProcessor(
             longitude: origin.location.longitude,
           },
           destination: {
-            latitude: destination.location.latitude,
-            longitude: destination.location.longitude,
+            latitude: routingTarget.location.latitude,
+            longitude: routingTarget.location.longitude,
           },
           departureAt,
           maxTransfers: search.maxTransfers,
@@ -157,14 +187,19 @@ export function createRoutingWorkProcessor(
         throw error;
       }
 
-      const journeys = planResult.journeys.map((journey, journeyOrdinal) => {
-        const transportModes = [
-          ...new Set(
-            journey.legs
-              .map((leg) => leg.mode)
-              .filter((mode) => mode !== 'walk' && mode !== 'other'),
-          ),
-        ];
+      // Reject transit itineraries whose legs are only unmapped (`other`) modes —
+      // never persist a silent empty transportModes list for real transit.
+      const usableJourneys = planResult.journeys.filter((journey) => {
+        const modes = collectJourneyTransportModes(journey.legs);
+        const hasTransitLeg = journey.legs.some((leg) => leg.mode !== 'walk');
+        if (hasTransitLeg && modes.length === 0 && hasUnmappedTransitLegs(journey.legs)) {
+          return false;
+        }
+        return true;
+      });
+
+      const journeys = usableJourneys.map((journey, journeyOrdinal) => {
+        const transportModes = collectJourneyTransportModes(journey.legs);
         return {
           journeyOrdinal,
           departureAt: journey.departureAt,

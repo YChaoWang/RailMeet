@@ -268,4 +268,15 @@ describe('SearchResultsView', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
+
+  it('switching ranking mode selects that mode’s rank-1 candidate without fetching', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    render(<SearchResultsViewStandalone results={rankedResults} />);
+    await user.click(screen.getByRole('tab', { name: 'Fastest overall' }));
+    const munich = screen.getByRole('button', { name: /Rank 1[\s\S]*Munich/i });
+    expect(munich).toHaveAttribute('aria-pressed', 'true');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
 });

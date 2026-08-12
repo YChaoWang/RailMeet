@@ -254,11 +254,22 @@ export function SearchResultsViewStandalone({
     availableModes.includes(results.rankingMode) ? results.rankingMode : availableModes[0]!,
   );
   const [selectedKey, setSelectedKey] = useState<string | null>(() => {
-    const first = rankingsForMode(results, mode)[0];
+    const rows = rankingsForMode(results, mode);
+    const first = rows.find((row) => row.rank === 1) ?? rows[0];
     return first
       ? candidateSelectionKey(first.rankingMode, first.rank, first.destination.placeId)
       : null;
   });
+
+  useEffect(() => {
+    const rows = rankingsForMode(results, mode);
+    const first = rows.find((row) => row.rank === 1) ?? rows[0];
+    setSelectedKey(
+      first
+        ? candidateSelectionKey(first.rankingMode, first.rank, first.destination.placeId)
+        : null,
+    );
+  }, [results, mode]);
 
   return (
     <SearchResultsView

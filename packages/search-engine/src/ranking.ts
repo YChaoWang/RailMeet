@@ -1,4 +1,5 @@
 import type { RankingMode } from '@railmeet/shared';
+import { ARRIVAL_TOLERANCE_MS } from '@railmeet/shared';
 
 import { evaluateCandidateFeasibility } from './feasibility.js';
 import {
@@ -38,6 +39,7 @@ function metricsFromSelection(
   const arrivals = selected.map((j) => j.arrivalAt.getTime());
   const earliestArrivalAt = new Date(Math.min(...arrivals));
   const latestArrivalAt = new Date(Math.max(...arrivals));
+  const arrivalSpreadMs = latestArrivalAt.getTime() - earliestArrivalAt.getTime();
   return {
     candidateId: candidate.candidateId,
     destinationPlaceId: candidate.destinationPlaceId,
@@ -50,7 +52,8 @@ function metricsFromSelection(
     maxTransfers: Math.max(...transfers),
     earliestArrivalAt,
     latestArrivalAt,
-    arrivalSpreadMs: latestArrivalAt.getTime() - earliestArrivalAt.getTime(),
+    arrivalSpreadMs,
+    arrivalPenaltyMs: Math.max(0, arrivalSpreadMs - ARRIVAL_TOLERANCE_MS),
     selectedJourneys: [...selected].sort((a, b) =>
       compareBinaryStrings(a.participantId, b.participantId),
     ),
@@ -136,12 +139,13 @@ function compareCandidates(
       compareBinaryStrings(a.candidateId, b.candidateId)
     );
   }
-  // arrive-together
+  // arrive-together (tolerance-aware)
   return (
-    a.arrivalSpreadMs - b.arrivalSpreadMs ||
-    a.totalDurationMinutes - b.totalDurationMinutes ||
+    a.arrivalPenaltyMs - b.arrivalPenaltyMs ||
     a.maxDurationMinutes - b.maxDurationMinutes ||
+    a.totalDurationMinutes - b.totalDurationMinutes ||
     a.totalTransfers - b.totalTransfers ||
+    a.arrivalSpreadMs - b.arrivalSpreadMs ||
     a.latestArrivalAt.getTime() - b.latestArrivalAt.getTime() ||
     a.ordinal - b.ordinal ||
     compareBinaryStrings(a.candidateId, b.candidateId)

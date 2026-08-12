@@ -46,12 +46,17 @@ describe('migration journal on fresh PostGIS', () => {
     }
   }, 60_000);
 
-  it('applies the complete migration journal through 0007 to a fresh PostGIS database', async () => {
+  it('applies the complete migration journal through 0012 to a fresh PostGIS database', async () => {
     const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as MigrationJournal;
-    expect(journal.entries.map((entry) => entry.tag)).toContain('0006_petite_flatman');
     expect(journal.entries.map((entry) => entry.tag)).toContain('0007_eager_lyja');
-    expect(journal.entries.at(-1)?.tag).toBe('0007_eager_lyja');
-    expect(journal.entries).toHaveLength(8);
+    expect(journal.entries.map((entry) => entry.tag)).toContain(
+      '0011_catalog_ownership_namespaces',
+    );
+    expect(journal.entries.map((entry) => entry.tag)).toContain(
+      '0012_meeting_city_eligibility_fields',
+    );
+    expect(journal.entries.at(-1)?.tag).toBe('0012_meeting_city_eligibility_fields');
+    expect(journal.entries).toHaveLength(13);
 
     const before = await database.db.execute(sql`
       SELECT to_regclass('public.meeting_search_candidate_evaluations') AS evaluations_table
@@ -65,33 +70,48 @@ describe('migration journal on fresh PostGIS', () => {
       FROM "drizzle"."__drizzle_migrations"
       ORDER BY created_at ASC
     `);
-    expect(applied).toHaveLength(8);
+    expect(applied).toHaveLength(13);
     expect(applied.map((row) => Number(row['created_at']))).toEqual(
       journal.entries.map((entry) => entry.when),
     );
     expect(Number(applied.at(-1)?.['created_at'])).toBe(
-      journal.entries.find((entry) => entry.tag === '0007_eager_lyja')?.when,
+      journal.entries.find((entry) => entry.tag === '0012_meeting_city_eligibility_fields')?.when,
     );
 
     const tables = await database.db.execute(sql`
       SELECT
         to_regclass('public.meeting_search_candidate_evaluations') AS evaluations_table,
         to_regclass('public.meeting_search_candidate_rankings') AS rankings_table,
-        to_regclass('public.meeting_search_candidate_ranking_journeys') AS ranking_journeys_table
+        to_regclass('public.meeting_search_candidate_ranking_journeys') AS ranking_journeys_table,
+        to_regclass('public.meeting_city_hubs') AS hubs_table,
+        to_regclass('public.catalog_import_runs') AS catalog_runs_table
     `);
     expect(tables[0]?.['evaluations_table']).toBe('meeting_search_candidate_evaluations');
     expect(tables[0]?.['rankings_table']).toBe('meeting_search_candidate_rankings');
     expect(tables[0]?.['ranking_journeys_table']).toBe('meeting_search_candidate_ranking_journeys');
+    expect(tables[0]?.['hubs_table']).toBe('meeting_city_hubs');
+    expect(tables[0]?.['catalog_runs_table']).toBe('catalog_import_runs');
 
     const placeProviderColumns = await database.db.execute(sql`
       SELECT column_name
       FROM information_schema.columns
       WHERE table_schema = 'public'
         AND table_name = 'places'
-        AND column_name IN ('provider', 'provider_place_id')
+        AND column_name IN (
+          'provider',
+          'provider_place_id',
+          'ownership',
+          'active',
+          'population',
+          'feature_code'
+        )
       ORDER BY column_name
     `);
     expect(placeProviderColumns.map((row) => row['column_name'])).toEqual([
+      'active',
+      'feature_code',
+      'ownership',
+      'population',
       'provider',
       'provider_place_id',
     ]);

@@ -9,6 +9,36 @@ export const PARTICIPANT_COUNT_MIN = 2;
 /** Maximum number of participants in one meeting search. */
 export const PARTICIPANT_COUNT_MAX = 6;
 
+/** Alias for {@link PARTICIPANT_COUNT_MIN}. */
+export const MIN_PARTICIPANTS = PARTICIPANT_COUNT_MIN;
+
+/** Alias for {@link PARTICIPANT_COUNT_MAX}. */
+export const MAX_PARTICIPANTS = PARTICIPANT_COUNT_MAX;
+
+/**
+ * Bounded search pipeline limits (candidate waves, Transitous plan budget, concurrency).
+ * Single source of truth for worker routing and candidate generation.
+ */
+export const SEARCH_LIMITS = {
+  minimumParticipants: PARTICIPANT_COUNT_MIN,
+  maximumParticipants: PARTICIPANT_COUNT_MAX,
+  /** First evaluation wave fans out routing for the top candidate only (ordinal 0). */
+  initialCandidates: 1,
+  /** Maximum meeting cities evaluated per search (progressive 1 → 2 → 3). */
+  maximumCandidates: 3,
+  /** Per-participant journey plan attempts per candidate wave (reserved for future use). */
+  maximumPlanCallsPerParticipant: 3,
+  /** Hard cap on Transitous `/plan` invocations per search (participants × candidates attempted). */
+  maximumTotalPlanCalls: 18,
+  /** Maximum concurrent in-flight Transitous plan requests in one worker process. */
+  maximumConcurrentTransitousRequests: 2,
+  /** Provider HTTP timeout for a single plan request (milliseconds). */
+  requestTimeoutMs: 10_000,
+} as const;
+
+/** Redis TTL for normalized journey-plan cache entries (milliseconds). */
+export const ROUTING_PLAN_CACHE_TTL_MS = 15 * 60 * 1000;
+
 /** Maximum length of a participant ID after trimming. */
 export const PARTICIPANT_ID_MAX_LENGTH = 64;
 
@@ -70,6 +100,26 @@ export const MAP_STOPS_DETAILED_MAX_SPAN_DEG = MAP_STOPS_MAX_REQUEST_SPAN_DEG;
 
 /** Suggested minimum zoom when the API returns an aggregated/truncated subset. */
 export const MAP_STOPS_MINIMUM_DETAIL_ZOOM = 12;
+
+/**
+ * Arrive-together arrival synchronization tolerance.
+ * Spreads up to this many minutes are treated as equally synchronized (penalty 0);
+ * beyond that, excess milliseconds remain the primary objective.
+ */
+export const ARRIVAL_TOLERANCE_MINUTES = 60;
+export const ARRIVAL_TOLERANCE_MS = ARRIVAL_TOLERANCE_MINUTES * 60_000;
+
+/** Soft readiness floor: fewer active cities than this → catalog not ready. */
+export const CATALOG_MIN_ACTIVE_CITIES = 20;
+
+/** Ordinary hub distance soft limit from city centroid (meters). */
+export const CATALOG_HUB_DISTANCE_SOFT_MAX_METERS = 25_000;
+
+/** Hard hub distance unless association is marked regional (meters). */
+export const CATALOG_HUB_DISTANCE_HARD_MAX_METERS = 80_000;
+
+/** Max hubs considered per candidate (prevents routing fan-out explosion). */
+export const CATALOG_MAX_HUBS_PER_CANDIDATE = 1;
 
 /** Importance thresholds for MOTIS Place.importance → major/regional/local. */
 export const MAP_STOPS_IMPORTANCE_MAJOR_MIN = 0.04;

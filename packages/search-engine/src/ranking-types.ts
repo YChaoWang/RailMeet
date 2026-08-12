@@ -63,6 +63,8 @@ export type RankedCandidateMetrics = {
   readonly earliestArrivalAt: Date;
   readonly latestArrivalAt: Date;
   readonly arrivalSpreadMs: number;
+  /** max(0, arrivalSpreadMs − ARRIVAL_TOLERANCE_MS); Arrive-together primary key. */
+  readonly arrivalPenaltyMs: number;
   readonly selectedJourneys: readonly SelectedParticipantJourney[];
 };
 

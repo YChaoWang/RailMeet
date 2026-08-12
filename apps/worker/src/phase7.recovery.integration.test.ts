@@ -22,12 +22,59 @@ import {
   createRoutingConsumer,
 } from '@railmeet/queue';
 import { createTransitousJourneyPlanner } from '@railmeet/routing';
+import { CATALOG_MIN_ACTIVE_CITIES } from '@railmeet/shared';
+import { sql } from 'drizzle-orm';
 
 import { createCandidateGenerationProcessor } from './candidate-generation.js';
 import { createRoutingWorkProcessor } from './routing-work.js';
 
 const POSTGIS_IMAGE = 'ghcr.io/baosystems/postgis:16-3.5';
 const execFileAsync = promisify(execFile);
+
+async function attachEligibleHub(database: Database, cityId: string, hubId: string): Promise<void> {
+  await database.db.execute(sql`
+    UPDATE places
+    SET
+      ownership = 'catalog:geonames',
+      population = 500000,
+      feature_code = 'PPLC',
+      provider = 'geonames',
+      provider_place_id = ${cityId},
+      active = true
+    WHERE id = ${cityId}
+  `);
+  await database.db.execute(sql`
+    INSERT INTO places (
+      id, name, kind, country_code, timezone, location,
+      ownership, provider, provider_place_id, active
+    )
+    SELECT
+      ${hubId},
+      ${`${cityId} hub`},
+      'station',
+      country_code,
+      timezone,
+      location,
+      'catalog:transitous',
+      'motis',
+      ${`motis-${hubId}`},
+      true
+    FROM places
+    WHERE id = ${cityId}
+    ON CONFLICT (id) DO UPDATE SET
+      ownership = EXCLUDED.ownership,
+      provider = EXCLUDED.provider,
+      provider_place_id = EXCLUDED.provider_place_id,
+      active = true
+  `);
+  await database.db.execute(sql`
+    INSERT INTO meeting_city_hubs (
+      city_place_id, hub_place_id, priority, distance_meters, match_method, source, regional, active
+    )
+    VALUES (${cityId}, ${hubId}, 0, 0, 'test-fixture', 'test', false, true)
+    ON CONFLICT (city_place_id, hub_place_id) DO UPDATE SET active = true, priority = 0
+  `);
+}
 
 const sampleItinerary = {
   duration: 7200,
@@ -203,6 +250,23 @@ describe('Phase 7 recovery integration (real candidate/routing processors)', () 
       },
     ]) {
       await database.places.create(place);
+    }
+    await attachEligibleHub(database, 'place:berlin', 'place:berlin-hub');
+    await attachEligibleHub(database, 'place:paris', 'place:paris-hub');
+    await attachEligibleHub(database, 'place:munich', 'place:munich-hub');
+
+    // Catalog readiness requires ≥ CATALOG_MIN_ACTIVE_CITIES hubbed eligible cities.
+    for (let i = 0; i < CATALOG_MIN_ACTIVE_CITIES; i += 1) {
+      const id = `place:catalog-city-${i}`;
+      await database.places.create({
+        id,
+        name: `Catalog City ${i}`,
+        kind: 'city',
+        countryCode: 'DE',
+        timezone: 'Europe/Berlin',
+        location: { longitude: 10 + i * 0.1, latitude: 50 + i * 0.05 },
+      });
+      await attachEligibleHub(database, id, `${id}-hub`);
     }
 
     const redisUrl = redisContainer.getConnectionUrl();
@@ -404,7 +468,8 @@ describe('Phase 7 recovery integration (real candidate/routing processors)', () 
       (event) => event.eventType === 'routing.requested',
     );
     expect(candidates.length).toBeGreaterThan(0);
-    expect(workCount).toBe(candidates.length * 2);
+    // Progressive evaluation fans out the top candidate first (2 participants × 1 destination).
+    expect(workCount).toBe(2);
     expect(routingEvents).toHaveLength(workCount);
 
     const after = await database.searchPipeline.findCandidateGeneration(search.id);
@@ -463,7 +528,8 @@ describe('Phase 7 recovery integration (real candidate/routing processors)', () 
       (event) => event.eventType === 'routing.requested',
     );
     expect(candidates.length).toBeGreaterThan(0);
-    expect(workCount).toBe(candidates.length * 2);
+    // Progressive evaluation fans out the top candidate first (2 participants × 1 destination).
+    expect(workCount).toBe(2);
     expect(routingEvents).toHaveLength(workCount);
     expect(new Set(candidates.map((c) => c.destinationPlaceId)).size).toBe(candidates.length);
     expect(new Set(routingEvents.map((e) => e.dedupeKey)).size).toBe(routingEvents.length);
@@ -629,7 +695,7 @@ describe('Phase 7 recovery integration (real candidate/routing processors)', () 
     const candidates = await database.searchPipeline.listCandidates(search.id);
     const workCount = await database.searchPipeline.countRoutingWorkForSearch(search.id);
     expect(candidates.length).toBeGreaterThan(0);
-    expect(workCount).toBe(candidates.length * 2);
+    expect(workCount).toBe(2);
     expect((await database.searchPipeline.findCandidateGeneration(search.id))?.status).toBe(
       'succeeded',
     );

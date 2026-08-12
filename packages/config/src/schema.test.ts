@@ -65,8 +65,8 @@ describe('workerEnvSchema outbox settings', () => {
     });
     expect(config.searchJobs.consumerConcurrency).toBe(2);
     expect(config.searchJobs.candidateConsumerConcurrency).toBe(2);
-    expect(config.searchJobs.routingConsumerConcurrency).toBe(4);
-    expect(config.searchJobs.candidateLimit).toBe(8);
+    expect(config.searchJobs.routingConsumerConcurrency).toBe(2);
+    expect(config.searchJobs.candidateLimit).toBe(3);
     expect(config.searchJobs.removeOnFailAgeSeconds).toBeGreaterThanOrEqual(
       config.searchJobs.removeOnCompleteAgeSeconds,
     );
@@ -229,9 +229,9 @@ describe('workerEnvSchema search job retry and retention', () => {
     ).toBe(3);
   });
 
-  it('applies SEARCH_CANDIDATE_LIMIT default of 8', () => {
+  it('applies SEARCH_CANDIDATE_LIMIT default of 3', () => {
     const config = toWorkerConfig(parseWithSchema(workerEnvSchema, { ...validShared }, 'worker'));
-    expect(config.searchJobs.candidateLimit).toBe(8);
+    expect(config.searchJobs.candidateLimit).toBe(3);
   });
 
   it('rejects SEARCH_CANDIDATE_LIMIT of zero', () => {
@@ -254,20 +254,16 @@ describe('workerEnvSchema search job retry and retention', () => {
 
   it('rejects SEARCH_CANDIDATE_LIMIT above configured maximum', () => {
     expect(() =>
-      parseWithSchema(workerEnvSchema, { ...validShared, SEARCH_CANDIDATE_LIMIT: '21' }, 'worker'),
+      parseWithSchema(workerEnvSchema, { ...validShared, SEARCH_CANDIDATE_LIMIT: '4' }, 'worker'),
     ).toThrow(ConfigError);
   });
 
   it('accepts SEARCH_CANDIDATE_LIMIT within the configured range', () => {
     expect(
       toWorkerConfig(
-        parseWithSchema(
-          workerEnvSchema,
-          { ...validShared, SEARCH_CANDIDATE_LIMIT: '12' },
-          'worker',
-        ),
+        parseWithSchema(workerEnvSchema, { ...validShared, SEARCH_CANDIDATE_LIMIT: '3' }, 'worker'),
       ).searchJobs.candidateLimit,
-    ).toBe(12);
+    ).toBe(3);
   });
 });
 

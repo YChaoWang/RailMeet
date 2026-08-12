@@ -85,6 +85,7 @@ export type {
   ClaimCandidateGenerationResult,
   ClaimRoutingWorkResult,
   FanOutRoutingInput,
+  ExpandRoutingWaveInput,
   SearchPipelineRepository,
 } from './repositories/search-pipeline-repository.js';
 export { assertPostgisInstalled } from './repositories/place-repository.js';

@@ -1,10 +1,7 @@
 import { loadApiConfig } from '@railmeet/config';
 import { createDatabase } from '@railmeet/database';
 import { createLogger } from '@railmeet/observability';
-import {
-  createTransitousMapStopsClient,
-  createTransitousPlaceGeocoder,
-} from '@railmeet/routing';
+import { createTransitousMapStopsClient, createTransitousPlaceGeocoder } from '@railmeet/routing';
 import { MAP_STOPS_MAX_RESPONSE_BYTES } from '@railmeet/shared';
 
 import { buildServer } from './app.js';
@@ -36,7 +33,13 @@ async function main(): Promise<void> {
     maxResponseBytes: Math.max(transitousOptions.maxResponseBytes, MAP_STOPS_MAX_RESPONSE_BYTES),
   });
 
-  const app = await buildServer({ logger, database, placeGeocoder, mapStopsClient });
+  const app = await buildServer({
+    logger,
+    database,
+    placeGeocoder,
+    mapStopsClient,
+    webOrigins: config.webOrigins,
+  });
 
   let shuttingDown = false;
 

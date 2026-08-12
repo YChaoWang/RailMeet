@@ -69,6 +69,36 @@ describe('place coordinate invariants (direct SQL)', () => {
       timezone: 'Europe/Berlin',
       location: { longitude: 11.582, latitude: 48.1351 },
     });
+
+    for (const [cityId, hubId] of [
+      ['place:berlin', 'place:hub:berlin'],
+      ['place:paris', 'place:hub:paris'],
+      ['place:munich', 'place:hub:munich'],
+    ] as const) {
+      await database.db.execute(sql`
+        UPDATE places
+        SET ownership = 'catalog:geonames', population = 500000, feature_code = 'PPLC', active = true
+        WHERE id = ${cityId}
+      `);
+      await database.db.execute(sql`
+        INSERT INTO places (
+          id, name, kind, country_code, timezone, location,
+          ownership, provider, provider_place_id, active
+        )
+        SELECT
+          ${hubId}, ${`${cityId} hub`}, 'station', country_code, timezone, location,
+          'catalog:transitous', 'motis', ${`motis-${hubId}`}, true
+        FROM places WHERE id = ${cityId}
+        ON CONFLICT (id) DO UPDATE SET active = true
+      `);
+      await database.db.execute(sql`
+        INSERT INTO meeting_city_hubs (
+          city_place_id, hub_place_id, priority, distance_meters, match_method, source, regional, active
+        )
+        VALUES (${cityId}, ${hubId}, 0, 0, 'test-fixture', 'test', false, true)
+        ON CONFLICT (city_place_id, hub_place_id) DO UPDATE SET active = true
+      `);
+    }
   }, 180_000);
 
   afterAll(async () => {

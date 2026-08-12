@@ -51,6 +51,10 @@ describe('shared finite-value constants', () => {
     expect(SEARCH_FAILURE_CODES).toEqual([
       'INVARIANT_VIOLATION',
       'CANDIDATE_GENERATION_FAILED',
+      'CANDIDATE_CATALOG_NOT_READY',
+      'NO_CANDIDATES_IN_SEARCH_AREA',
+      'NO_CANDIDATES_MATCH_CONSTRAINTS',
+      'CANDIDATES_HAVE_NO_ROUTING_TARGET',
       'ROUTING_TECHNICAL_FAILURE',
     ]);
     expect(API_ERROR_CODES).toContain('RESULTS_NOT_READY');
@@ -69,5 +73,14 @@ describe('shared finite-value constants', () => {
   it('keeps participant bounds at 2–6', () => {
     expect(PARTICIPANT_COUNT_MIN).toBe(2);
     expect(PARTICIPANT_COUNT_MAX).toBe(6);
+  });
+
+  it('exposes SEARCH_LIMITS for the bounded routing pipeline', async () => {
+    const { SEARCH_LIMITS, MIN_PARTICIPANTS, MAX_PARTICIPANTS } = await import('./index.js');
+    expect(MIN_PARTICIPANTS).toBe(2);
+    expect(MAX_PARTICIPANTS).toBe(6);
+    expect(SEARCH_LIMITS.maximumCandidates).toBe(3);
+    expect(SEARCH_LIMITS.maximumTotalPlanCalls).toBe(18);
+    expect(SEARCH_LIMITS.maximumConcurrentTransitousRequests).toBe(2);
   });
 });

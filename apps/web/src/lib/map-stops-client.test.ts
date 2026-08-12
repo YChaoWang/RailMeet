@@ -5,10 +5,7 @@ import { isMapStopsViewportEligible, mapStopsQueryFromBounds } from './map-stops
 describe('mapStopsQueryFromBounds', () => {
   it('passes through west/south/east/north as min/max lon/lat', () => {
     expect(
-      mapStopsQueryFromBounds(
-        { minLon: 13.3, minLat: 52.5, maxLon: 13.5, maxLat: 52.6 },
-        11.4,
-      ),
+      mapStopsQueryFromBounds({ minLon: 13.3, minLat: 52.5, maxLon: 13.5, maxLat: 52.6 }, 11.4),
     ).toEqual({
       minLon: 13.3,
       minLat: 52.5,

@@ -11,7 +11,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:integration": "pnpm --filter @railmeet/database test:integration",
+    "test:integration": "pnpm --filter @railmeet/database test:integration && pnpm --filter @railmeet/catalog test:integration",
     "test:integration:queue": "pnpm --filter @railmeet/queue test:integration && pnpm --filter @railmeet/worker test:integration",
     "test:integration:transitous": "pnpm --filter @railmeet/routing test:integration:transitous",
     "worker:dev": "pnpm --filter @railmeet/worker dev",
@@ -23,7 +23,13 @@
     "db:generate": "pnpm --filter @railmeet/database db:generate",
     "db:migrate": "pnpm --filter @railmeet/database db:migrate",
     "db:check": "pnpm --filter @railmeet/database db:check",
-    "db:studio": "pnpm --filter @railmeet/database db:studio"
+    "db:studio": "pnpm --filter @railmeet/database db:studio",
+    "catalog:validate": "pnpm --filter @railmeet/catalog catalog:validate",
+    "catalog:download": "pnpm --filter @railmeet/catalog catalog:download",
+    "catalog:build": "pnpm --filter @railmeet/catalog catalog:build",
+    "catalog:enrich-hubs": "pnpm --filter @railmeet/catalog catalog:enrich-hubs",
+    "catalog:import": "pnpm --filter @railmeet/catalog catalog:import",
+    "catalog:status": "pnpm --filter @railmeet/catalog catalog:status"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

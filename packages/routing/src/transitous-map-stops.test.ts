@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { RoutingError } from './errors.js';
+import type { RoutingError } from './errors.js';
 import { MOTIS_MAP_STOPS_OPENAPI_PIN } from './motis-map-stops.js';
 import { createTransitousMapStopsClient } from './transitous-map-stops.js';
 
@@ -98,8 +98,7 @@ describe('createTransitousMapStopsClient', () => {
       userAgent: 'RailMeet/0.0.0 (+https://example.test)',
       timeoutMs: 5_000,
       maxResponseBytes: 1_048_576,
-      fetchImpl: (async () =>
-        new Response('nope', { status: 429 })) as unknown as typeof fetch,
+      fetchImpl: (async () => new Response('nope', { status: 429 })) as unknown as typeof fetch,
     });
 
     await expect(

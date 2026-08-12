@@ -318,9 +318,7 @@ export function SearchMap({
         // Prefer style stylesheet readiness over map.loaded()/isStyleLoaded().
         // OpenFreeMap can paint tiles while image/sprite loading keeps loaded() false forever,
         // which would otherwise skip traveler/station overlays entirely.
-        const style = (
-          map as unknown as { style?: { _loaded?: boolean } }
-        ).style;
+        const style = (map as unknown as { style?: { _loaded?: boolean } }).style;
         if (!style?._loaded && !map.getStyle()) {
           return;
         }
@@ -370,8 +368,7 @@ export function SearchMap({
                   }
                   const coordinates = (
                     features[0]?.geometry as
-                      | { type?: string; coordinates?: [number, number] }
-                      | undefined
+                      { type?: string; coordinates?: [number, number] } | undefined
                   )?.coordinates;
                   if (!coordinates) {
                     return;
@@ -620,7 +617,8 @@ function ensureTerrainSupport(map: MapInstance, maplibregl: MapLibreModule) {
       tileSize: 256,
       maxzoom: 15,
       encoding: 'terrarium',
-      attribution: 'Terrain © <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a>',
+      attribution:
+        'Terrain © <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a>',
     });
   }
   if (!map.getLayer(HILLSHADE_LAYER_ID)) {
@@ -696,9 +694,7 @@ function labelTerrainControl(container: HTMLElement | null) {
   if (!container) {
     return;
   }
-  container
-    .querySelector('.maplibregl-ctrl-terrain')
-    ?.setAttribute('aria-label', 'Toggle terrain');
+  container.querySelector('.maplibregl-ctrl-terrain')?.setAttribute('aria-label', 'Toggle terrain');
 }
 
 function ensureOriginLayers(map: MapInstance) {
@@ -791,15 +787,7 @@ function ensureStationLayers(map: MapInstance) {
       source: STATION_SOURCE_ID,
       filter: ['!', ['has', 'point_count']],
       paint: {
-        'circle-radius': [
-          'match',
-          ['get', 'importance'],
-          'major',
-          7,
-          'regional',
-          5.5,
-          4,
-        ],
+        'circle-radius': ['match', ['get', 'importance'], 'major', 7, 'regional', 5.5, 4],
         'circle-color': '#334155',
         'circle-stroke-width': 1.5,
         'circle-stroke-color': '#ffffff',
@@ -813,11 +801,7 @@ function ensureStationLayers(map: MapInstance) {
         id: STATION_LABEL_LAYER_ID,
         type: 'symbol',
         source: STATION_SOURCE_ID,
-        filter: [
-          'all',
-          ['!', ['has', 'point_count']],
-          ['==', ['get', 'importance'], 'major'],
-        ],
+        filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'importance'], 'major']],
         minzoom: STATION_INDIVIDUAL_ZOOM_MIN,
         layout: {
           'text-field': ['get', 'name'],
@@ -1004,8 +988,7 @@ function applyScene(options: {
   clearMarkers(markersRef);
 
   const originSource = map.getSource(ORIGIN_SOURCE_ID) as
-    | { setData: (data: ReturnType<typeof originsToGeoJson>) => void }
-    | undefined;
+    { setData: (data: ReturnType<typeof originsToGeoJson>) => void } | undefined;
   if (originSource) {
     originSource.setData(originsToGeoJson(scene));
   }
@@ -1023,8 +1006,7 @@ function applyScene(options: {
   }
 
   const source = map.getSource(ROUTE_SOURCE_ID) as
-    | { setData: (data: RouteFeatureCollection) => void }
-    | undefined;
+    { setData: (data: RouteFeatureCollection) => void } | undefined;
   if (source) {
     source.setData({
       type: 'FeatureCollection',
@@ -1126,8 +1108,7 @@ function applyScene(options: {
   if (shouldFit) {
     const originMarkers = scene.markers.filter((marker) => marker.kind === 'origin');
     const hasRoutesOrCandidates =
-      scene.routeLines.length > 0 ||
-      scene.markers.some((marker) => marker.kind === 'candidate');
+      scene.routeLines.length > 0 || scene.markers.some((marker) => marker.kind === 'candidate');
 
     if (!hasRoutesOrCandidates && originMarkers.length === 1) {
       const only = originMarkers[0]!;

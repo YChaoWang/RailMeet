@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createLogger } from '@railmeet/observability';
 
-import { RoutingError } from './errors.js';
 import { MOTIS_PLAN_API_VERSION, normalizeMotisPlanResponse } from './motis-normalize.js';
 import { createTransitousJourneyPlanner } from './transitous-client.js';
 
@@ -294,8 +293,9 @@ describe('Transitous MOTIS plan client', () => {
     }
   });
 
-  it('rejects valid JSON with invalid journey semantics', () => {
-    expect(() =>
+  it('skips itineraries with invalid journey semantics instead of failing the whole plan', () => {
+    // Per-itinerary isolation: a single inverted arrival/departure must not abort siblings.
+    expect(
       normalizeMotisPlanResponse({
         itineraries: [
           {
@@ -314,7 +314,7 @@ describe('Transitous MOTIS plan client', () => {
           },
         ],
       }),
-    ).toThrow(RoutingError);
+    ).toEqual([]);
   });
 
   it('rejects valid JSON with invalid schema shape', async () => {

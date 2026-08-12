@@ -2,10 +2,7 @@ import { RoutingError } from '@railmeet/routing';
 import { MAP_STOPS_FEATURE_SOFT_LIMIT } from '@railmeet/shared';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  buildMapStopsCacheKey,
-  createMapStopsService,
-} from './map-stops-service.js';
+import { buildMapStopsCacheKey, createMapStopsService } from './map-stops-service.js';
 
 function feature(
   stopId: string,

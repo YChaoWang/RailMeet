@@ -32,9 +32,9 @@ async function main(): Promise<void> {
     loadDotenv({ path: envPath });
   }
 
-  const connectionString = process.env['DATABASE_URL'];
+  const connectionString = process.env['DATABASE_URL_DIRECT'] ?? process.env['DATABASE_URL'];
   if (!connectionString) {
-    console.error('DATABASE_URL is required to run migrations');
+    console.error('DATABASE_URL or DATABASE_URL_DIRECT is required to run migrations');
     process.exit(1);
   }
 

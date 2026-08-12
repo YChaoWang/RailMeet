@@ -44,10 +44,7 @@ export function isMapStopsViewportEligible(
  * Build a map-stops query from MapLibre-style west/south/east/north bounds.
  * Does not call Transitous — routes through the Next.js API proxy.
  */
-export function mapStopsQueryFromBounds(
-  bounds: MapStopsBounds,
-  zoom: number,
-): MapStopsQuery {
+export function mapStopsQueryFromBounds(bounds: MapStopsBounds, zoom: number): MapStopsQuery {
   return {
     minLon: bounds.minLon,
     minLat: bounds.minLat,

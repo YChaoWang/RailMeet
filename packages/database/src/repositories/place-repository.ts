@@ -31,6 +31,12 @@ function mapPlace(row: typeof places.$inferSelect): PlaceRecord {
     parentCityId: row.parentCityId,
     provider: row.provider,
     providerPlaceId: row.providerPlaceId,
+    ownership: row.ownership,
+    sourceVersion: row.sourceVersion,
+    normalizedName: row.normalizedName,
+    population: row.population ?? null,
+    featureCode: row.featureCode ?? null,
+    active: row.active,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -118,6 +124,9 @@ export function createPlaceRepository(db: Db): PlaceRepository {
           parentCityId: null,
           provider: command.provider,
           providerPlaceId: command.providerPlaceId,
+          ownership: 'provider:motis',
+          normalizedName: command.name.trim().toLowerCase(),
+          active: true,
           createdAt: now,
           updatedAt: now,
         })
@@ -130,6 +139,9 @@ export function createPlaceRepository(db: Db): PlaceRepository {
             countryCode: command.countryCode,
             timezone: command.timezone,
             location: { x: command.location.longitude, y: command.location.latitude },
+            ownership: 'provider:motis',
+            normalizedName: command.name.trim().toLowerCase(),
+            active: true,
             updatedAt: now,
           },
         })

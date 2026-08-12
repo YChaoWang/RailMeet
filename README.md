@@ -147,10 +147,88 @@ migrations against disposable PostGIS via Testcontainers.
 
 ## Current limitations
 
-- Ranking results are persisted but not exposed via a public results/progress API or frontend (Phase 9)
-- No place seed/import pipeline
-- Parent-city “must be kind=city” is not DB-enforced
+- **European coverage follows Transitous** — meeting cities and schedules are limited to
+  locations and feeds available through [Transitous](https://transitous.org). The catalog is
+  imported from GeoNames + Transitous hub enrichment; production readiness is
+  `production-catalog-partial` until every tier-eligible city has an authoritative hub.
+- **Manual catalog import** — run `pnpm catalog:download`, `catalog:build`, `catalog:enrich-hubs`,
+  and `catalog:import` against production Postgres before live searches (see
+  [packages/catalog/README.md](./packages/catalog/README.md)).
 - No authentication or user ownership
-- No cancellation, SSE, maps, or deployment config
-- `/ready` probe not yet implemented
-- Existing Phase 5 jobs retain their original unbounded retention options and may remain indefinitely unless explicitly cleaned up; Phase 6/7 do not automatically delete or migrate those jobs. Bounded retention applies only to newly produced jobs.
+- No search cancellation UI (backend supports terminal cancel states for future work)
+- `/ready` probe not yet implemented (use `/health`)
+- Existing Phase 5 jobs retain their original unbounded retention options
+
+## Deployment
+
+RailMeet targets a three-service layout:
+
+| Service       | Platform          | Role                                                             |
+| ------------- | ----------------- | ---------------------------------------------------------------- |
+| `apps/web`    | Vercel            | Next.js UI (same-origin API proxy or `NEXT_PUBLIC_API_BASE_URL`) |
+| `apps/api`    | Railway (public)  | Fastify API, **sole migration runner**, `/health`                |
+| `apps/worker` | Railway (private) | Outbox dispatcher + BullMQ consumers                             |
+
+Supporting infrastructure: **Neon** (PostGIS), **Railway Redis**, **Transitous** (external routing).
+
+### Environment variables by platform
+
+**Vercel (`apps/web`)**
+
+| Variable                   | Purpose                                               |
+| -------------------------- | ----------------------------------------------------- |
+| `NEXT_PUBLIC_API_BASE_URL` | Optional public API URL when not using Route Handlers |
+| `API_BASE_URL`             | Server-side proxy target (build/runtime on Vercel)    |
+
+**Railway API (`apps/api`)**
+
+| Variable                | Purpose                                                            |
+| ----------------------- | ------------------------------------------------------------------ |
+| `NODE_ENV=production`   | Enables production validation (no localhost URLs)                  |
+| `DATABASE_URL`          | Neon **pooled** runtime connection                                 |
+| `DATABASE_URL_DIRECT`   | Neon **direct** connection for `pnpm db:migrate` only              |
+| `REDIS_URL`             | Railway Redis                                                      |
+| `WEB_ORIGIN`            | Comma-separated CORS origins (Vercel production + preview + local) |
+| `API_BASE_URL`          | Public HTTPS API URL                                               |
+| `TRANSITOUS_BASE_URL`   | `https://api.transitous.org/api`                                   |
+| `TRANSITOUS_USER_AGENT` | `RailMeet/<version> (+https://…)`                                  |
+
+**Railway Worker (`apps/worker`)**
+
+| Variable              | Purpose                                     |
+| --------------------- | ------------------------------------------- |
+| `NODE_ENV=production` | Production validation                       |
+| `DATABASE_URL`        | Neon pooled connection                      |
+| `REDIS_URL`           | Railway Redis (BullMQ + routing plan cache) |
+| `API_BASE_URL`        | Internal reference URL                      |
+| `TRANSITOUS_*`        | Same as API                                 |
+
+**Neon**
+
+- Enable PostGIS: migrations run `CREATE EXTENSION IF NOT EXISTS postgis`
+- Use pooled `DATABASE_URL` for API/worker runtime
+- Use direct `DATABASE_URL_DIRECT` for migrations (`pnpm db:migrate` from API deploy)
+
+### Build commands
+
+```bash
+pnpm --filter @railmeet/web build
+pnpm --filter @railmeet/api build && node apps/api/dist/index.js
+pnpm --filter @railmeet/worker build && node --enable-source-maps apps/worker/dist/index.js
+```
+
+See `apps/web/vercel.json`, `apps/api/railway.toml`, and `apps/worker/railway.toml` for platform defaults.
+
+## Transitous attribution
+
+Routing data © [Transitous](https://transitous.org) contributors and underlying GTFS/OSM sources.
+RailMeet uses the public MOTIS API; respect provider rate limits (max **18** plan calls and **2**
+concurrent requests per search).
+
+## Product scope (verified)
+
+- **2–6 participants** end to end (shared `SEARCH_LIMITS` / validation)
+- **Progressive candidate evaluation** — up to **3** meeting cities, stopping early when feasible
+- **Four ranking modes** — fairest, fastest overall, fewest transfers, arrive together
+- **Modes** — train, bus, tram, metro, ferry (via MOTIS normalization)
+- **Async lifecycle** — queued → running → completed/failed with polling UI

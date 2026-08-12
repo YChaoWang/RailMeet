@@ -62,29 +62,14 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
       return;
     }
     const modeRows = rankingsForMode(results, rankingMode);
-    const first = modeRows[0];
+    const first = modeRows.find((row) => row.rank === 1) ?? modeRows[0];
     if (!first) {
       setSelectedKey(null);
       return;
     }
-    // Prefer preserving the same destination when switching modes; otherwise rank 1.
-    setSelectedKey((current) => {
-      if (current) {
-        const preserved = modeRows.find((row) => {
-          const key = candidateSelectionKey(row.rankingMode, row.rank, row.destination.placeId);
-          const placeId = current.split(':').slice(2).join(':');
-          return row.destination.placeId === placeId || key === current;
-        });
-        if (preserved) {
-          return candidateSelectionKey(
-            preserved.rankingMode,
-            preserved.rank,
-            preserved.destination.placeId,
-          );
-        }
-      }
-      return candidateSelectionKey(first.rankingMode, first.rank, first.destination.placeId);
-    });
+    // Mode switches must select that mode's rank-1 winner (and its journey set).
+    // Do not keep the previous destination — winners differ across modes.
+    setSelectedKey(candidateSelectionKey(first.rankingMode, first.rank, first.destination.placeId));
   }, [results, rankingMode]);
 
   const scene: MapScene = useMemo(

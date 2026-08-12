@@ -5,7 +5,7 @@ import {
   type RankingRoutingWorkInput,
 } from '@railmeet/search-engine';
 import type { RankingMode, SearchStatus } from '@railmeet/shared';
-import { RANKING_MODES } from '@railmeet/shared';
+import { RANKING_MODES, SEARCH_LIMITS } from '@railmeet/shared';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
@@ -32,6 +32,10 @@ import {
   type NormalizedJourneyLegJson,
 } from '../schema/tables.js';
 import type * as schema from '../schema/index.js';
+import type {
+  ExpandRoutingWaveInput,
+  SearchPipelineRepository,
+} from './search-pipeline-repository.js';
 
 type Db = PostgresJsDatabase<typeof schema>;
 
@@ -90,10 +94,15 @@ function assertFeasibility(value: string): CandidateFeasibilityReason {
   throw new Error(`Unexpected feasibility: ${value}`);
 }
 
-export function createFinalizationRepository(db: Db): FinalizationRepository {
+export function createFinalizationRepository(
+  db: Db,
+  searchPipeline: SearchPipelineRepository,
+): FinalizationRepository {
   return {
     async finalizeMeetingSearch(searchId) {
-      return db.transaction(async (tx) => {
+      let expandWave: ExpandRoutingWaveInput | null = null;
+
+      const result: FinalizeMeetingSearchResult = await db.transaction(async (tx) => {
         const locked = await tx.execute(sql`
           SELECT id, status, ranking_mode, started_at, completed_at, failed_at
           FROM meeting_searches
@@ -132,7 +141,14 @@ export function createFinalizationRepository(db: Db): FinalizationRepository {
           return { outcome: 'not_ready', searchId };
         }
         if (generation.status === 'failed_permanent') {
-          return failSearch(tx, searchId, 'CANDIDATE_GENERATION_FAILED');
+          const mapped =
+            generation.errorCode === 'CANDIDATE_CATALOG_NOT_READY' ||
+            generation.errorCode === 'CANDIDATES_HAVE_NO_ROUTING_TARGET' ||
+            generation.errorCode === 'NO_CANDIDATES_IN_SEARCH_AREA' ||
+            generation.errorCode === 'NO_CANDIDATES_MATCH_CONSTRAINTS'
+              ? generation.errorCode
+              : 'CANDIDATE_GENERATION_FAILED';
+          return failSearch(tx, searchId, mapped);
         }
 
         const participants = await tx
@@ -163,13 +179,29 @@ export function createFinalizationRepository(db: Db): FinalizationRepository {
         }
 
         const participantIds = participants.map((row) => row.participantId);
-        const expectedWork = participants.length * candidates.length;
-        if (workRows.length !== expectedWork) {
-          const nonterminal = workRows.some((row) => !TERMINAL_ROUTING.has(row.status));
-          if (nonterminal || workRows.length < expectedWork) {
-            // Missing pairs may still be pending creation only during fan-out; treat incomplete as not_ready
-            // unless every present row is terminal and counts still mismatch → invariant.
-            if (workRows.every((row) => TERMINAL_ROUTING.has(row.status))) {
+
+        const destinationsWithWork = new Set(workRows.map((row) => row.destinationPlaceId));
+        const activeCandidates = candidates.filter((candidate) =>
+          destinationsWithWork.has(candidate.destinationPlaceId),
+        );
+
+        if (activeCandidates.length === 0) {
+          return { outcome: 'not_ready', searchId };
+        }
+
+        const maxOrdinalWithWork = activeCandidates.reduce(
+          (max, candidate) => Math.max(max, candidate.ordinal),
+          -1,
+        );
+        const expectedWork = participantIds.length * activeCandidates.length;
+        const activeWork = workRows.filter((row) =>
+          destinationsWithWork.has(row.destinationPlaceId),
+        );
+
+        if (activeWork.length !== expectedWork) {
+          const nonterminal = activeWork.some((row) => !TERMINAL_ROUTING.has(row.status));
+          if (nonterminal || activeWork.length < expectedWork) {
+            if (activeWork.every((row) => TERMINAL_ROUTING.has(row.status))) {
               return failSearch(tx, searchId, 'INVARIANT_VIOLATION');
             }
             return { outcome: 'not_ready', searchId };
@@ -177,14 +209,13 @@ export function createFinalizationRepository(db: Db): FinalizationRepository {
           return failSearch(tx, searchId, 'INVARIANT_VIOLATION');
         }
 
-        if (workRows.some((row) => !TERMINAL_ROUTING.has(row.status))) {
+        if (activeWork.some((row) => !TERMINAL_ROUTING.has(row.status))) {
           return { outcome: 'not_ready', searchId };
         }
 
-        // Pair completeness
-        for (const candidate of candidates) {
+        for (const candidate of activeCandidates) {
           for (const participantId of participantIds) {
-            const match = workRows.find(
+            const match = activeWork.find(
               (row) =>
                 row.destinationPlaceId === candidate.destinationPlaceId &&
                 row.participantId === participantId,
@@ -214,7 +245,7 @@ export function createFinalizationRepository(db: Db): FinalizationRepository {
           journeysByWork.set(row.workId, list);
         }
 
-        for (const work of workRows) {
+        for (const work of activeWork) {
           const journeys = journeysByWork.get(work.id) ?? [];
           if (work.status === 'succeeded' && journeys.length === 0) {
             return failSearch(tx, searchId, 'INVARIANT_VIOLATION');
@@ -227,7 +258,7 @@ export function createFinalizationRepository(db: Db): FinalizationRepository {
           }
         }
 
-        const routingWork: RankingRoutingWorkInput[] = workRows.map((work) => {
+        const routingWork: RankingRoutingWorkInput[] = activeWork.map((work) => {
           const journeys = (journeysByWork.get(work.id) ?? []).map(
             (journey): RankingJourneyInput => ({
               journeyId: journey.id,
@@ -250,7 +281,7 @@ export function createFinalizationRepository(db: Db): FinalizationRepository {
 
         const evaluations = evaluateCandidateFeasibility({
           participantIds,
-          candidates: candidates.map((row) => ({
+          candidates: activeCandidates.map((row) => ({
             candidateId: row.destinationPlaceId,
             destinationPlaceId: row.destinationPlaceId,
             ordinal: row.ordinal,
@@ -281,12 +312,23 @@ export function createFinalizationRepository(db: Db): FinalizationRepository {
 
         const feasibleCount = evaluations.filter((row) => row.feasibility === 'feasible').length;
         if (feasibleCount === 0) {
+          const canExpand =
+            maxOrdinalWithWork < candidates.length - 1 &&
+            maxOrdinalWithWork < SEARCH_LIMITS.maximumCandidates - 1;
+          if (canExpand) {
+            expandWave = {
+              searchId,
+              fanOutMaxOrdinal: maxOrdinalWithWork + 1,
+              participantIds,
+            };
+            return { outcome: 'not_ready', searchId };
+          }
           return completeSearch(tx, searchId, 'no_feasible_candidates', null);
         }
 
         const ranked = rankAllModes({
           participantIds,
-          candidates: candidates.map((row) => ({
+          candidates: activeCandidates.map((row) => ({
             candidateId: row.destinationPlaceId,
             destinationPlaceId: row.destinationPlaceId,
             ordinal: row.ordinal,
@@ -366,6 +408,12 @@ export function createFinalizationRepository(db: Db): FinalizationRepository {
 
         return completeSearch(tx, searchId, 'ranked', recommendation);
       });
+
+      if (expandWave) {
+        await searchPipeline.expandCandidateRoutingWave(expandWave);
+      }
+
+      return result;
     },
 
     async loadRankedResults(searchId) {

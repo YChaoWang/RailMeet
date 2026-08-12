@@ -56,7 +56,7 @@ export function createDatabase(config: DatabaseConfig): Database {
   const meetingSearches = createMeetingSearchRepository(db);
   const outbox = createOutboxRepository(db);
   const searchPipeline = createSearchPipelineRepository(db);
-  const finalization = createFinalizationRepository(db);
+  const finalization = createFinalizationRepository(db, searchPipeline);
 
   return {
     db,

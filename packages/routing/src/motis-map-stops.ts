@@ -41,28 +41,20 @@ const KIND_PRIORITY: Record<StationKind, number> = {
   other: 5,
 };
 
+import { mapMotisLegMode } from './motis-mode.js';
+
 function mapModeToKind(mode: string): StationKind {
-  const normalized = mode.trim().toUpperCase().replace(/[\s-]+/g, '_');
-  switch (normalized) {
-    case 'RAIL':
-    case 'HIGHSPEED_RAIL':
-    case 'LONG_DISTANCE':
-    case 'NIGHT_RAIL':
-    case 'REGIONAL_RAIL':
-    case 'REGIONAL_FAST_RAIL':
-    case 'SUBURBAN':
-    case 'TRAIN':
+  const mapped = mapMotisLegMode(mode);
+  switch (mapped) {
+    case 'train':
       return 'rail';
-    case 'SUBWAY':
-    case 'METRO':
+    case 'metro':
       return 'metro';
-    case 'TRAM':
+    case 'tram':
       return 'tram';
-    case 'FERRY':
-    case 'BOAT':
+    case 'ferry':
       return 'ferry';
-    case 'BUS':
-    case 'COACH':
+    case 'bus':
       return 'bus';
     default:
       return 'other';
@@ -142,9 +134,7 @@ export function normalizeMotisMapStopsResponse(payload: unknown): StationFeature
       continue;
     }
 
-    const modes = (place.modes ?? [])
-      .map((mode) => mode.trim())
-      .filter((mode) => mode.length > 0);
+    const modes = (place.modes ?? []).map((mode) => mode.trim()).filter((mode) => mode.length > 0);
     const importanceScore = place.importance ?? 0;
     const feature: StationFeature = {
       type: 'Feature',
@@ -181,8 +171,7 @@ export function normalizeMotisMapStopsResponse(payload: unknown): StationFeature
       if (importanceCmp !== 0) {
         return importanceCmp;
       }
-      const kindCmp =
-        KIND_PRIORITY[left.properties.kind] - KIND_PRIORITY[right.properties.kind];
+      const kindCmp = KIND_PRIORITY[left.properties.kind] - KIND_PRIORITY[right.properties.kind];
       if (kindCmp !== 0) {
         return kindCmp;
       }

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redis';
 import { Queue, UnrecoverableError } from 'bullmq';
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDatabase, type Database } from '@railmeet/database';
@@ -25,6 +26,51 @@ import { createRoutingConsumer } from './routing-consumer.js';
 import { closeRedisConnection, createRedisConnection } from './redis.js';
 
 const POSTGIS_IMAGE = 'ghcr.io/baosystems/postgis:16-3.5';
+
+async function attachEligibleHub(database: Database, cityId: string, hubId: string): Promise<void> {
+  await database.db.execute(sql`
+    UPDATE places
+    SET
+      ownership = 'catalog:geonames',
+      population = 500000,
+      feature_code = 'PPLC',
+      provider = 'geonames',
+      provider_place_id = ${cityId},
+      active = true
+    WHERE id = ${cityId}
+  `);
+  await database.db.execute(sql`
+    INSERT INTO places (
+      id, name, kind, country_code, timezone, location,
+      ownership, provider, provider_place_id, active
+    )
+    SELECT
+      ${hubId},
+      ${`${cityId} hub`},
+      'station',
+      country_code,
+      timezone,
+      location,
+      'catalog:transitous',
+      'motis',
+      ${`motis-${hubId}`},
+      true
+    FROM places
+    WHERE id = ${cityId}
+    ON CONFLICT (id) DO UPDATE SET
+      ownership = EXCLUDED.ownership,
+      provider = EXCLUDED.provider,
+      provider_place_id = EXCLUDED.provider_place_id,
+      active = true
+  `);
+  await database.db.execute(sql`
+    INSERT INTO meeting_city_hubs (
+      city_place_id, hub_place_id, priority, distance_meters, match_method, source, regional, active
+    )
+    VALUES (${cityId}, ${hubId}, 0, 0, 'test-fixture', 'test', false, true)
+    ON CONFLICT (city_place_id, hub_place_id) DO UPDATE SET active = true, priority = 0
+  `);
+}
 
 const testJobOptions = {
   attempts: 3,
@@ -193,6 +239,9 @@ describe('Phase 7 candidate fan-out and routing integration', () => {
     ]) {
       await database.places.create(place);
     }
+    await attachEligibleHub(database, 'place:berlin', 'place:berlin-hub');
+    await attachEligibleHub(database, 'place:paris', 'place:paris-hub');
+    await attachEligibleHub(database, 'place:munich', 'place:munich-hub');
 
     const redisUrl = redisContainer.getConnectionUrl();
     redis = createRedisConnection({
@@ -423,53 +472,51 @@ describe('Phase 7 candidate fan-out and routing integration', () => {
     void candidateConsumer.worker.run();
     void routingConsumer.worker.run();
 
-    for (let i = 0; i < 10; i += 1) {
-      await dispatcher.runOnce();
-      await new Promise((r) => setTimeout(r, 150));
-    }
+    try {
+      await waitFor(async () => {
+        await dispatcher.runOnce();
+        const routingEvents = (await database.outbox.findByAggregateId(search.id)).filter(
+          (event) => event.eventType === 'routing.requested',
+        );
+        if (routingEvents.length === 0) {
+          return false;
+        }
+        for (const event of routingEvents) {
+          const workId = (event.payload as { routingWorkId: string }).routingWorkId;
+          const work = await database.searchPipeline.findRoutingWorkById(workId);
+          if (!work || (work.status !== 'succeeded' && work.status !== 'no_journeys')) {
+            return false;
+          }
+        }
+        return true;
+      }, 45_000);
 
-    await waitFor(async () => {
+      const candidates = await database.searchPipeline.listCandidates(search.id);
+      expect(candidates.length).toBeGreaterThan(0);
+      expect(planCalls).toBeGreaterThan(0);
+
+      const workCount = await database.searchPipeline.countRoutingWorkForSearch(search.id);
+      expect(workCount).toBe(candidates.length * 2);
+
       const routingEvents = (await database.outbox.findByAggregateId(search.id)).filter(
         (event) => event.eventType === 'routing.requested',
       );
-      if (routingEvents.length === 0) {
-        return false;
-      }
+      const persisted = [];
       for (const event of routingEvents) {
         const workId = (event.payload as { routingWorkId: string }).routingWorkId;
-        const work = await database.searchPipeline.findRoutingWorkById(workId);
-        if (!work || (work.status !== 'succeeded' && work.status !== 'no_journeys')) {
-          return false;
-        }
+        persisted.push(...(await database.searchPipeline.listJourneysForRoutingWork(workId)));
       }
-      return true;
-    }, 30_000);
+      expect(persisted.length).toBeGreaterThan(0);
+      assertNormalizedJourneyPersistence(persisted);
 
-    const candidates = await database.searchPipeline.listCandidates(search.id);
-    expect(candidates.length).toBeGreaterThan(0);
-    expect(planCalls).toBeGreaterThan(0);
-
-    const workCount = await database.searchPipeline.countRoutingWorkForSearch(search.id);
-    expect(workCount).toBe(candidates.length * 2);
-
-    const routingEvents = (await database.outbox.findByAggregateId(search.id)).filter(
-      (event) => event.eventType === 'routing.requested',
-    );
-    const persisted = [];
-    for (const event of routingEvents) {
-      const workId = (event.payload as { routingWorkId: string }).routingWorkId;
-      persisted.push(...(await database.searchPipeline.listJourneysForRoutingWork(workId)));
+      expect((await database.meetingSearches.findById(search.id))?.status).toBe('running');
+    } finally {
+      await kickoff.close(5_000);
+      await candidateConsumer.close(5_000);
+      await routingConsumer.close(5_000);
+      await publisher.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
-    expect(persisted.length).toBeGreaterThan(0);
-    assertNormalizedJourneyPersistence(persisted);
-
-    expect((await database.meetingSearches.findById(search.id))?.status).toBe('running');
-
-    await kickoff.close(5_000);
-    await candidateConsumer.close(5_000);
-    await routingConsumer.close(5_000);
-    await publisher.close();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
   }, 90_000);
 
   it('marks empty Transitous responses as no_journeys without failing the search', async () => {

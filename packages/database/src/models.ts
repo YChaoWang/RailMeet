@@ -28,6 +28,12 @@ export type PlaceRecord = {
   readonly parentCityId: string | null;
   readonly provider: string | null;
   readonly providerPlaceId: string | null;
+  readonly ownership: string;
+  readonly sourceVersion: string | null;
+  readonly normalizedName: string | null;
+  readonly population: number | null;
+  readonly featureCode: string | null;
+  readonly active: boolean;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
@@ -210,6 +216,8 @@ export type MeetingSearchCandidateRecord = {
   readonly destinationPlaceId: string;
   readonly ordinal: number;
   readonly distanceMeters: number;
+  readonly routingHubPlaceId: string | null;
+  readonly routingTargetReason: 'hub' | 'centroid_fallback' | null;
   readonly createdAt: Date;
 };
 

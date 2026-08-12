@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "role": "offline-test-fixture",
+  "artifact": "data/fixtures/offline-europe-v1.json",
+  "importerItArtifact": "data/fixtures/importer-it-v1.json",
+  "warning": "These fixtures are NOT the production European catalog. Fixture-only imports never satisfy production readiness.",
+  "production": {
+    "geonamesManifest": "data/manifests/geonames-cities15000.json",
+    "transitousHubsManifest": "data/manifests/transitous-hubs.json",
+    "citiesArtifact": "data/artifacts/europe-cities-geonames-v1.json (gitignored)",
+    "hubsArtifact": "data/artifacts/europe-hubs-transitous-v1.json (gitignored)",
+    "mergedArtifact": "data/artifacts/europe-production-catalog-v1.json (gitignored)"
+  }
+}

@@ -27,8 +27,7 @@ vi.mock('@/lib/map-stops-client', () => ({
     minLat: number;
     maxLon: number;
     maxLat: number;
-  }) =>
-    bounds.maxLon - bounds.minLon <= 0.4 && bounds.maxLat - bounds.minLat <= 0.4,
+  }) => bounds.maxLon - bounds.minLon <= 0.4 && bounds.maxLat - bounds.minLat <= 0.4,
   fetchMapStops: (...args: unknown[]) => fetchMapStops(...args),
 }));
 

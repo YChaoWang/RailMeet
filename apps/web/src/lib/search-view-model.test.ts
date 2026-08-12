@@ -127,6 +127,7 @@ describe('search view model', () => {
     expect(emptyOutcomeMessage('no_candidates')).toContain('No meeting cities');
     expect(emptyOutcomeMessage('no_feasible_candidates')).toContain('No destination');
     expect(failureMessage('ROUTING_TECHNICAL_FAILURE')).toContain('Journey planning');
+    expect(failureMessage('CANDIDATE_CATALOG_NOT_READY')).toContain('catalog');
     expect(isUuid('44444444-4444-4444-8444-444444444444')).toBe(true);
     expect(isUuid('not-a-uuid')).toBe(false);
   });

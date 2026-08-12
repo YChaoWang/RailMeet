@@ -83,6 +83,318 @@ function buildFixture() {
 }
 
 describe('rankAllModes', () => {
+  it('separates all four mode winners with three participants and four candidates', () => {
+    /**
+     * Metrics (single journey per participant → selection forced):
+     * | Cand | Durations   | Total | Max | Transfers | Spread |
+     * | A    | 20,20,100   | 140   | 100 | 3         | 80 min |
+     * | B    | 50,50,50    | 150   | 50  | 6         | 90 min |
+     * | C    | 70,70,70    | 210   | 70  | 0         | 30 min |
+     * | D    | 55,55,55    | 165   | 55  | 3         | 10 min |
+     * Expected winners: fastest→A, fairest→B, fewest→C, arrive-together→D
+     */
+    const A = 'cand:A';
+    const B = 'cand:B';
+    const C = 'cand:C';
+    const D = 'cand:D';
+    const result = rankAllModes({
+      participantIds: ['p1', 'p2', 'p3'],
+      candidates: [
+        { candidateId: A, destinationPlaceId: A, ordinal: 0 },
+        { candidateId: B, destinationPlaceId: B, ordinal: 1 },
+        { candidateId: C, destinationPlaceId: C, ordinal: 2 },
+        { candidateId: D, destinationPlaceId: D, ordinal: 3 },
+      ],
+      routingWork: [
+        succeeded('a1', 'p1', A, [
+          j('a-p1', 'p1', A, 20, 1, '2026-06-15T08:00:00.000Z', '2026-06-15T08:20:00.000Z'),
+        ]),
+        succeeded('a2', 'p2', A, [
+          j('a-p2', 'p2', A, 20, 1, '2026-06-15T08:00:00.000Z', '2026-06-15T08:20:00.000Z'),
+        ]),
+        succeeded('a3', 'p3', A, [
+          j('a-p3', 'p3', A, 100, 1, '2026-06-15T08:00:00.000Z', '2026-06-15T09:40:00.000Z'),
+        ]),
+        succeeded('b1', 'p1', B, [
+          j('b-p1', 'p1', B, 50, 2, '2026-06-15T08:00:00.000Z', '2026-06-15T08:50:00.000Z'),
+        ]),
+        succeeded('b2', 'p2', B, [
+          j('b-p2', 'p2', B, 50, 2, '2026-06-15T08:30:00.000Z', '2026-06-15T09:20:00.000Z'),
+        ]),
+        succeeded('b3', 'p3', B, [
+          j('b-p3', 'p3', B, 50, 2, '2026-06-15T09:30:00.000Z', '2026-06-15T10:20:00.000Z'),
+        ]),
+        succeeded('c1', 'p1', C, [
+          j('c-p1', 'p1', C, 70, 0, '2026-06-15T08:00:00.000Z', '2026-06-15T09:10:00.000Z'),
+        ]),
+        succeeded('c2', 'p2', C, [
+          j('c-p2', 'p2', C, 70, 0, '2026-06-15T08:15:00.000Z', '2026-06-15T09:25:00.000Z'),
+        ]),
+        succeeded('c3', 'p3', C, [
+          j('c-p3', 'p3', C, 70, 0, '2026-06-15T08:30:00.000Z', '2026-06-15T09:40:00.000Z'),
+        ]),
+        succeeded('d1', 'p1', D, [
+          j('d-p1', 'p1', D, 55, 1, '2026-06-15T08:00:00.000Z', '2026-06-15T08:55:00.000Z'),
+        ]),
+        succeeded('d2', 'p2', D, [
+          j('d-p2', 'p2', D, 55, 1, '2026-06-15T08:05:00.000Z', '2026-06-15T09:00:00.000Z'),
+        ]),
+        succeeded('d3', 'p3', D, [
+          j('d-p3', 'p3', D, 55, 1, '2026-06-15T08:10:00.000Z', '2026-06-15T09:05:00.000Z'),
+        ]),
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    const order = (modeName: string) =>
+      result.modes
+        .find((entry) => entry.rankingMode === modeName)!
+        .rankings.map((row) => row.candidateId);
+
+    expect(order('fastest-overall')).toEqual([A, B, D, C]);
+    expect(order('fairest')).toEqual([B, D, C, A]);
+    expect(order('fewest-transfers')).toEqual([C, A, D, B]);
+    expect(order('arrive-together')).toEqual([D, C, A, B]);
+
+    const summarize = (modeName: string, candidateId: string) => {
+      const row = result.modes
+        .find((entry) => entry.rankingMode === modeName)!
+        .rankings.find((entry) => entry.candidateId === candidateId)!;
+      return {
+        rank: row.rank,
+        journeys: Object.fromEntries(
+          row.selectedJourneys.map((selected) => [selected.participantId, selected.journeyId]),
+        ),
+        totalDur: row.totalDurationMinutes,
+        maxDur: row.maxDurationMinutes,
+        range: row.durationRangeMinutes,
+        totalXfer: row.totalTransfers,
+        maxXfer: row.maxTransfers,
+        earliest: row.earliestArrivalAt.toISOString(),
+        latest: row.latestArrivalAt.toISOString(),
+        spreadMs: row.arrivalSpreadMs,
+        penaltyMs: row.arrivalPenaltyMs,
+      };
+    };
+
+    expect(summarize('fastest-overall', A)).toMatchObject({
+      rank: 1,
+      journeys: { p1: 'a-p1', p2: 'a-p2', p3: 'a-p3' },
+      totalDur: 140,
+      maxDur: 100,
+      totalXfer: 3,
+      spreadMs: 80 * 60_000,
+    });
+    expect(summarize('fairest', B)).toMatchObject({
+      rank: 1,
+      journeys: { p1: 'b-p1', p2: 'b-p2', p3: 'b-p3' },
+      totalDur: 150,
+      maxDur: 50,
+      totalXfer: 6,
+      spreadMs: 90 * 60_000,
+      penaltyMs: 30 * 60_000,
+    });
+    expect(summarize('fewest-transfers', C)).toMatchObject({
+      rank: 1,
+      journeys: { p1: 'c-p1', p2: 'c-p2', p3: 'c-p3' },
+      totalDur: 210,
+      maxDur: 70,
+      totalXfer: 0,
+      spreadMs: 30 * 60_000,
+      penaltyMs: 0,
+    });
+    expect(summarize('arrive-together', D)).toMatchObject({
+      rank: 1,
+      journeys: { p1: 'd-p1', p2: 'd-p2', p3: 'd-p3' },
+      totalDur: 165,
+      maxDur: 55,
+      totalXfer: 3,
+      spreadMs: 10 * 60_000,
+      penaltyMs: 0,
+    });
+
+    // Fairest reuses fastest journey picks on every candidate.
+    const fastest = result.modes.find((entry) => entry.rankingMode === 'fastest-overall')!;
+    const fairest = result.modes.find((entry) => entry.rankingMode === 'fairest')!;
+    for (const candidateId of [A, B, C, D]) {
+      expect(
+        fairest.rankings.find((row) => row.candidateId === candidateId)?.selectedJourneys,
+      ).toEqual(fastest.rankings.find((row) => row.candidateId === candidateId)?.selectedJourneys);
+    }
+  });
+
+  it('York beats Berlin under tolerance-aware Arrive together (strict spread-first picks Berlin)', () => {
+    /**
+     * Product counterexample (London–Edinburgh corridor vs distant hub):
+     * York:   durations 120 / 135, arrival spread 20 min
+     * Berlin: durations 720 / 760, arrival spread 0 min
+     * Strict spread-first would recommend Berlin; tolerance-aware prefers York.
+     */
+    const york = 'place:york';
+    const berlin = 'place:berlin';
+    const result = rankAllModes({
+      participantIds: ['london', 'edinburgh'],
+      candidates: [
+        { candidateId: berlin, destinationPlaceId: berlin, ordinal: 0 },
+        { candidateId: york, destinationPlaceId: york, ordinal: 1 },
+      ],
+      routingWork: [
+        succeeded('yl', 'london', york, [
+          j(
+            'york-lon',
+            'london',
+            york,
+            120,
+            0,
+            '2026-08-10T08:00:00+01:00',
+            '2026-08-10T10:00:00+01:00',
+          ),
+        ]),
+        succeeded('ye', 'edinburgh', york, [
+          j(
+            'york-edi',
+            'edinburgh',
+            york,
+            135,
+            0,
+            '2026-08-10T08:05:00+01:00',
+            '2026-08-10T10:20:00+01:00',
+          ),
+        ]),
+        succeeded('bl', 'london', berlin, [
+          j(
+            'ber-lon',
+            'london',
+            berlin,
+            720,
+            2,
+            '2026-08-10T06:00:00+01:00',
+            '2026-08-10T20:00:00+02:00',
+          ),
+        ]),
+        succeeded('be', 'edinburgh', berlin, [
+          j(
+            'ber-edi',
+            'edinburgh',
+            berlin,
+            760,
+            2,
+            '2026-08-10T05:20:00+01:00',
+            '2026-08-10T20:00:00+02:00',
+          ),
+        ]),
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    const arrive = result.modes.find((entry) => entry.rankingMode === 'arrive-together')!;
+    const yorkRow = arrive.rankings.find((row) => row.candidateId === york)!;
+    const berlinRow = arrive.rankings.find((row) => row.candidateId === berlin)!;
+
+    expect(yorkRow.arrivalSpreadMs).toBe(20 * 60_000);
+    expect(yorkRow.arrivalPenaltyMs).toBe(0);
+    expect(yorkRow.totalDurationMinutes).toBe(255);
+    expect(yorkRow.maxDurationMinutes).toBe(135);
+    // +01:00 / +02:00 arrivals both normalize to the same UTC instant for Berlin.
+    expect(berlinRow.earliestArrivalAt.toISOString()).toBe('2026-08-10T18:00:00.000Z');
+    expect(berlinRow.latestArrivalAt.toISOString()).toBe('2026-08-10T18:00:00.000Z');
+    expect(berlinRow.arrivalSpreadMs).toBe(0);
+    expect(berlinRow.arrivalPenaltyMs).toBe(0);
+    expect(berlinRow.totalDurationMinutes).toBe(1480);
+    expect(berlinRow.maxDurationMinutes).toBe(760);
+
+    // Legacy strict spread-first ordering (arrivalSpread → …) would pick Berlin.
+    const strictOrder = [yorkRow, berlinRow].sort(
+      (a, b) =>
+        a.arrivalSpreadMs - b.arrivalSpreadMs ||
+        a.totalDurationMinutes - b.totalDurationMinutes ||
+        a.maxDurationMinutes - b.maxDurationMinutes ||
+        a.totalTransfers - b.totalTransfers ||
+        a.latestArrivalAt.getTime() - b.latestArrivalAt.getTime() ||
+        a.ordinal - b.ordinal ||
+        (a.candidateId < b.candidateId ? -1 : a.candidateId > b.candidateId ? 1 : 0),
+    );
+    expect(strictOrder.map((row) => row.candidateId)).toEqual([berlin, york]);
+
+    // Production tolerance-aware comparator: equal penalties → prefer lower maxDuration → York.
+    expect(arrive.rankings.map((row) => row.candidateId)).toEqual([york, berlin]);
+    expect(arrive.rankings[0]?.rank).toBe(1);
+    expect(yorkRow.selectedJourneys.map((row) => row.journeyId).sort()).toEqual([
+      'york-edi',
+      'york-lon',
+    ]);
+  });
+
+  it('selects different journey sets per mode for one multi-journey candidate', () => {
+    const dest = 'place:meet';
+    const result = rankAllModes({
+      participantIds: ['p1', 'p2'],
+      candidates: [{ candidateId: dest, destinationPlaceId: dest, ordinal: 0 }],
+      routingWork: [
+        succeeded('w1', 'p1', dest, [
+          j('J1', 'p1', dest, 60, 1, '2026-06-15T09:00:00.000Z', '2026-06-15T10:00:00.000Z'),
+          j('J2', 'p1', dest, 75, 0, '2026-06-15T09:15:00.000Z', '2026-06-15T10:30:00.000Z'),
+        ]),
+        succeeded('w2', 'p2', dest, [
+          j('K1', 'p2', dest, 55, 2, '2026-06-15T09:45:00.000Z', '2026-06-15T10:40:00.000Z'),
+          j('K2', 'p2', dest, 65, 0, '2026-06-15T09:26:00.000Z', '2026-06-15T10:31:00.000Z'),
+        ]),
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    const pick = (modeName: string) => {
+      const row = result.modes.find((entry) => entry.rankingMode === modeName)!.rankings[0]!;
+      return {
+        journeys: Object.fromEntries(
+          row.selectedJourneys.map((selected) => [selected.participantId, selected.journeyId]),
+        ),
+        totalDur: row.totalDurationMinutes,
+        totalXfer: row.totalTransfers,
+        earliest: row.earliestArrivalAt.toISOString(),
+        latest: row.latestArrivalAt.toISOString(),
+        spreadMs: row.arrivalSpreadMs,
+      };
+    };
+
+    expect(pick('fastest-overall')).toEqual({
+      journeys: { p1: 'J1', p2: 'K1' },
+      totalDur: 115,
+      totalXfer: 3,
+      earliest: '2026-06-15T10:00:00.000Z',
+      latest: '2026-06-15T10:40:00.000Z',
+      spreadMs: 40 * 60_000,
+    });
+    expect(pick('fairest')).toEqual(pick('fastest-overall'));
+    expect(pick('fewest-transfers')).toEqual({
+      journeys: { p1: 'J2', p2: 'K2' },
+      totalDur: 140,
+      totalXfer: 0,
+      earliest: '2026-06-15T10:30:00.000Z',
+      latest: '2026-06-15T10:31:00.000Z',
+      spreadMs: 60_000,
+    });
+    // Tolerance-aware Arrive together prefers J1+K1 (maxDur 60, spread 40 within 60m)
+    // over the near-zero-spread but slower J2+K2 set.
+    expect(pick('arrive-together')).toEqual({
+      journeys: { p1: 'J1', p2: 'K1' },
+      totalDur: 115,
+      totalXfer: 3,
+      earliest: '2026-06-15T10:00:00.000Z',
+      latest: '2026-06-15T10:40:00.000Z',
+      spreadMs: 40 * 60_000,
+    });
+  });
+
   it('ranks fastest-overall by total duration with deterministic journey picks', () => {
     const result = rankAllModes(buildFixture());
     expect(result.ok).toBe(true);
@@ -328,20 +640,6 @@ describe('rankAllModes', () => {
       },
       {
         rank: 2,
-        dest: 'place:cologne',
-        // Sliding window prefers the 10-minute arrival cover (wc-*-1) over the 40-minute 0-transfer pair.
-        journeys: { a: 'wc-a-1', b: 'wc-b-1' },
-        totalDur: 250,
-        maxDur: 130,
-        range: 10,
-        totalXfer: 4,
-        maxXfer: 2,
-        earliest: '2026-06-15T10:00:00.000Z',
-        latest: '2026-06-15T10:10:00.000Z',
-        spreadMs: 600_000,
-      },
-      {
-        rank: 3,
         dest: 'place:munich',
         journeys: { a: 'wm-a-1', b: 'wm-b-0' },
         totalDur: 170,
@@ -352,6 +650,19 @@ describe('rankAllModes', () => {
         earliest: '2026-06-15T09:30:00.000Z',
         latest: '2026-06-15T10:00:00.000Z',
         spreadMs: 1_800_000,
+      },
+      {
+        rank: 3,
+        dest: 'place:cologne',
+        journeys: { a: 'wc-a-1', b: 'wc-b-1' },
+        totalDur: 250,
+        maxDur: 130,
+        range: 10,
+        totalXfer: 4,
+        maxXfer: 2,
+        earliest: '2026-06-15T10:00:00.000Z',
+        latest: '2026-06-15T10:10:00.000Z',
+        spreadMs: 600_000,
       },
     ]);
   });
@@ -366,6 +677,102 @@ describe('rankAllModes', () => {
     const a = rankAllModes(base);
     const b = rankAllModes(shuffled);
     expect(a).toEqual(b);
+  });
+
+  it('does not leak candidates or rankings across independent search fixtures', () => {
+    const searchA = rankAllModes({
+      participantIds: ['a', 'b'],
+      candidates: [{ candidateId: 'place:berlin', destinationPlaceId: 'place:berlin', ordinal: 0 }],
+      routingWork: [
+        succeeded('a1', 'a', 'place:berlin', [
+          j(
+            'ba',
+            'a',
+            'place:berlin',
+            60,
+            0,
+            '2026-06-15T08:00:00.000Z',
+            '2026-06-15T09:00:00.000Z',
+          ),
+        ]),
+        succeeded('a2', 'b', 'place:berlin', [
+          j(
+            'bb',
+            'b',
+            'place:berlin',
+            60,
+            0,
+            '2026-06-15T08:00:00.000Z',
+            '2026-06-15T09:00:00.000Z',
+          ),
+        ]),
+      ],
+    });
+    const searchB = rankAllModes({
+      participantIds: ['a', 'b'],
+      candidates: [{ candidateId: 'place:york', destinationPlaceId: 'place:york', ordinal: 0 }],
+      routingWork: [
+        succeeded('b1', 'a', 'place:york', [
+          j('ya', 'a', 'place:york', 40, 0, '2026-06-15T08:00:00.000Z', '2026-06-15T08:40:00.000Z'),
+        ]),
+        succeeded('b2', 'b', 'place:york', [
+          j('yb', 'b', 'place:york', 40, 0, '2026-06-15T08:00:00.000Z', '2026-06-15T08:40:00.000Z'),
+        ]),
+      ],
+    });
+    expect(searchA.ok && searchB.ok).toBe(true);
+    if (!searchA.ok || !searchB.ok) {
+      return;
+    }
+    for (const mode of searchA.modes) {
+      expect(mode.rankings.map((row) => row.candidateId)).toEqual(['place:berlin']);
+      expect(mode.rankings[0]?.selectedJourneys.map((row) => row.journeyId).sort()).toEqual([
+        'ba',
+        'bb',
+      ]);
+    }
+    for (const mode of searchB.modes) {
+      expect(mode.rankings.map((row) => row.candidateId)).toEqual(['place:york']);
+      expect(mode.rankings[0]?.selectedJourneys.map((row) => row.journeyId).sort()).toEqual([
+        'ya',
+        'yb',
+      ]);
+    }
+    // Repeated calculation is byte-equivalent for the same fixture.
+    expect(JSON.stringify(searchA)).toBe(
+      JSON.stringify(
+        rankAllModes({
+          participantIds: ['a', 'b'],
+          candidates: [
+            { candidateId: 'place:berlin', destinationPlaceId: 'place:berlin', ordinal: 0 },
+          ],
+          routingWork: [
+            succeeded('a1', 'a', 'place:berlin', [
+              j(
+                'ba',
+                'a',
+                'place:berlin',
+                60,
+                0,
+                '2026-06-15T08:00:00.000Z',
+                '2026-06-15T09:00:00.000Z',
+              ),
+            ]),
+            succeeded('a2', 'b', 'place:berlin', [
+              j(
+                'bb',
+                'b',
+                'place:berlin',
+                60,
+                0,
+                '2026-06-15T08:00:00.000Z',
+                '2026-06-15T09:00:00.000Z',
+              ),
+            ]),
+          ],
+        }),
+      ),
+    );
   });
 
   it('uses candidateId, not destinationPlaceId, as the final candidate tie-breaker', () => {
@@ -676,30 +1083,21 @@ describe('selectArriveTogetherJourneys', () => {
     );
   });
 
-  it('retains earliest-arrival after latest in the journey-set comparator (equals latest−spread)', async () => {
+  it('orders journey-set comparator by arrivalPenalty then maxDuration (not earliestArrival)', async () => {
     const source = await import('node:fs').then((fs) =>
       fs.readFileSync(new URL('./journey-selection.ts', import.meta.url), 'utf8'),
     );
-    const latestIdx = source.indexOf('candidate.latestArrival < best.latestArrival');
-    const earliestIdx = source.indexOf('candidate.earliestArrival < best.earliestArrival');
+    const penaltyIdx = source.indexOf('candidate.arrivalPenalty < best.arrivalPenalty');
+    const maxDurIdx = source.indexOf('candidate.maxDuration < best.maxDuration');
+    const spreadIdx = source.indexOf('candidate.spread < best.spread');
     const tupleIdx = source.indexOf(
       'compareJourneyIdTuples(candidate.journeyIds, best.journeyIds)',
     );
-    expect(latestIdx).toBeGreaterThan(-1);
-    expect(earliestIdx).toBeGreaterThan(latestIdx);
-    expect(tupleIdx).toBeGreaterThan(earliestIdx);
-
-    const dest = 'place:meet';
-    const selected = selectArriveTogetherJourneys(
-      journeysByParticipant([
-        [j('A', 'a', dest, 30, 0, '2026-06-15T10:00:00.000Z', '2026-06-15T10:00:00.000Z')],
-        [j('B', 'b', dest, 30, 0, '2026-06-15T10:00:00.000Z', '2026-06-15T10:10:00.000Z')],
-      ]),
-    );
-    const earliest = Math.min(...selected.map((row) => row.arrivalAt.getTime()));
-    const latest = Math.max(...selected.map((row) => row.arrivalAt.getTime()));
-    expect(latest - earliest).toBe(10 * 60_000);
-    expect(earliest).toBe(latest - (latest - earliest));
+    expect(penaltyIdx).toBeGreaterThan(-1);
+    expect(maxDurIdx).toBeGreaterThan(penaltyIdx);
+    expect(spreadIdx).toBeGreaterThan(maxDurIdx);
+    expect(tupleIdx).toBeGreaterThan(spreadIdx);
+    expect(source).not.toContain('candidate.earliestArrival < best.earliestArrival');
   });
 
   it('selects the element-wise journey-ID tuple winner for prefix-related IDs', () => {

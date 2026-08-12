@@ -12,6 +12,10 @@ export {
   MIN_TRANSFER_DURATION_MINUTES_UPPER_BOUND,
   PARTICIPANT_COUNT_MAX,
   PARTICIPANT_COUNT_MIN,
+  MIN_PARTICIPANTS,
+  MAX_PARTICIPANTS,
+  SEARCH_LIMITS,
+  ROUTING_PLAN_CACHE_TTL_MS,
   PARTICIPANT_ID_MAX_LENGTH,
   PARTICIPANT_NAME_MAX_LENGTH,
   IANA_TIMEZONE_MAX_LENGTH,
@@ -34,9 +38,19 @@ export {
   MAP_STOPS_MINIMUM_DETAIL_ZOOM,
   MAP_STOPS_IMPORTANCE_MAJOR_MIN,
   MAP_STOPS_IMPORTANCE_REGIONAL_MIN,
+  ARRIVAL_TOLERANCE_MINUTES,
+  ARRIVAL_TOLERANCE_MS,
   ENCODED_POLYLINE_POINTS_MAX_LENGTH,
   ENCODED_POLYLINE_PRECISION_MIN,
   ENCODED_POLYLINE_PRECISION_MAX,
+  /** Minimum active meeting cities required before routing is scheduled. */
+  CATALOG_MIN_ACTIVE_CITIES,
+  /** Soft max city→hub distance for ordinary stations (meters). */
+  CATALOG_HUB_DISTANCE_SOFT_MAX_METERS,
+  /** Absolute max city→hub distance unless marked regional (meters). */
+  CATALOG_HUB_DISTANCE_HARD_MAX_METERS,
+  /** Max representative hubs attempted per candidate city. */
+  CATALOG_MAX_HUBS_PER_CANDIDATE,
 } from './limits.js';
 
 export { asNonEmptyStringTuple } from './tuple.js';
@@ -64,6 +78,18 @@ export {
 } from './search-completion.js';
 export { API_ERROR_CODES, isApiErrorCode, type ApiErrorCode } from './api-error-codes.js';
 export { PLACE_KINDS, isPlaceKind, type PlaceKind } from './place-kind.js';
+export {
+  PLACE_OWNERSHIPS,
+  CATALOG_MANAGED_OWNERSHIPS,
+  PRODUCTION_CITY_OWNERSHIPS,
+  PRODUCTION_HUB_OWNERSHIPS,
+  isPlaceOwnership,
+  isCatalogManagedOwnership,
+  isProductionCityOwnership,
+  isFixtureCityOwnership,
+  type PlaceOwnership,
+  type CatalogManagedOwnership,
+} from './place-ownership.js';
 
 export { isValidCalendarDate, isValidLocalTime } from './calendar.js';
 

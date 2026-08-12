@@ -11,10 +11,7 @@ export const stationImportanceSchema = z.enum(['major', 'regional', 'local']);
 
 export const stationFeaturePropertiesSchema = z
   .object({
-    stopId: z
-      .string()
-      .min(1)
-      .max(PROVIDER_PLACE_ID_MAX_LENGTH),
+    stopId: z.string().min(1).max(PROVIDER_PLACE_ID_MAX_LENGTH),
     name: z.string().min(1).max(PLACE_NAME_MAX_LENGTH),
     kind: stationKindSchema,
     importance: stationImportanceSchema,
