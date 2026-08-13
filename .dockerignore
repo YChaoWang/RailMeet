@@ -1,0 +1,47 @@
+# Dependencies and build outputs (rebuilt inside the image)
+node_modules
+**/node_modules
+dist
+**/dist
+.turbo
+**/.turbo
+.next
+**/.next
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+
+# Git and editor
+.git
+.gitignore
+.cursor
+**/.cursor
+**/*.md
+!README.md
+
+# Tests and coverage (not needed at runtime)
+**/*.test.ts
+**/*.integration.test.ts
+coverage
+**/coverage
+
+# Catalog bulk data (not required for API/worker runtime)
+packages/catalog/data/cache
+packages/catalog/data/artifacts
+
+# Web app (not built by API/worker images)
+apps/web
+
+# Local infra definitions (Postgres/Redis run externally)
+docker-compose.yml
+docker-compose*.yml
+
+# Misc
+terminals
+**/.DS_Store
+out/
+**/out/

@@ -219,6 +219,47 @@ pnpm --filter @railmeet/worker build && node --enable-source-maps apps/worker/di
 
 See `apps/web/vercel.json`, `apps/api/railway.toml`, and `apps/worker/railway.toml` for platform defaults.
 
+### Docker (API + Worker)
+
+Multi-stage images use the **repository root** as build context, Node 20 slim, Corepack
+`pnpm@10.8.0`, and `turbo prune` so only the target app and its workspace dependencies are
+built. Images run as user `railmeet` (uid 1001), exclude `.env` files, and do **not** run
+migrations or bundle Postgres/Redis.
+
+Build:
+
+```bash
+docker build -f apps/api/Dockerfile -t railmeet-api .
+docker build -f apps/worker/Dockerfile -t railmeet-worker .
+```
+
+Run locally against **external** Postgres and Redis (not the in-container localhost defaults).
+Use `host.docker.internal` on Docker Desktop when pointing at Compose services on the host:
+
+```bash
+# API — binds 0.0.0.0, uses PORT or API_PORT (default 3001), GET /health
+docker run --rm -p 3001:3001 \
+  -e NODE_ENV=development \
+  -e DATABASE_URL=postgresql://railmeet:railmeet@host.docker.internal:5432/railmeet \
+  -e REDIS_URL=redis://host.docker.internal:6379 \
+  -e API_BASE_URL=http://localhost:3001 \
+  -e TRANSITOUS_BASE_URL=https://api.transitous.org/api \
+  railmeet-api
+
+# Worker — no HTTP port; source maps enabled
+docker run --rm \
+  -e NODE_ENV=development \
+  -e DATABASE_URL=postgresql://railmeet:railmeet@host.docker.internal:5432/railmeet \
+  -e REDIS_URL=redis://host.docker.internal:6379 \
+  -e API_BASE_URL=http://localhost:3001 \
+  -e TRANSITOUS_BASE_URL=https://api.transitous.org/api \
+  railmeet-worker
+```
+
+The API image includes a Docker `HEALTHCHECK` on `/health` (compatible with Northflank HTTP
+probes). Set `NODE_ENV=production` in real deployments; production validation rejects
+`localhost` database/redis URLs inside the container.
+
 ## Transitous attribution
 
 Routing data © [Transitous](https://transitous.org) contributors and underlying GTFS/OSM sources.

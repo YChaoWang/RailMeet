@@ -110,7 +110,10 @@ export const sharedEnvSchema = z.object({
 export const apiEnvSchema = sharedEnvSchema
   .extend({
     API_HOST: z.string().min(1).default('0.0.0.0'),
-    API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+    /** Explicit API listen port (local dev). */
+    API_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+    /** PaaS-injected listen port (Northflank/Railway/Fly). Used when API_PORT is unset. */
+    PORT: z.coerce.number().int().min(1).max(65535).optional(),
     /** Comma-separated browser origins allowed for CORS (production Vercel + local dev). */
     WEB_ORIGIN: z.string().min(1).optional(),
     TRANSITOUS_USER_AGENT: transitousUserAgentSchema.default(TRANSITOUS_DEFAULTS.userAgent),
@@ -402,7 +405,7 @@ export function toApiConfig(env: ApiEnv): ApiConfig {
     apiBaseUrl: env.API_BASE_URL,
     transitousBaseUrl: env.TRANSITOUS_BASE_URL,
     host: env.API_HOST,
-    port: env.API_PORT,
+    port: env.API_PORT ?? env.PORT ?? 3001,
     webOrigins,
     transitous: {
       baseUrl: env.TRANSITOUS_BASE_URL,

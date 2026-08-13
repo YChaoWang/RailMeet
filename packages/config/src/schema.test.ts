@@ -38,6 +38,20 @@ describe('apiEnvSchema', () => {
     expect(toApiConfig(env).port).toBe(4000);
   });
 
+  it('falls back to PORT when API_PORT is unset', () => {
+    const env = parseWithSchema(apiEnvSchema, { ...validShared, PORT: '8080' }, 'API');
+    expect(toApiConfig(env).port).toBe(8080);
+  });
+
+  it('prefers API_PORT over PORT', () => {
+    const env = parseWithSchema(
+      apiEnvSchema,
+      { ...validShared, API_PORT: '4000', PORT: '5000' },
+      'API',
+    );
+    expect(toApiConfig(env).port).toBe(4000);
+  });
+
   it('rejects a missing DATABASE_URL', () => {
     const { DATABASE_URL: _removed, ...rest } = validShared;
     expect(() => parseWithSchema(apiEnvSchema, rest, 'API')).toThrow(ConfigError);
