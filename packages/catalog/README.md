@@ -50,10 +50,18 @@ pnpm catalog:download --source geonames       # manual; writes cache + manifest 
 pnpm catalog:build --source geonames          # parse → europe-cities-geonames-v1.json
 pnpm catalog:enrich-hubs --dry-run            # report eligible cities needing hubs
 pnpm catalog:enrich-hubs [--limit N] [--refresh]  # manual Transitous STOP association
+pnpm catalog:remap-hub-ids                    # rewrite hub IDs to hash-safe unique form + merge
+pnpm catalog:cleanup-fixture                  # dry-run: report legacy fixture:offline-europe-v1 rows
+pnpm catalog:cleanup-fixture --apply          # delete fixture cities + parented catalog:hub stations
 pnpm catalog:import --source fixture          # import offline fixture (not production-ready)
 pnpm catalog:import --source production       # import merged production artifact
 pnpm catalog:status                           # readiness + coverage metrics
 ```
+
+`catalog:import` prefers `DATABASE_URL_DIRECT` (Neon direct) and falls back to `DATABASE_URL`.
+It preloads existing catalog places once, then upserts cities/hubs/associations in batches of
+250–500 rows with progress lines (`cities 500/6075`). Batches commit independently so an
+interrupted run can be safely retried.
 
 Enrichment is manual only: not during migrate, startup, test, typecheck, or build.
 
@@ -101,6 +109,12 @@ Deterministic precedence:
 Within a level: capability class → geodesic distance → stable provider stop ID.
 Insertion order is never significant.
 
+Hub place IDs are `place:hub:motis:{readableSlug}-{sha256[:16]}` of
+`provider` + NUL + `providerPlaceId` (see `buildCatalogHubPlaceId`). Truncation alone
+is never used for uniqueness; duplicate hub IDs fail validation. Run
+`pnpm catalog:remap-hub-ids` after upgrading the ID scheme to rewrite sidecar + production
+artifacts.
+
 Caches that omit `modes` are treated as stale and refreshed on the next network enrich.
 
 ## Ownership
@@ -114,6 +128,18 @@ Caches that omit `modes` are treated as stale and refreshed on the next network 
 | `catalog:hub`               | Hub rows without provider stop IDs (fixture/legacy) |
 | `fixture:offline-europe-v1` | Offline fixture cities                              |
 | `provider:motis`            | Runtime autocomplete origins                        |
+
+One-time cleanup of a legacy fixture import that leaked into a DB that also has production
+GeoNames/Transitous data:
+
+```bash
+pnpm catalog:cleanup-fixture           # dry-run report (default)
+pnpm catalog:cleanup-fixture --apply   # delete only fixture cities + their catalog:hub stations
+```
+
+Dry-run is default. `--apply` aborts if search/user rows reference fixture places, or if a
+non-`catalog:hub` station is parented under a fixture city. It never deletes all `catalog:hub`
+rows — only stations whose `parent_city_id` is a fixture city.
 
 ## Readiness
 

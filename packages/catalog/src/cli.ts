@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createDatabase, type Database } from '@railmeet/database';
 import { config as loadDotenv } from 'dotenv';
 
-import { getCatalogReadiness } from './cli-lib.js';
+import { getCatalogReadiness } from './status.js';
 import { isMeetingCityTierEligible, MEETING_CITY_POLICY_VERSION } from './eligibility.js';
 import {
   downloadGeonamesCities15000,
@@ -13,7 +13,11 @@ import {
   verifyGeonamesChecksum,
 } from './geonames-download.js';
 import { buildGeonamesCitiesArtifact, parseGeonamesCitiesFile } from './geonames-parse.js';
-import { importCatalogArtifact, loadCatalogArtifactFile } from './import.js';
+import {
+  importCatalogArtifact,
+  loadCatalogArtifactFile,
+  printCatalogImportProgress,
+} from './import.js';
 import {
   artifactsDir,
   cacheDir,
@@ -30,6 +34,14 @@ import {
   mergeCitiesAndHubs,
   writeHubsArtifact,
 } from './transitous-hubs.js';
+import {
+  findHubIdCollisions,
+  remapCatalogHubIds,
+} from './hub-id.js';
+import {
+  cleanupOfflineFixture,
+  FixtureCleanupAbortedError,
+} from './cleanup-fixture.js';
 import { validateCatalogArtifact } from './validate.js';
 import type { CatalogArtifact } from './types.js';
 
@@ -41,9 +53,14 @@ function loadEnv(): void {
 
 async function withDatabase<T>(fn: (database: Database) => Promise<T>): Promise<T> {
   loadEnv();
-  const connectionString = process.env['DATABASE_URL'];
+  const connectionString = process.env['DATABASE_URL_DIRECT'] ?? process.env['DATABASE_URL'];
   if (!connectionString) {
-    throw new Error('DATABASE_URL is required');
+    throw new Error('DATABASE_URL_DIRECT or DATABASE_URL is required');
+  }
+  if (process.env['DATABASE_URL_DIRECT']) {
+    console.error('catalog import using DATABASE_URL_DIRECT');
+  } else {
+    console.error('catalog import using DATABASE_URL (DATABASE_URL_DIRECT unset)');
   }
   const database = createDatabase({ connectionString });
   try {
@@ -317,6 +334,49 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  if (command === 'remap-hub-ids') {
+    const hubsPath =
+      typeof flags['hubs'] === 'string' ? flags['hubs'] : transitousHubsArtifactPath();
+    const citiesPath =
+      typeof flags['cities'] === 'string' ? flags['cities'] : geonamesCitiesArtifactPath();
+    const loaded = loadHubsSidecar(hubsPath);
+    const before = findHubIdCollisions(loaded.hubs);
+    const remapped = remapCatalogHubIds(loaded.hubs);
+    const after = findHubIdCollisions(remapped);
+    const retrievedAt = new Date().toISOString();
+    const { artifact: citiesArtifact } = loadCatalogArtifactFile(citiesPath);
+    writeHubsArtifact(remapped, {
+      sourceVersion: `transitous-geocode@${retrievedAt.slice(0, 10)}+hub-id-v2`,
+      retrievedAt,
+      citiesSourceVersion: (citiesArtifact as CatalogArtifact).sourceVersion,
+    });
+    const merged = mergeCitiesAndHubs(citiesArtifact as CatalogArtifact, remapped);
+    writeFileSync(productionCatalogArtifactPath(), `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
+    const validation = validateCatalogArtifact(merged);
+    console.log(
+      JSON.stringify(
+        {
+          hubsPath: transitousHubsArtifactPath(),
+          productionPath: productionCatalogArtifactPath(),
+          collisionsBefore: before,
+          collisionsAfter: after,
+          hubCount: merged.hubs.length,
+          cityCount: merged.cities.length,
+          idsChanged: remapped.filter((hub, index) => hub.id !== loaded.hubs[index]?.id).length,
+          validation: {
+            ok: validation.ok,
+            duplicateHubIds: validation.duplicateHubIds.length,
+            duplicateProviderStopIds: validation.duplicateProviderStopIds.length,
+            rejectedCount: validation.rejectedRecords.length,
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(validation.ok && after.duplicatedIdCount === 0 ? 0 : 1);
+  }
+
   if (command === 'validate') {
     const path = resolveArtifactPath(command, positional, flags);
     const { artifact } = loadCatalogArtifactFile(path);
@@ -329,7 +389,9 @@ async function main(): Promise<void> {
     await withDatabase(async (database) => {
       const path = resolveArtifactPath(command, positional, flags);
       const { artifact, text } = loadCatalogArtifactFile(path);
-      const result = await importCatalogArtifact(database, artifact, text);
+      const result = await importCatalogArtifact(database, artifact, text, {
+        onProgress: printCatalogImportProgress,
+      });
       const report = result.report;
       console.log(
         JSON.stringify(
@@ -345,6 +407,7 @@ async function main(): Promise<void> {
             unchangedCount: result.unchangedCount,
             deactivatedCount: result.deactivatedCount,
             stableInternalIdsPreserved: result.stableInternalIdsPreserved,
+            stats: result.stats,
             validation: {
               source: report.source,
               sourceVersion: report.sourceVersion,
@@ -376,13 +439,64 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === 'cleanup-fixture') {
+    const apply = flags['apply'] === true;
+    await withDatabase(async (database) => {
+      try {
+        const result = await cleanupOfflineFixture(database, {
+          apply,
+          strictProductionValidation: apply,
+        });
+        console.log(
+          JSON.stringify(
+            {
+              mode: apply ? 'apply' : 'dry-run',
+              ...result,
+            },
+            null,
+            2,
+          ),
+        );
+        if (!apply) {
+          process.exit(result.report.blocking ? 1 : 0);
+          return;
+        }
+        if (!result.applied) {
+          process.exit(1);
+          return;
+        }
+        process.exit(result.validation.ok ? 0 : 1);
+      } catch (error) {
+        if (error instanceof FixtureCleanupAbortedError) {
+          console.error(
+            JSON.stringify(
+              {
+                mode: 'apply',
+                aborted: true,
+                message: error.message,
+                report: error.report,
+              },
+              null,
+              2,
+            ),
+          );
+          process.exit(1);
+        }
+        throw error;
+      }
+    });
+    return;
+  }
+
   console.error(`Usage:
   catalog download --source geonames [--expected-sha256 HEX]
   catalog build --source geonames
   catalog enrich-hubs [--cities PATH] [--limit N] [--cache-only]
   catalog merge [--cities PATH] [--hubs PATH]
+  catalog remap-hub-ids [--cities PATH] [--hubs PATH]
   catalog validate [--source fixture|geonames|production] [artifact.json]
   catalog import [--source fixture|geonames|production] [artifact.json]
+  catalog cleanup-fixture [--apply]
   catalog status`);
   process.exit(2);
 }

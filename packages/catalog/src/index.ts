@@ -1,5 +1,14 @@
 export { validateCatalogArtifact, parseCatalogArtifact, haversineMeters } from './validate.js';
-export { importCatalogArtifact, loadCatalogArtifactFile } from './import.js';
+export {
+  CATALOG_IMPORT_BATCH_SIZE,
+  importCatalogArtifact,
+  loadCatalogArtifactFile,
+  printCatalogImportProgress,
+  type CatalogImportOptions,
+  type CatalogImportProgress,
+  type CatalogImportResult,
+  type CatalogImportStats,
+} from './import.js';
 export {
   evaluateCatalogReadiness,
   classifyProductionReadiness,
@@ -12,6 +21,25 @@ export {
   type HubCandidate,
   type RoutingTargetSelection,
 } from './hub-select.js';
+export {
+  buildCatalogHubPlaceId,
+  findHubIdCollisions,
+  legacyTruncatedCatalogHubPlaceId,
+  remapCatalogHubIds,
+  CATALOG_HUB_ID_HASH_LENGTH,
+  type HubIdCollisionReport,
+} from './hub-id.js';
+export {
+  cleanupOfflineFixture,
+  inspectFixtureCleanup,
+  validateFixtureCleanupState,
+  FixtureCleanupAbortedError,
+  EXPECTED_PRODUCTION_GEONAMES_CITY_COUNT,
+  EXPECTED_PRODUCTION_TRANSITOUS_STATION_COUNT,
+  type FixtureCleanupReport,
+  type FixtureCleanupResult,
+  type FixtureCleanupValidationResult,
+} from './cleanup-fixture.js';
 export { associateCityToHub } from './associate.js';
 export {
   parseGeonamesLine,
@@ -39,7 +67,8 @@ export {
   isEligiblePrimaryHubCapability,
   type HubCapabilityClass,
 } from './associate.js';
-export { defaultFixturePath, loadCatalogStatus } from './cli-lib.js';
+export { defaultFixturePath } from './paths.js';
+export { loadCatalogStatus, getCatalogReadiness } from './status.js';
 export type {
   CatalogArtifact,
   CatalogCity,

@@ -47,6 +47,8 @@ function emptyReport(rejected: readonly string[]): CatalogValidationReport {
     invalidTimeZones: [],
     invalidCoordinates: [],
     duplicateExternalIds: [],
+    duplicateHubIds: [],
+    duplicateProviderStopIds: [],
     ambiguousMatches: [],
     rejectedRecords: [...rejected],
     fixtureRecordCount: 0,
@@ -72,10 +74,14 @@ export function validateCatalogArtifact(raw: unknown): CatalogValidationReport {
   const invalidTimeZones: string[] = [];
   const invalidCoordinates: string[] = [];
   const duplicateExternalIds: string[] = [];
+  const duplicateHubIds: string[] = [];
+  const duplicateProviderStopIds: string[] = [];
   const ambiguousMatches: string[] = [];
 
   const cityExt = new Set<string>();
   const hubExt = new Set<string>();
+  const hubIds = new Set<string>();
+  const providerStopKeys = new Set<string>();
   const cityIds = new Set(artifact.cities.map((city) => city.id));
 
   for (const city of artifact.cities) {
@@ -97,10 +103,26 @@ export function validateCatalogArtifact(raw: unknown): CatalogValidationReport {
 
   const hubsByCity = new Map<string, typeof artifact.hubs>();
   for (const hub of artifact.hubs) {
+    if (hubIds.has(hub.id)) {
+      duplicateHubIds.push(hub.id);
+      rejected.push(`duplicate hub place id ${hub.id}`);
+    }
+    hubIds.add(hub.id);
+
     if (hubExt.has(hub.externalId)) {
       duplicateExternalIds.push(hub.externalId);
     }
     hubExt.add(hub.externalId);
+
+    if (hub.providerStopId) {
+      const providerKey = `motis\0${hub.providerStopId}`;
+      if (providerStopKeys.has(providerKey)) {
+        duplicateProviderStopIds.push(hub.providerStopId);
+        rejected.push(`duplicate provider stop id ${hub.providerStopId}`);
+      }
+      providerStopKeys.add(providerKey);
+    }
+
     if (!cityIds.has(hub.cityId)) {
       rejected.push(`hub ${hub.id} references missing city ${hub.cityId}`);
       continue;
@@ -178,6 +200,8 @@ export function validateCatalogArtifact(raw: unknown): CatalogValidationReport {
   const ok =
     rejected.length === 0 &&
     duplicateExternalIds.length === 0 &&
+    duplicateHubIds.length === 0 &&
+    duplicateProviderStopIds.length === 0 &&
     invalidTimeZones.length === 0 &&
     invalidCoordinates.length === 0 &&
     citiesWithMultiplePrimaryHubs.length === 0 &&
@@ -202,6 +226,8 @@ export function validateCatalogArtifact(raw: unknown): CatalogValidationReport {
     invalidTimeZones,
     invalidCoordinates,
     duplicateExternalIds,
+    duplicateHubIds,
+    duplicateProviderStopIds,
     ambiguousMatches,
     rejectedRecords: rejected,
     fixtureRecordCount,

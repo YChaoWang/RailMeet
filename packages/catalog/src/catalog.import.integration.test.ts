@@ -9,8 +9,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, schema, type Database } from '@railmeet/database';
 
 import { importCatalogArtifact, loadCatalogArtifactFile } from './import.js';
-import { getCatalogReadiness } from './cli-lib.js';
+import { getCatalogReadiness } from './status.js';
 import { evaluateCatalogReadiness } from './readiness.js';
+import { productionCatalogArtifactPath } from './paths.js';
+import { existsSync } from 'node:fs';
 
 const POSTGIS_IMAGE = 'ghcr.io/baosystems/postgis:16-3.5';
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -50,6 +52,9 @@ describe('catalog importer integration (PostGIS)', () => {
     expect(first.cityCount).toBe(3);
     expect(first.hubCount).toBe(4);
     expect(first.associationCount).toBe(4);
+    expect(first.createdCount).toBe(3);
+    expect(first.stats.preloadQueries).toBe(1);
+    expect(first.stats.totalQueries).toBeLessThan(40);
 
     const citiesAfterFirst = await database.db
       .select({
@@ -75,6 +80,10 @@ describe('catalog importer integration (PostGIS)', () => {
     expect(second.ok).toBe(true);
     expect(second.cityCount).toBe(3);
     expect(second.hubCount).toBe(4);
+    expect(second.createdCount).toBe(0);
+    expect(second.updatedCount).toBe(0);
+    expect(second.unchangedCount).toBe(3);
+    expect(second.stats.cityBatches).toBe(0);
 
     const citiesAfterSecond = await database.db
       .select({ id: schema.places.id })
@@ -171,6 +180,128 @@ describe('catalog importer integration (PostGIS)', () => {
     expect(deactivated?.active).toBe(false);
   });
 
+  it('updates changed city fields while preserving stable internal IDs', async () => {
+    const { artifact } = loadCatalogArtifactFile(fixturePath);
+    const clone = structuredClone(artifact) as {
+      cities: Array<Record<string, unknown>>;
+      hubs: Array<Record<string, unknown>>;
+      source: string;
+      sourceVersion: string;
+      schemaVersion: number;
+      artifactKind: string;
+      selectionPolicyVersion: string;
+      license: string;
+      attribution: string;
+      retrievedAt: string;
+      coverage: string;
+    };
+    // Isolate ownership namespace so prior fixture rows are not deactivated by this case.
+    clone.source = 'fixture:importer-it-update';
+    clone.sourceVersion = 'importer-it-update-1';
+    for (const city of clone.cities) {
+      city['id'] = String(city['id']).replace('place:it:', 'place:it-upd:');
+      city['externalId'] = `upd:${String(city['externalId'])}`;
+    }
+    for (const hub of clone.hubs) {
+      hub['id'] = String(hub['id']).replace('place:it:', 'place:it-upd:');
+      hub['cityId'] = String(hub['cityId']).replace('place:it:', 'place:it-upd:');
+      hub['externalId'] = `upd:${String(hub['externalId'])}`;
+    }
+
+    const first = await importCatalogArtifact(database, clone, JSON.stringify(clone));
+    expect(first.ok).toBe(true);
+    expect(first.createdCount).toBe(3);
+    const idBefore = (await database.places.findById('place:it-upd:paris-fr'))?.id;
+
+    clone.sourceVersion = 'importer-it-update-2';
+    const paris = clone.cities.find((city) => city['id'] === 'place:it-upd:paris-fr')!;
+    paris['name'] = 'Paris Updated';
+    paris['population'] = 2_200_000;
+
+    const progress: string[] = [];
+    const second = await importCatalogArtifact(database, clone, JSON.stringify(clone), {
+      batchSize: 250,
+      onProgress: (event) => {
+        progress.push(`${event.phase} ${event.done}/${event.total}`);
+      },
+    });
+    expect(second.ok).toBe(true);
+    expect(second.updatedCount).toBe(1);
+    expect(second.unchangedCount).toBe(2);
+    expect(second.createdCount).toBe(0);
+    expect((await database.places.findById('place:it-upd:paris-fr'))?.name).toBe('Paris Updated');
+    expect((await database.places.findById('place:it-upd:paris-fr'))?.id).toBe(idBefore);
+    expect(progress.some((line) => line.startsWith('cities '))).toBe(true);
+    expect(progress.some((line) => line.startsWith('hubs '))).toBe(true);
+    expect(progress.some((line) => line.startsWith('associations '))).toBe(true);
+  });
+
+  it('resumes safely after an interrupted city write batch', async () => {
+    const { artifact } = loadCatalogArtifactFile(fixturePath);
+    const clone = structuredClone(artifact) as {
+      cities: Array<Record<string, unknown>>;
+      hubs: Array<Record<string, unknown>>;
+      source: string;
+      sourceVersion: string;
+      schemaVersion: number;
+      artifactKind: string;
+      selectionPolicyVersion: string;
+      license: string;
+      attribution: string;
+      retrievedAt: string;
+      coverage: string;
+    };
+    clone.source = 'fixture:importer-it-resume';
+    clone.sourceVersion = 'importer-it-resume-1';
+    for (const city of clone.cities) {
+      city['id'] = String(city['id']).replace('place:it:', 'place:it-res:');
+      city['externalId'] = `res:${String(city['externalId'])}`;
+    }
+    for (const hub of clone.hubs) {
+      hub['id'] = String(hub['id']).replace('place:it:', 'place:it-res:');
+      hub['cityId'] = String(hub['cityId']).replace('place:it:', 'place:it-res:');
+      hub['externalId'] = `res:${String(hub['externalId'])}`;
+    }
+
+    await expect(
+      importCatalogArtifact(database, clone, JSON.stringify(clone), {
+        batchSize: 250,
+        failAfterCityBatches: 1,
+      }),
+    ).rejects.toThrow(/Simulated catalog import interrupt/);
+
+    const citiesAfterInterrupt = await database.db.execute(sql`
+      SELECT COUNT(*)::int AS count FROM places
+      WHERE ownership = 'fixture:offline-europe-v1' AND id LIKE 'place:it-res:%' AND kind = 'city'
+    `);
+    expect(Number((citiesAfterInterrupt as unknown as Array<{ count: number }>)[0]?.count)).toBe(3);
+
+    const hubsAfterInterrupt = await database.db.execute(sql`
+      SELECT COUNT(*)::int AS count FROM places
+      WHERE id LIKE 'place:it-res:%' AND kind = 'station' AND active = true
+    `);
+    expect(Number((hubsAfterInterrupt as unknown as Array<{ count: number }>)[0]?.count)).toBe(0);
+
+    const resumed = await importCatalogArtifact(database, clone, JSON.stringify(clone), {
+      batchSize: 250,
+    });
+    expect(resumed.ok).toBe(true);
+    expect(resumed.hubCount).toBe(4);
+    expect(resumed.unchangedCount).toBe(3);
+
+    const hubsAfterResume = await database.db.execute(sql`
+      SELECT COUNT(*)::int AS count FROM places
+      WHERE id LIKE 'place:it-res:%' AND kind = 'station' AND active = true
+    `);
+    expect(Number((hubsAfterResume as unknown as Array<{ count: number }>)[0]?.count)).toBe(4);
+
+    const associations = await database.db.execute(sql`
+      SELECT COUNT(*)::int AS count FROM meeting_city_hubs
+      WHERE city_place_id LIKE 'place:it-res:%' AND active = true
+    `);
+    expect(Number((associations as unknown as Array<{ count: number }>)[0]?.count)).toBe(4);
+  });
+
   it('rejects invalid timezones/coordinates/country without partial writes when validation fails first', async () => {
     const raw = JSON.parse(readFileSync(fixturePath, 'utf8')) as {
       cities: Array<Record<string, unknown>>;
@@ -202,4 +333,71 @@ describe('catalog importer integration (PostGIS)', () => {
       Number((before as unknown as Array<{ count: number }>)[0]?.count),
     );
   });
+});
+
+describe('catalog importer production-artifact benchmark (PostGIS)', () => {
+  it('imports europe-production-catalog-v1 with bounded queries', async () => {
+    const artifactPath = productionCatalogArtifactPath();
+    if (!existsSync(artifactPath)) {
+      console.warn(`Skipping production benchmark; missing ${artifactPath}`);
+      return;
+    }
+
+    const container = await new PostgreSqlContainer(POSTGIS_IMAGE)
+      .withDatabase('railmeet_catalog_bench')
+      .withUsername('railmeet')
+      .withPassword('railmeet')
+      .start();
+    const database = createDatabase({
+      connectionString: container.getConnectionUri(),
+      maxConnections: 5,
+    });
+    try {
+      await database.migrate();
+      const { artifact, text } = loadCatalogArtifactFile(artifactPath);
+      const progress: string[] = [];
+      const first = await importCatalogArtifact(database, artifact, text, {
+        batchSize: 500,
+        onProgress: (event) => {
+          if (event.done === event.total || event.done % 500 === 0) {
+            progress.push(`${event.phase} ${event.done}/${event.total}`);
+          }
+        },
+      });
+      expect(first.ok).toBe(true);
+      expect(first.cityCount).toBeGreaterThan(6000);
+      expect(first.hubCount).toBeGreaterThan(1000);
+      // Old importer ≈ 3 queries/city + 3/hub + 1/association ≈ 25k+ round trips.
+      // New importer: 1 preload + ~ceil(n/500) writes per phase + deactivation ≤ ~80.
+      expect(first.stats.totalQueries).toBeLessThan(100);
+      expect(first.stats.durationMs).toBeLessThan(180_000);
+
+      const second = await importCatalogArtifact(database, artifact, text, { batchSize: 500 });
+      expect(second.ok).toBe(true);
+      expect(second.unchangedCount).toBe(first.cityCount);
+      expect(second.createdCount).toBe(0);
+      expect(second.updatedCount).toBe(0);
+      expect(second.stats.durationMs).toBeLessThan(60_000);
+
+      console.info(
+        JSON.stringify(
+          {
+            event: 'catalog_import_benchmark',
+            first: first.stats,
+            second: second.stats,
+            cityCount: first.cityCount,
+            hubCount: first.hubCount,
+            estimatedLegacyQueries:
+              first.cityCount * 3 + first.hubCount * 3 + first.associationCount + 5,
+            progressSample: progress.slice(0, 12),
+          },
+          null,
+          2,
+        ),
+      );
+    } finally {
+      await database.close();
+      await container.stop();
+    }
+  }, 300_000);
 });

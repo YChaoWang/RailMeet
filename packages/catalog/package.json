@@ -24,6 +24,8 @@
     "catalog:download": "tsx src/cli.ts download",
     "catalog:build": "tsx src/cli.ts build",
     "catalog:enrich-hubs": "tsx src/cli.ts enrich-hubs",
+    "catalog:remap-hub-ids": "tsx src/cli.ts remap-hub-ids",
+    "catalog:cleanup-fixture": "tsx src/cli.ts cleanup-fixture",
     "catalog:import": "tsx src/cli.ts import",
     "catalog:status": "tsx src/cli.ts status",
     "clean": "rm -rf dist"

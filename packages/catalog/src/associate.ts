@@ -3,8 +3,9 @@ import {
   CATALOG_HUB_DISTANCE_SOFT_MAX_METERS,
 } from '@railmeet/shared';
 
-import { haversineMeters } from './validate.js';
+import { buildCatalogHubPlaceId } from './hub-id.js';
 import type { CatalogCity, CatalogHub } from './types.js';
+import { haversineMeters } from './validate.js';
 
 /** Structured MOTIS geocode mode tokens that indicate intercity / regional rail capability. */
 export const RAIL_FAMILY_MODES = [
@@ -311,9 +312,8 @@ function buildMatch(
   if (!isEligiblePrimaryHubCapability(capability)) {
     return { status: 'rejected', reason: `capability-${capability}-not-primary` };
   }
-  const stableId = stop.providerStopId.replace(/[^a-zA-Z0-9._:-]+/g, '_');
   const hub: CatalogHub = {
-    id: `place:hub:motis:${stableId}`.slice(0, 128),
+    id: buildCatalogHubPlaceId('motis', stop.providerStopId),
     externalId: `motis:${stop.providerStopId}`,
     name: stop.name,
     countryCode: stop.countryCode,

@@ -9,6 +9,7 @@ import {
   transitousHubsArtifactPath,
   transitousHubsManifestPath,
 } from './paths.js';
+import { remapCatalogHubIds } from './hub-id.js';
 import type { CatalogArtifact, CatalogCity, CatalogHub, SourceManifest } from './types.js';
 
 const DEFAULT_TRANSITOUS_BASE = 'https://api.transitous.org';
@@ -190,6 +191,7 @@ export function writeHubsArtifact(
   },
 ): void {
   mkdirSync(artifactsDir(), { recursive: true });
+  const remapped = remapCatalogHubIds(hubs);
   const sidecar = {
     schemaVersion: 1 as const,
     source: 'catalog:transitous',
@@ -199,8 +201,8 @@ export function writeHubsArtifact(
     attribution: `${GEONAMES_ATTRIBUTION}; Transitous https://transitous.org/`,
     retrievedAt: options.retrievedAt,
     coverage: `Representative hubs for cities from ${options.citiesSourceVersion}`,
-    selectionPolicyVersion: 'transitous-geocode-stop-v1',
-    hubs: [...hubs],
+    selectionPolicyVersion: 'transitous-geocode-stop-v2',
+    hubs: [...remapped],
   };
   writeFileSync(transitousHubsArtifactPath(), `${JSON.stringify(sidecar, null, 2)}\n`, 'utf8');
 
@@ -215,7 +217,7 @@ export function writeHubsArtifact(
     attribution: 'Transitous https://transitous.org/',
     format: 'MOTIS geocode STOP matches (cached JSON per city)',
     coverage: 'Hubs for European GeoNames cities (manual enrich)',
-    selectionPolicyVersion: 'transitous-geocode-stop-v1',
+    selectionPolicyVersion: 'transitous-geocode-stop-v2',
   };
   writeSourceManifest(transitousHubsManifestPath(), manifest);
 }
@@ -236,10 +238,12 @@ export function mergeCitiesAndHubs(
   hubs: readonly CatalogHub[],
 ): CatalogArtifact {
   const cityIds = new Set(citiesArtifact.cities.map((city) => city.id));
-  const filtered = hubs.filter((hub) => cityIds.has(hub.cityId));
+  const remapped = remapCatalogHubIds(hubs);
+  const filtered = remapped.filter((hub) => cityIds.has(hub.cityId));
   return {
     ...citiesArtifact,
     source: 'catalog:geonames+transitous',
+    artifactKind: 'production-catalog',
     hubs: [...filtered].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     license: `${citiesArtifact.license}; hubs from Transitous MOTIS geocode`,
     attribution: `${citiesArtifact.attribution}; Transitous https://transitous.org/`,

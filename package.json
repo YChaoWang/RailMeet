@@ -28,6 +28,8 @@
     "catalog:download": "pnpm --filter @railmeet/catalog catalog:download",
     "catalog:build": "pnpm --filter @railmeet/catalog catalog:build",
     "catalog:enrich-hubs": "pnpm --filter @railmeet/catalog catalog:enrich-hubs",
+    "catalog:remap-hub-ids": "pnpm --filter @railmeet/catalog catalog:remap-hub-ids",
+    "catalog:cleanup-fixture": "pnpm --filter @railmeet/catalog catalog:cleanup-fixture",
     "catalog:import": "pnpm --filter @railmeet/catalog catalog:import",
     "catalog:status": "pnpm --filter @railmeet/catalog catalog:status"
   },

@@ -81,6 +81,8 @@ export type CatalogValidationReport = {
   readonly invalidTimeZones: readonly string[];
   readonly invalidCoordinates: readonly string[];
   readonly duplicateExternalIds: readonly string[];
+  readonly duplicateHubIds: readonly string[];
+  readonly duplicateProviderStopIds: readonly string[];
   readonly ambiguousMatches: readonly string[];
   readonly rejectedRecords: readonly string[];
   readonly fixtureRecordCount: number;
