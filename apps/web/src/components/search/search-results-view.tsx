@@ -219,10 +219,13 @@ export function SearchResultsView({
                                   {missingForTraveler.length === 1 ? '' : 's'}
                                 </p>
                               ) : null}
-                              <JourneyDetailsPanel
-                                searchId={results.searchId}
-                                journeyId={journey.journeyId}
-                              />
+                                <JourneyDetailsPanel
+                                  searchId={results.searchId}
+                                  journeyId={journey.journeyId}
+                                  participantDisplayName={journey.participantDisplayName}
+                                  originLabel={placeLabel(journey.origin)}
+                                  destinationLabel={placeLabel(journey.destination)}
+                                />
                             </div>
                           );
                         })}

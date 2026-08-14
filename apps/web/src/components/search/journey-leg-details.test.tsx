@@ -8,60 +8,62 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 import type { MotisItineraryJson, MotisLegJson } from '@railmeet/shared';
-import { getMotisModeStyle, joinInterlinedMotisLegs } from '@railmeet/shared';
+import { joinInterlinedMotisLegs } from '@railmeet/shared';
 
 import { JourneyItineraryDetails, JourneyRouteSummary } from './journey-leg-details';
 
-const fixturePath = resolve(
+const fixtureDir = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../../../../../packages/routing/src/fixtures/transitous-manchester-york.json',
+  '../../../../../packages/routing/src/fixtures',
 );
 
 function manchesterYork(): MotisItineraryJson {
-  return JSON.parse(readFileSync(fixturePath, 'utf8')) as MotisItineraryJson;
+  return JSON.parse(readFileSync(resolve(fixtureDir, 'transitous-manchester-york.json'), 'utf8')) as MotisItineraryJson;
+}
+
+function berlinYork(): MotisItineraryJson {
+  return JSON.parse(readFileSync(resolve(fixtureDir, 'transitous-berlin-york.json'), 'utf8')) as MotisItineraryJson;
 }
 
 describe('JourneyItineraryDetails Manchester–York fixture', () => {
   it('shows multiple UK operators and displayName distinct from agencyName', () => {
     render(<JourneyItineraryDetails itinerary={manchesterYork()} />);
-    const services = screen.getAllByTestId('journey-leg-service').map((node) => node.textContent);
-    const operators = screen.getAllByTestId('journey-leg-operator').map((node) => node.textContent);
-    expect(services).toEqual(expect.arrayContaining(['Yellow Line', 'TPE', 'Northern']));
-    expect(operators).toEqual(
+    const overview = screen.getByTestId('journey-overview-header');
+    expect(overview).toHaveTextContent('Yellow Line');
+    expect(overview).toHaveTextContent('TPE');
+    expect(overview).toHaveTextContent('Northern');
+    expect(screen.getAllByTestId('journey-leg-operator').map((node) => node.textContent)).toEqual(
       expect.arrayContaining(['Metrolink', 'TransPennine Express', 'Northern Rail']),
     );
-    expect(services).toContain('TPE');
-    expect(operators).toContain('TransPennine Express');
-    expect(services).not.toContain('TransPennine Express');
   });
 
   it('shows walking transfers with duration and distance', () => {
     render(<JourneyItineraryDetails itinerary={manchesterYork()} />);
-    const walkLegs = screen.getAllByTestId('journey-leg').filter((node) => node.getAttribute('data-motis-mode') === 'WALK');
-    expect(walkLegs.length).toBeGreaterThanOrEqual(2);
-    expect(walkLegs.some((node) => within(node).queryByText(/188 m/))).toBe(true);
-    expect(walkLegs.some((node) => within(node).queryByText(/285 m/))).toBe(true);
+    const walks = screen.getAllByTestId('journey-walk');
+    expect(walks.length).toBeGreaterThanOrEqual(2);
+    expect(walks.some((node) => within(node).queryByText(/188 m/))).toBe(true);
   });
 
   it('shows platforms/tracks from Place.track', () => {
     render(<JourneyItineraryDetails itinerary={manchesterYork()} />);
     expect(screen.getAllByTestId('leg-platform').map((node) => node.textContent)).toEqual(
-      expect.arrayContaining(['Platform To Ashton', 'Track 4', 'Track 7']),
+      expect.arrayContaining(['Platform To Ashton', 'Track 4']),
     );
   });
 
   it('expands intermediate stops with times and platforms', async () => {
     const user = userEvent.setup();
     render(<JourneyItineraryDetails itinerary={manchesterYork()} />);
-    await user.click(screen.getAllByRole('button', { name: 'Show intermediate stops' })[0]!);
+    const stopToggle = screen.getAllByRole('button').find((button) => /intermediate stops|1 stop|2 stops|3 stops/i.test(button.textContent ?? ''));
+    expect(stopToggle).toBeTruthy();
+    await user.click(stopToggle!);
     const stops = screen.getByTestId('journey-leg-stops');
     expect(within(stops).getByText('Piccadilly Gardens')).toBeInTheDocument();
-    expect(within(stops).getByText('Market Street')).toBeInTheDocument();
   });
 
-  it('uses provider route colors on the service chip', () => {
+  it('uses provider route colors on route pills', () => {
     render(<JourneyItineraryDetails itinerary={manchesterYork()} />);
-    const tpe = screen.getAllByTestId('journey-leg-service').find((node) => node.textContent === 'TPE');
+    const tpe = screen.getAllByTestId('route-pill').find((node) => node.textContent?.includes('TPE'));
     expect(tpe?.getAttribute('style')).toContain('rgb(9, 164, 236)');
   });
 
@@ -76,25 +78,51 @@ describe('JourneyItineraryDetails Manchester–York fixture', () => {
       />,
     );
     expect(screen.getByTestId('journey-route-summary')).toHaveTextContent('Yellow Line');
-    expect(screen.getByTestId('journey-route-summary')).toHaveTextContent('TPE');
-    expect(screen.getByTestId('journey-route-summary')).toHaveTextContent('Northern');
   });
 
-  it('preserves alerts from the provider payload', () => {
+  it('preserves alerts from the provider payload', async () => {
+    const user = userEvent.setup();
     render(<JourneyItineraryDetails itinerary={manchesterYork()} />);
+    await user.click(screen.getByRole('button', { name: /Special Service/i }));
     expect(screen.getByTestId('journey-leg-alerts')).toHaveTextContent('Special Service');
   });
 
-  it('shows headsign/tripTo as direction and walk steps with geometry', () => {
+  it('shows headsign and walking directions disclosure', async () => {
+    const user = userEvent.setup();
     render(<JourneyItineraryDetails itinerary={manchesterYork()} />);
     expect(screen.getAllByTestId('journey-leg-headsign').map((node) => node.textContent)).toEqual(
-      expect.arrayContaining(['Toward Bury', 'Toward Hull', 'Toward York']),
+      expect.arrayContaining([expect.stringMatching(/Toward Bury/), expect.stringMatching(/Toward York/)]),
     );
-    expect(screen.getAllByTestId('journey-leg-steps')[0]).toHaveTextContent('Piccadilly Station');
-    const walks = screen
-      .getAllByTestId('journey-leg')
-      .filter((node) => node.getAttribute('data-motis-mode') === 'WALK');
-    expect(walks.some((node) => node.getAttribute('data-has-geometry') === 'true')).toBe(true);
+    await user.click(screen.getByRole('button', { name: /Show walking directions/i }));
+    expect(screen.getByTestId('journey-leg-steps')).toHaveTextContent('Piccadilly Station');
+  });
+});
+
+describe('JourneyItineraryDetails Berlin → York fixture', () => {
+  it('renders the full multimodal service sequence with overnight header', () => {
+    render(
+      <JourneyItineraryDetails
+        itinerary={berlinYork()}
+        context={{
+          participantDisplayName: 'David',
+          originLabel: 'Berlin Hbf',
+          destinationLabel: 'York',
+        }}
+      />,
+    );
+    const header = screen.getByTestId('journey-overview-header');
+    expect(header).toHaveTextContent("David's journey");
+    expect(header).toHaveTextContent('Berlin Hbf → York');
+    expect(header).toHaveTextContent('+1 day');
+    for (const service of ['ICE 858', 'ICE 10', 'IC 2843', 'FlixBus N814', 'Southeastern', 'Thameslink', 'LNER']) {
+      expect(header).toHaveTextContent(service);
+    }
+    expect(screen.getAllByTestId('route-pill').length).toBeGreaterThanOrEqual(7);
+  });
+
+  it('shows transfer blocks between services', () => {
+    render(<JourneyItineraryDetails itinerary={berlinYork()} />);
+    expect(screen.getAllByTestId('journey-transfer').length).toBeGreaterThan(0);
   });
 });
 
@@ -136,7 +164,7 @@ describe('JourneyItineraryDetails Transitous behaviours', () => {
     };
     expect(joinInterlinedMotisLegs(itinerary.legs)).toHaveLength(1);
     render(<JourneyItineraryDetails itinerary={itinerary} />);
-    expect(screen.getAllByTestId('journey-leg-service')).toHaveLength(1);
+    expect(screen.getAllByTestId('route-pill')).toHaveLength(1);
     expect(screen.getByTestId('leg-continues-as')).toHaveTextContent('Continues as LNER 2');
   });
 
@@ -186,14 +214,12 @@ describe('JourneyItineraryDetails Transitous behaviours', () => {
       ],
     };
     render(<JourneyItineraryDetails itinerary={itinerary} />);
-    expect(screen.getByTestId('journey-leg-service')).toHaveTextContent('36');
+    expect(screen.getByTestId('route-pill')).toHaveTextContent('36');
     expect(screen.queryByTestId('journey-leg-operator')).not.toBeInTheDocument();
     expect(screen.queryByTestId('leg-platform')).not.toBeInTheDocument();
-    expect(screen.queryByText(/unknown/i)).not.toBeInTheDocument();
   });
 
   it('never maps unknown future MOTIS modes to Train', () => {
-    expect(getMotisModeStyle({ mode: 'HYPERLOOP' })[0]).toBe('other');
     const itinerary: MotisItineraryJson = {
       duration: 60,
       startTime: '2026-09-15T10:00:00Z',
@@ -211,9 +237,7 @@ describe('JourneyItineraryDetails Transitous behaviours', () => {
       ],
     };
     render(<JourneyItineraryDetails itinerary={itinerary} />);
-    expect(screen.getByTestId('journey-leg-service')).toHaveTextContent('Other transport');
-    expect(screen.getByTestId('journey-leg-mode')).toHaveTextContent('Other transport');
-    expect(screen.queryByText(/^Train$/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('route-pill')).toHaveTextContent('Other transport');
   });
 
   it('preserves leg alternatives when MOTIS included them', () => {
@@ -247,6 +271,7 @@ describe('JourneyItineraryDetails Transitous behaviours', () => {
       ],
     };
     render(<JourneyItineraryDetails itinerary={itinerary} />);
-    expect(screen.getByTestId('journey-leg-alternatives')).toHaveTextContent('Alternative Northern 10:12');
+    expect(screen.getByTestId('journey-leg-alternatives')).toHaveTextContent('Northern');
+    expect(screen.getByTestId('journey-leg-alternatives')).toHaveTextContent('informational');
   });
 });

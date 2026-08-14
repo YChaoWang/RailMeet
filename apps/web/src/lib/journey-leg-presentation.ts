@@ -73,6 +73,9 @@ export function rankingLegToMotis(leg: RankingLeg): MotisLegJson {
   if (typeof leg.distanceMeters === 'number') {
     mapped = { ...mapped, distance: leg.distanceMeters };
   }
+  if (!mapped.displayName) {
+    mapped = { ...mapped, displayName: motisPlanModeLabel(motisMode) };
+  }
   if (leg.from) {
     mapped = {
       ...mapped,

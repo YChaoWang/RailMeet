@@ -17,6 +17,9 @@ import {
 type JourneyDetailsPanelProps = {
   readonly searchId: string;
   readonly journeyId: string;
+  readonly participantDisplayName?: string;
+  readonly originLabel?: string;
+  readonly destinationLabel?: string;
 };
 
 export function JourneyDetailsSkeleton() {
@@ -29,11 +32,24 @@ export function JourneyDetailsSkeleton() {
   );
 }
 
-function renderDetail(detail: MeetingSearchJourneyDetailData) {
+function renderDetail(
+  detail: MeetingSearchJourneyDetailData,
+  context: {
+    readonly participantDisplayName?: string;
+    readonly originLabel?: string;
+    readonly destinationLabel?: string;
+  },
+) {
+  const journeyContext = {
+    ...(context.participantDisplayName ? { participantDisplayName: context.participantDisplayName } : {}),
+    ...(context.originLabel ? { originLabel: context.originLabel } : {}),
+    ...(context.destinationLabel ? { destinationLabel: context.destinationLabel } : {}),
+  };
   if (detail.detailSource === 'provider' && detail.providerItinerary) {
     return (
       <JourneyItineraryDetails
         itinerary={detail.providerItinerary.itinerary as MotisItineraryJson}
+        context={journeyContext}
       />
     );
   }
@@ -47,18 +63,24 @@ function renderDetail(detail: MeetingSearchJourneyDetailData) {
             : ''}
           . Showing ranking legs.
         </p>
-        <RankingJourneyLegs legs={detail.legs} />
+        <RankingJourneyLegs legs={detail.legs} context={journeyContext} />
       </div>
     );
   }
-  return <RankingJourneyLegs legs={detail.legs} />;
+  return <RankingJourneyLegs legs={detail.legs} context={journeyContext} />;
 }
 
 /**
  * Lazy-loads journey detail by journeyId. Compact results must not decide
  * provider vs legacy from missing providerItinerary.
  */
-export function JourneyDetailsPanel({ searchId, journeyId }: JourneyDetailsPanelProps) {
+export function JourneyDetailsPanel({
+  searchId,
+  journeyId,
+  participantDisplayName,
+  originLabel,
+  destinationLabel,
+}: JourneyDetailsPanelProps) {
   const cached = peekJourneyDetailCache(searchId, journeyId);
   const [detail, setDetail] = useState<MeetingSearchJourneyDetailData | null>(
     cached?.status === 'ready' ? cached.data : null,
@@ -139,5 +161,13 @@ export function JourneyDetailsPanel({ searchId, journeyId }: JourneyDetailsPanel
     return null;
   }
 
-  return <div data-testid="journey-detail-loaded">{renderDetail(detail)}</div>;
+  return (
+    <div data-testid="journey-detail-loaded">
+      {renderDetail(detail, {
+        ...(participantDisplayName ? { participantDisplayName } : {}),
+        ...(originLabel ? { originLabel } : {}),
+        ...(destinationLabel ? { destinationLabel } : {}),
+      })}
+    </div>
+  );
 }

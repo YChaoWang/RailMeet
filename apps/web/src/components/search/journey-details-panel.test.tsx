@@ -98,13 +98,15 @@ describe('JourneyDetailsPanel', () => {
       }),
     );
     await waitFor(() => expect(screen.getByTestId('journey-detail-loaded')).toBeInTheDocument());
-    expect(screen.getByTestId('journey-leg-service')).toHaveTextContent('ICE 100');
+    expect(screen.getByTestId('route-pill')).toHaveTextContent('ICE 100');
     expect(screen.getByTestId('journey-leg-operator')).toHaveTextContent('DB Fernverkehr AG');
     expect(screen.getAllByTestId('leg-platform').map((n) => n.textContent)).toEqual(
       expect.arrayContaining(['Track 1', 'Track 12']),
     );
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: 'Show intermediate stops' }));
+    const stopToggle = screen.getAllByRole('button').find((button) => /1 stop/i.test(button.textContent ?? ''));
+    expect(stopToggle).toBeTruthy();
+    await user.click(stopToggle!);
     expect(screen.getByTestId('journey-leg-stops')).toHaveTextContent('Erfurt Hbf');
   });
 
@@ -121,8 +123,7 @@ describe('JourneyDetailsPanel', () => {
     render(<JourneyDetailsPanel searchId={searchId} journeyId={journeyId} />);
     await waitFor(() => expect(screen.getByTestId('journey-detail-loaded')).toBeInTheDocument());
     expect(screen.getByTestId('ranking-journey-legs')).toBeInTheDocument();
-    // Coarse train → MOTIS RAIL label when no better identity exists.
-    expect(screen.getByTestId('journey-leg-service')).toHaveTextContent('Rail');
+    expect(screen.getByTestId('route-pill')).toHaveTextContent('Rail');
   });
 
   it('shows retry on failure and refetches after retry', async () => {
