@@ -4,6 +4,7 @@ import {
   placeSuggestionLocalityLine,
   placeSuggestionModeChips,
   placeSuggestionModeOverflowCount,
+  placeSuggestionOptionAriaLabel,
   placeSuggestionTypeLabel,
 } from './place-suggestion-presentation';
 
@@ -61,5 +62,23 @@ describe('placeSuggestionTypeLabel', () => {
     expect(placeSuggestionTypeLabel('STOP')).toBe('Station');
     expect(placeSuggestionTypeLabel('PLACE')).toBe('City');
     expect(placeSuggestionTypeLabel('ADDRESS')).toBe('Address');
+  });
+});
+
+describe('placeSuggestionOptionAriaLabel', () => {
+  it('combines name, type, locality, and mode labels', () => {
+    expect(
+      placeSuggestionOptionAriaLabel({
+        providerId: '1',
+        name: 'Berlin Hbf',
+        type: 'STOP',
+        latitude: 0,
+        longitude: 0,
+        countryCode: 'DE',
+        timezone: null,
+        modes: ['RAIL', 'SUBWAY'],
+        secondaryLabel: 'Station · Berlin, DE',
+      }),
+    ).toBe('Berlin Hbf, Station, Berlin, DE, Rail, Metro');
   });
 });

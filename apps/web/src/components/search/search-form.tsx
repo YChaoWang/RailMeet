@@ -172,7 +172,7 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
     const payload = {
       participants: participants.map((participant) => ({
         id: participant.id.trim(),
-        displayName: participant.displayName.trim(),
+        displayName: participant.displayName.trim() || `Traveler ${participant.letter}`,
         origin: toSelectedOrigin(participant.originSelected!),
       })),
       travelDate,
@@ -247,52 +247,37 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
           >
             <div className="flex items-center gap-2">
               <span
-                className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-white"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
                 style={{ backgroundColor: participant.color }}
                 aria-hidden
               >
                 {participant.letter}
               </span>
-              <span className="text-xs font-medium text-ink-700">
-                Traveler {participant.letter}
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor={`${participant.key}-name`}>Display name</Label>
-              <Input
-                id={`${participant.key}-name`}
-                data-field={`participants.${index}.displayName`}
-                value={participant.displayName}
-                aria-invalid={Boolean(errors[`participants.${index}.displayName`])}
-                aria-describedby={
-                  errors[`participants.${index}.displayName`]
-                    ? `${participant.key}-name-error`
-                    : undefined
-                }
-                onChange={(event) => {
-                  updateParticipant(participant.key, { displayName: event.target.value });
-                }}
-              />
-              {errors[`participants.${index}.displayName`] ? (
-                <p id={`${participant.key}-name-error`} className="text-sm text-red-700">
-                  {errors[`participants.${index}.displayName`]}
-                </p>
-              ) : null}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor={`${participant.key}-id`}>Participant ID</Label>
-              <Input
-                id={`${participant.key}-id`}
-                data-field={`participants.${index}.id`}
-                value={participant.id}
-                aria-invalid={Boolean(errors[`participants.${index}.id`])}
-                onChange={(event) => {
-                  updateParticipant(participant.key, { id: event.target.value });
-                }}
-              />
-              {errors[`participants.${index}.id`] ? (
-                <p className="text-sm text-red-700">{errors[`participants.${index}.id`]}</p>
-              ) : null}
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Label htmlFor={`${participant.key}-name`} className="sr-only">
+                  Traveler {participant.letter} name
+                </Label>
+                <Input
+                  id={`${participant.key}-name`}
+                  data-field={`participants.${index}.displayName`}
+                  value={participant.displayName}
+                  placeholder={`Name (optional — defaults to Traveler ${participant.letter})`}
+                  aria-invalid={Boolean(errors[`participants.${index}.displayName`])}
+                  aria-describedby={
+                    errors[`participants.${index}.displayName`]
+                      ? `${participant.key}-name-error`
+                      : undefined
+                  }
+                  onChange={(event) => {
+                    updateParticipant(participant.key, { displayName: event.target.value });
+                  }}
+                />
+                {errors[`participants.${index}.displayName`] ? (
+                  <p id={`${participant.key}-name-error`} className="text-sm text-red-700">
+                    {errors[`participants.${index}.displayName`]}
+                  </p>
+                ) : null}
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor={`${participant.key}-origin`}>Starting place</Label>

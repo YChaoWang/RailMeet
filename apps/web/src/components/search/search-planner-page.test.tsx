@@ -270,10 +270,12 @@ describe('SearchPlannerPage live draft markers', () => {
     const user = userEvent.setup();
     renderPlanner();
     await user.click(screen.getByRole('button', { name: 'Add traveler' }));
-    expect(screen.getByText('Traveler C')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Name (optional — defaults to Traveler C)')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Remove last' }));
-    expect(screen.queryByText('Traveler C')).not.toBeInTheDocument();
-    expect(screen.getByText('Traveler A')).toBeInTheDocument();
-    expect(screen.getByText('Traveler B')).toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText('Name (optional — defaults to Traveler C)'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Name (optional — defaults to Traveler A)')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Name (optional — defaults to Traveler B)')).toBeInTheDocument();
   });
 });

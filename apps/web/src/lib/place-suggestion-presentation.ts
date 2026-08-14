@@ -130,3 +130,17 @@ export function placeSuggestionModeOverflowCount(modes: readonly string[]): numb
 export function placeSuggestionModeIcon(kind: MotisModeIconKind): LucideIcon {
   return MODE_ICONS[kind];
 }
+
+/** Screen-reader label for listbox options (icons and chips are decorative). */
+export function placeSuggestionOptionAriaLabel(suggestion: PlaceSuggestionView): string {
+  const parts = [suggestion.name, placeSuggestionTypeLabel(suggestion.type)];
+  const locality = placeSuggestionLocalityLine(suggestion);
+  if (locality) {
+    parts.push(locality);
+  }
+  const modeLabels = placeSuggestionModeChips(suggestion.modes).map((chip) => chip.label);
+  if (modeLabels.length > 0) {
+    parts.push(modeLabels.join(', '));
+  }
+  return parts.join(', ');
+}

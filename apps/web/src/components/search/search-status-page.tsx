@@ -36,7 +36,6 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
   const {
     setScene,
     setPanelTitle,
-    setCollapseSheetWhen,
     setSheetExpanded,
     setCandidateSelectHandler,
     setTravelerSelectHandler,
@@ -101,11 +100,10 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
   }, [scene, setScene, state.kind]);
 
   useEffect(() => {
-    setCollapseSheetWhen(results?.searchId ?? null);
-    if (!results) {
+    if (results?.searchId) {
       setSheetExpanded(true);
     }
-  }, [results?.searchId, results, setCollapseSheetWhen, setSheetExpanded]);
+  }, [results?.searchId, setSheetExpanded]);
 
   useEffect(() => {
     setCandidateSelectHandler(setSelectedKey);
@@ -384,6 +382,7 @@ function renderPanelBody({
             emphasizedParticipantId={emphasizedParticipantId}
             onEmphasizeParticipant={setEmphasizedParticipantId}
             missingGeometry={scene.missingGeometry}
+            embedded
           />
         </div>
       );

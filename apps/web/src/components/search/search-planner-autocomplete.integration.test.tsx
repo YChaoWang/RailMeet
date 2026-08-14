@@ -132,8 +132,11 @@ describe('SearchPlannerPage real autocomplete → map boundary', () => {
       expect(screen.getByTestId('search-map')).toHaveAttribute('data-marker-count', '1');
     });
 
-    const selected = await screen.findByText(/Selected · Station · Paris, FR/i);
-    expect(selected).toBeInTheDocument();
+    const selected = await screen.findByTestId('place-selected-hint');
+    expect(selected).toHaveTextContent(/Paris Est/);
+    expect(selected).toHaveTextContent(/Station/);
+    expect(selected).toHaveTextContent(/Paris, FR/);
+    expect(selected).toHaveTextContent(/Rail/);
 
     const latest = mapScenes.at(-1);
     expect(latest?.markers).toHaveLength(1);

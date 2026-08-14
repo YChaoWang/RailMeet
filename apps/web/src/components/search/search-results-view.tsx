@@ -39,6 +39,8 @@ type SearchResultsViewProps = {
   readonly emphasizedParticipantId?: string | null;
   readonly onEmphasizeParticipant?: (participantId: string | null) => void;
   readonly missingGeometry?: readonly MapMissingGeometryNote[];
+  /** When true, render inline in the planner panel without a nested sub-panel chrome. */
+  readonly embedded?: boolean;
 };
 
 export function SearchResultsView({
@@ -50,6 +52,7 @@ export function SearchResultsView({
   emphasizedParticipantId = null,
   onEmphasizeParticipant,
   missingGeometry = [],
+  embedded = false,
 }: SearchResultsViewProps) {
   const availableModes = useMemo(() => {
     const present = new Set(results.rankings.map((row) => row.rankingMode));
@@ -84,7 +87,12 @@ export function SearchResultsView({
 
   return (
     <div className="space-y-4" data-testid="results-ranked">
-      <div className="sticky top-0 z-[1] -mx-4 space-y-2 border-b border-ink-700/10 bg-white px-4 pb-3 pt-1">
+      <div
+        className={cn(
+          'space-y-2',
+          embedded ? 'border-b border-ink-700/10 pb-3' : 'sticky top-0 z-[1] -mx-4 border-b border-ink-700/10 bg-white px-4 pb-3 pt-1',
+        )}
+      >
         <p className="text-xs font-medium uppercase tracking-wide text-ink-700">Ranking mode</p>
         <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Ranking modes">
           {availableModes.map((value) => (
@@ -162,68 +170,66 @@ export function SearchResultsView({
               </button>
 
               {selected ? (
-                <div className="mt-2 rounded-xl border border-ink-700/10 px-3 py-2">
-                  <Accordion type="single" collapsible defaultValue="details">
-                    <AccordionItem value="details" className="border-none">
-                      <AccordionTrigger className="py-2 text-sm">Journey details</AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-3">
-                          {candidate.journeys.map((journey) => {
-                            const missingForTraveler = missingGeometry.filter(
-                              (note) => note.participantId === journey.participantId,
-                            );
-                            const emphasized =
-                              !emphasizedParticipantId ||
-                              emphasizedParticipantId === journey.participantId;
-                            const letter = travelerLetterAt(journey.participantPosition);
-                            const color = travelerColorAt(journey.participantPosition);
-                            return (
-                              <div
-                                key={`legs-${journey.journeyId}`}
-                                style={{ opacity: emphasized ? 1 : 0.45 }}
+                <Accordion type="single" collapsible defaultValue="details" className="mt-2">
+                  <AccordionItem value="details" className="border-none">
+                    <AccordionTrigger className="py-2 text-sm">Journey details</AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-3">
+                        {candidate.journeys.map((journey) => {
+                          const missingForTraveler = missingGeometry.filter(
+                            (note) => note.participantId === journey.participantId,
+                          );
+                          const emphasized =
+                            !emphasizedParticipantId ||
+                            emphasizedParticipantId === journey.participantId;
+                          const letter = travelerLetterAt(journey.participantPosition);
+                          const color = travelerColorAt(journey.participantPosition);
+                          return (
+                            <div
+                              key={`legs-${journey.journeyId}`}
+                              style={{ opacity: emphasized ? 1 : 0.45 }}
+                            >
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-2 font-medium text-ink-900 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                                aria-pressed={emphasizedParticipantId === journey.participantId}
+                                onClick={() =>
+                                  onEmphasizeParticipant?.(
+                                    emphasizedParticipantId === journey.participantId
+                                      ? null
+                                      : journey.participantId,
+                                  )
+                                }
                               >
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-2 font-medium text-ink-900 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
-                                  aria-pressed={emphasizedParticipantId === journey.participantId}
-                                  onClick={() =>
-                                    onEmphasizeParticipant?.(
-                                      emphasizedParticipantId === journey.participantId
-                                        ? null
-                                        : journey.participantId,
-                                    )
-                                  }
+                                <span
+                                  className="grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold text-white"
+                                  style={{ backgroundColor: color }}
+                                  aria-hidden
                                 >
-                                  <span
-                                    className="grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold text-white"
-                                    style={{ backgroundColor: color }}
-                                    aria-hidden
-                                  >
-                                    {letter}
-                                  </span>
-                                  {journey.participantDisplayName}
-                                </button>
-                                <p className="text-xs text-ink-700">
-                                  {placeLabel(journey.origin)} → {placeLabel(journey.destination)}
+                                  {letter}
+                                </span>
+                                {journey.participantDisplayName}
+                              </button>
+                              <p className="text-xs text-ink-700">
+                                {placeLabel(journey.origin)} → {placeLabel(journey.destination)}
+                              </p>
+                              {missingForTraveler.length > 0 ? (
+                                <p className="mt-1 text-xs text-amber-800">
+                                  Route shape unavailable for {missingForTraveler.length} segment
+                                  {missingForTraveler.length === 1 ? '' : 's'}
                                 </p>
-                                {missingForTraveler.length > 0 ? (
-                                  <p className="mt-1 text-xs text-amber-800">
-                                    Route shape unavailable for {missingForTraveler.length} segment
-                                    {missingForTraveler.length === 1 ? '' : 's'}
-                                  </p>
-                                ) : null}
-                                <JourneyDetailsPanel
-                                  searchId={results.searchId}
-                                  journeyId={journey.journeyId}
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                </div>
+                              ) : null}
+                              <JourneyDetailsPanel
+                                searchId={results.searchId}
+                                journeyId={journey.journeyId}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               ) : null}
             </li>
           );

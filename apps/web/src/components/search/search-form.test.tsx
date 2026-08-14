@@ -90,9 +90,9 @@ describe('SearchForm place selection', () => {
     const user = userEvent.setup();
     render(<Harness />);
     const form = screen.getByRole('form', { name: 'Meeting search' });
-    expect(within(form).getAllByLabelText('Display name')).toHaveLength(2);
+    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(2);
     await user.click(within(form).getByRole('button', { name: 'Add traveler' }));
-    expect(within(form).getAllByLabelText('Display name')).toHaveLength(3);
+    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(3);
   });
 
   it('cannot submit arbitrary text and submits selected provider identity', async () => {
@@ -145,9 +145,44 @@ describe('SearchForm place selection', () => {
     expect(body.participants[0].origin.providerId).toBe('participants.0.origin-id');
     expect(body.participants[0].origin.latitude).toBeCloseTo(52.5);
     expect(body.participants[0].origin.placeId).toBeUndefined();
+    expect(body.participants[0].displayName).toBe('Alex');
+    expect(body.participants[1].displayName).toBe('Blake');
     await waitFor(() =>
       expect(push).toHaveBeenCalledWith('/search/44444444-4444-4444-8444-444444444444'),
     );
+  });
+
+  it('defaults traveler names when left blank', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 202,
+      json: async () => ({
+        data: {
+          searchId: '44444444-4444-4444-8444-444444444444',
+          status: 'queued',
+          createdAt: '2026-06-01T12:00:00.000Z',
+        },
+        meta: { requestId: 'r1' },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<Harness />);
+
+    await user.click(
+      screen.getByRole('button', { name: /Pick suggestion for participants.0.origin/i }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: /Pick suggestion for participants.1.origin/i }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Find a meeting point' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body));
+    expect(body.participants[0].displayName).toBe('Traveler A');
+    expect(body.participants[1].displayName).toBe('Traveler B');
+    expect(body.participants[0].id).toBe('traveler-1');
+    expect(screen.queryByLabelText(/Participant ID/i)).not.toBeInTheDocument();
   });
 
   it('editing selected text clears the selection and blocks submit', async () => {

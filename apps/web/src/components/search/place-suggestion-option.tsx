@@ -15,12 +15,14 @@ export type PlaceSuggestionOptionProps = {
   readonly suggestion: PlaceSuggestionView;
   readonly compact?: boolean;
   readonly className?: string;
+  readonly 'data-testid'?: string;
 };
 
 export function PlaceSuggestionOption({
   suggestion,
   compact = false,
   className,
+  'data-testid': dataTestId,
 }: PlaceSuggestionOptionProps) {
   const TypeIcon = placeSuggestionTypeIcon(suggestion.type);
   const typeLabel = placeSuggestionTypeLabel(suggestion.type);
@@ -31,7 +33,7 @@ export function PlaceSuggestionOption({
   const iconSize = compact ? 'h-3.5 w-3.5' : 'h-4 w-4';
 
   return (
-    <div className={cn('flex min-w-0 gap-3', className)}>
+    <div className={cn('flex min-w-0 gap-3', className)} data-testid={dataTestId}>
       <div
         className={cn(
           'flex shrink-0 items-center justify-center rounded-lg',

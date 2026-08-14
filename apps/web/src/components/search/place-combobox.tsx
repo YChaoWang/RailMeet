@@ -2,15 +2,15 @@
 
 import { PLACE_SEARCH_QUERY_MIN_LENGTH } from '@railmeet/shared';
 import type { PlaceSuggestionView } from '@railmeet/validation';
+import { X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 
 import { PlaceSuggestionOption } from '@/components/search/place-suggestion-option';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  placeSuggestionLocalityLine,
+  placeSuggestionOptionAriaLabel,
   placeSuggestionTypeIcon,
-  placeSuggestionTypeLabel,
 } from '@/lib/place-suggestion-presentation';
 import { searchPlaces } from '@/lib/place-search-client';
 import { cn } from '@/lib/utils';
@@ -196,69 +196,88 @@ export function PlaceCombobox({
   const activeOptionId =
     open && activeIndex >= 0 ? `${optionIdPrefix}-opt-${activeIndex}` : undefined;
 
+  const SelectedTypeIcon = selected ? placeSuggestionTypeIcon(selected.type) : null;
+
+  const clearSelection = () => {
+    onClearSelection();
+    onTextChange('');
+    setOpen(false);
+    setLoadState({ kind: 'idle' });
+    setActiveIndex(-1);
+  };
+
   return (
     <div className="relative space-y-1.5">
-      <Input
-        id={id}
-        role="combobox"
-        data-field={fieldPath}
-        value={valueText}
-        disabled={disabled}
-        autoComplete="off"
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls={listboxId}
-        aria-activedescendant={activeOptionId}
-        aria-invalid={invalid}
-        placeholder="Search a station or city"
-        className={cn(selected ? 'border-teal-600 bg-teal-50/40' : undefined)}
-        onChange={(event) => {
-          const next = event.target.value;
-          onTextChange(next);
-          if (selected) {
-            onClearSelection();
-          }
-        }}
-        onKeyDown={onKeyDown}
-        onBlur={() => {
-          // Delay close so option click registers.
-          window.setTimeout(() => setOpen(false), 120);
-        }}
-        onFocus={() => {
-          if (
-            loadState.kind === 'ready' ||
-            loadState.kind === 'empty' ||
-            loadState.kind === 'error'
-          ) {
-            setOpen(true);
-          }
-        }}
-      />
+      <div className="relative">
+        {SelectedTypeIcon ? (
+          <SelectedTypeIcon
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-teal-800"
+            aria-hidden
+          />
+        ) : null}
+        <Input
+          id={id}
+          role="combobox"
+          data-field={fieldPath}
+          value={valueText}
+          disabled={disabled}
+          autoComplete="off"
+          aria-autocomplete="list"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-activedescendant={activeOptionId}
+          aria-invalid={invalid}
+          placeholder="Search a station, city, or address"
+          className={cn(
+            selected ? 'border-teal-600 bg-teal-50/40 pl-10 pr-10' : undefined,
+          )}
+          onChange={(event) => {
+            const next = event.target.value;
+            onTextChange(next);
+            if (selected) {
+              onClearSelection();
+            }
+          }}
+          onKeyDown={onKeyDown}
+          onBlur={() => {
+            // Delay close so option click registers.
+            window.setTimeout(() => setOpen(false), 120);
+          }}
+          onFocus={() => {
+            if (
+              loadState.kind === 'ready' ||
+              loadState.kind === 'empty' ||
+              loadState.kind === 'error'
+            ) {
+              setOpen(true);
+            }
+          }}
+        />
+        {selected ? (
+          <button
+            type="button"
+            aria-label="Clear selected place"
+            disabled={disabled}
+            className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-950 disabled:pointer-events-none disabled:opacity-50"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={clearSelection}
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        ) : null}
+      </div>
       {selected ? (
-        <div
-          className="flex items-center gap-1.5 text-xs text-teal-800"
+        <PlaceSuggestionOption
+          suggestion={selected}
+          compact
+          className="rounded-lg border border-teal-600/20 bg-teal-50/30 px-2 py-1.5"
           data-testid="place-selected-hint"
-        >
-          {(() => {
-            const SelectedIcon = placeSuggestionTypeIcon(selected.type);
-            const locality = placeSuggestionLocalityLine(selected);
-            const detail = [placeSuggestionTypeLabel(selected.type), locality]
-              .filter(Boolean)
-              .join(' · ');
-            return (
-              <>
-                <SelectedIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span>
-                  Selected · {detail || selected.type}
-                </span>
-              </>
-            );
-          })()}
-        </div>
+        />
       ) : null}
       {open ? (
         <div
-          className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto overflow-x-hidden rounded-lg border border-ink-700/15 bg-white shadow-lg"
+          className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto overflow-x-hidden rounded-lg border border-ink-700/15 bg-white shadow-lg"
           data-testid="place-suggestion-panel"
         >
           {loadState.kind === 'loading' ? (
@@ -318,6 +337,7 @@ export function PlaceCombobox({
                     id={`${optionIdPrefix}-opt-${index}`}
                     role="option"
                     aria-selected={active}
+                    aria-label={placeSuggestionOptionAriaLabel(suggestion)}
                     ref={(node) => {
                       optionRefs.current[index] = node;
                     }}

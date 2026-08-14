@@ -184,4 +184,44 @@ describe('PlaceCombobox', () => {
     await waitFor(() => expect(screen.getByText(/No matching places/i)).toBeInTheDocument());
     view.unmount();
   });
+
+  it('shows compact selected summary with modes and clears via button', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const onTextChange = vi.fn();
+    const onClearSelection = vi.fn();
+
+    const view = render(
+      <PlaceCombobox
+        id="origin"
+        fieldPath="participants.0.origin"
+        valueText="Berlin Hbf"
+        selected={berlinStop}
+        onTextChange={onTextChange}
+        onSelect={vi.fn()}
+        onClearSelection={onClearSelection}
+      />,
+    );
+
+    expect(screen.getByTestId('place-selected-hint')).toBeInTheDocument();
+    expect(screen.getAllByText('Rail').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('button', { name: 'Clear selected place' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear selected place' }));
+    expect(onClearSelection).toHaveBeenCalledTimes(1);
+    expect(onTextChange).toHaveBeenCalledWith('');
+
+    view.rerender(
+      <PlaceCombobox
+        id="origin"
+        fieldPath="participants.0.origin"
+        valueText=""
+        selected={null}
+        onTextChange={onTextChange}
+        onSelect={vi.fn()}
+        onClearSelection={onClearSelection}
+      />,
+    );
+    expect(screen.queryByTestId('place-selected-hint')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear selected place' })).not.toBeInTheDocument();
+  });
 });
