@@ -1,173 +1,136 @@
-# Search and results user experience
+# Search and results UX
 
-Phase 9 exposes Phase 8 persisted rankings through read APIs and a map-first Next.js UI.
+Map-first Next.js UI for planning, polling, ranked results, and lazy journey details.
 
-## Architecture
+## Data flow
 
 ```text
-Browser (MapLibre map + planner panel)
-  → Next.js Route Handlers (/api/v1/meeting-searches…)
-  → Fastify (/api/v1/meeting-searches…)
-  → PostgreSQL (Phase 8 persisted rows + places.location)
+Browser (MapLibre + planner panel)
+  → Next.js Route Handlers (/api/v1/…)
+  → Fastify
+  → PostgreSQL (rankings, places, journey legs JSONB)
 ```
 
-No Redis, BullMQ, Transitous, ranking recomputation, feasibility recomputation, or
-browser geocoding on the read path. Ranking-mode tabs switch over already-persisted rows.
+The read path does **not** use Redis, BullMQ, Transitous plan, or ranking recomputation. Ranking-mode tabs switch over persisted rows only.
 
-## Place autocomplete
+## Planner and place input
 
-Origin fields use a same-origin combobox:
+### Autocomplete
 
 ```text
 PlaceCombobox → GET /api/v1/places/search?q=…
-  → Next.js proxy → Fastify → Transitous GET /api/v1/geocode?text=…
-  → normalized PlaceSuggestion[]
+  → Transitous GET /api/v1/geocode
+  → PlaceSuggestion[] (type icon, mode chips, locality line)
 ```
 
-Requirements:
+- Debounced (~300 ms) after 2+ non-whitespace characters.
+- Stops prioritized over cities/addresses.
+- Submit requires a structured selection (provider id + coordinates) — arbitrary text is rejected.
+- Places upsert into `places` on search create; routing uses stored coordinates.
 
-- search starts after 2 non-whitespace characters with ~300 ms debounce;
-- stops are prioritized ahead of cities/addresses;
-- selection requires a structured MOTIS identity + coordinates (never free text);
-- places are upserted into `places` (provider + provider_place_id) only when the meeting
-  search is created;
-- worker routing continues to use stored `places.location` — no browser Transitous calls
-  and no re-geocode for already-persisted origins.
+### Map-first workspace
 
-The map is the primary workspace.
+| Viewport | Layout |
+| -------- | ------ |
+| Desktop (~1440) | Full-bleed map; ~400px left overlay panel |
+| Tablet (~768) | Same left panel |
+| Mobile (~390) | Full-screen map; bottom sheet (collapsed / expanded) |
 
-| Viewport        | Layout                                                                            |
-| --------------- | --------------------------------------------------------------------------------- |
-| Desktop (~1440) | Full-bleed MapLibre map; ~400px left overlay panel with brand + controls          |
-| Tablet (~768)   | Same left-panel pattern                                                           |
-| Mobile (~390)   | Full-screen map; single bottom sheet (collapsed / expanded / drag) with safe-area |
+- Map shell stays mounted across lifecycle states and network errors.
+- Draft origin markers appear on autocomplete select (before submit).
+- No route geometry until ranked results exist.
 
-Lifecycle status, search form, ranking modes, candidates, and journey details render inside
-the panel. The map shell stays mounted across polling and transient network errors. Draft
-origins appear on the map as soon as a place suggestion is selected (no routes before create).
+### Search form
 
-### Markers and routes (persisted data only)
+- 2–6 travelers; auto-generated participant ids; optional display names default to “Traveler A/B/…”.
+- No manual participant-id field in the UI.
 
-Place views on summary and results include optional `longitude` / `latitude` from
-`places.location` (PostGIS). The UI:
+## Results and ranking modes
 
-- draws distinct origin markers (stable letter + color) for travelers with coordinates;
-- draws candidate meeting-point markers for the active ranking mode;
-- emphasizes the selected candidate destination;
-- draws **every traveler’s** real selected-candidate journey geometry simultaneously from
-  persisted MOTIS EncodedPolyline fields (transit solid, walk dashed; never fabricated
-  straight lines);
-- highlights one traveler’s full route while dimming others;
-- shows accessible popups (traveler journey summary / meeting arrival spread) and a compact
-  letter+name legend;
-- fits bounds to markers and decoded route coordinates once per geometry identity, with
-  sheet/panel-aware padding — emphasis and manual pan/zoom do not repeatedly reset the camera.
+When `completionOutcome === 'ranked'`:
 
-Missing coordinates omit that marker; missing leg geometry omits that segment only.
+- Four modes when persisted: fairest, fastest overall, fewest transfers, arrive together.
+- Candidate list preserves **API order** (rank ascending) — no client re-sort.
+- Selecting a candidate updates map emphasis; does not create a new search or call Transitous.
 
-## Public HTTP contracts
+Empty outcomes (`no_candidates`, `no_feasible_candidates`) show copy inside the panel; map remains visible.
 
-| Method | Path                                         | Behavior                                                                                                                                                  |
-| ------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/v1/meeting-searches`                   | Create (unchanged)                                                                                                                                        |
-| GET    | `/api/v1/meeting-searches/:searchId`         | Summary for any lifecycle state (`200`); `404` unknown; `400` bad UUID                                                                                    |
-| GET    | `/api/v1/meeting-searches/:searchId/results` | Ranked results when `completed` (`200`); `409 RESULTS_NOT_READY` while non-completed non-failed; `409 SEARCH_FAILED` when failed/cancelled; `404` unknown |
+## Map rendering
 
-Place views may include `name`, `longitude`, and `latitude` when present in `places`.
-Selected journey legs include optional normalized `geometry: { points, precision, length } | null`
-from MOTIS EncodedPolyline (persisted in `meeting_search_journeys.legs` jsonb). Precision is
-provider-supplied (v5 typically 6) and is never hard-coded to 5.
+From persisted data only:
 
-## Map route rendering
+- Lettered origin markers per traveler.
+- Meeting-point marker for selected candidate.
+- All travelers’ route geometries decoded from MOTIS EncodedPolyline (transit solid, walk dashed).
+- One traveler emphasized at a time; others dimmed.
+- Missing geometry omits that segment — no straight-line fallback.
+- Pre-search: station overlay via `GET /api/v1/map/stops` on pan/zoom (no `/plan` on draft map).
 
-When a ranked candidate is selected (default: rank 1 of the active mode):
+Attribution: OpenStreetMap + Transitous outside the panel cover zone.
 
-- origin and meeting-point markers are shown when coordinates exist;
-- each participant’s selected journey legs are decoded client-side and drawn as MapLibre
-  GeoJSON line layers (transit solid, walk dashed, with white casing);
-- missing leg geometry never produces a straight-line fallback — journey details show
-  “Route shape unavailable for this segment”;
-- ranking-mode and candidate switches use already-loaded results only (no Transitous).
+## Journey details (expanded)
 
-Attribution remains visible (OpenStreetMap + Transitous) outside the panel cover zone.
-
-## Exhaustive lifecycle → UI mapping
-
-| Status                | Produced by (today)                          | Terminal | Continue polling | Fetch results | Panel copy                   |
-| --------------------- | -------------------------------------------- | -------: | ---------------: | ------------: | ---------------------------- |
-| `queued`              | create                                       |       no |              yes |            no | Preparing / waiting          |
-| `running`             | kickoff                                      |       no |              yes |            no | Comparing routes             |
-| `partially-completed` | reserved; not written by Phase 8             |       no |              yes |            no | Still refining               |
-| `completed`           | Phase 8 finalize                             |      yes |               no |           yes | Ranked list or empty outcome |
-| `failed`              | Phase 8 finalize                             |      yes |               no |            no | Failed (safe copy)           |
-| `cancelling`          | unused transitional; kickoff refuses restart |       no |              yes |            no | Stopping (no Cancel control) |
-| `cancelled`           | unused; kickoff treats as terminal           |      yes |               no |            no | Cancelled terminal           |
-
-Shared helpers in `@railmeet/shared` (`search-lifecycle.ts`) classify terminal vs polling statuses.
-`shouldFetchSearchResults` is true only for `completed`.
-
-## Completion outcomes
-
-| Outcome                  | HTTP results                | UI                                                              |
-| ------------------------ | --------------------------- | --------------------------------------------------------------- |
-| `ranked`                 | `200` with ranking rows     | Segmented ranking modes; preserve API order; map selection sync |
-| `no_candidates`          | `200` with empty `rankings` | Empty plan copy inside panel; map remains visible               |
-| `no_feasible_candidates` | `200` with empty `rankings` | Same empty plan screen                                          |
-
-## Deterministic result order
+Compact result rows show **`routeSummary` chips** only. Full detail loads on expand:
 
 ```text
-RANKING_MODES order → persisted rank ascending → participant position ascending
+JourneyDetailsPanel
+  → loadJourneyDetailCached(searchId, journeyId)
+  → GET /api/v1/meeting-searches/:searchId/journeys/:journeyId
+  → JourneyItineraryTimeline (provider) | RankingJourneyLegs (legacy)
 ```
 
-Frontend filters by mode only and does not re-sort. Selecting a candidate updates map
-highlight state without creating a new search or calling Transitous.
+### Client cache
 
-## Polling rules (web)
+- In-memory cache keyed by `searchId + journeyId`.
+- Concurrent expanders share one in-flight promise.
+- Re-opening or switching ranking mode reuses cache when `journeyId` unchanged.
+- No prefetch of all journeys on results load.
 
-1. Open `/search/[searchId]` inside the map shell.
-2. Poll summary about every 2 seconds without overlapping requests.
-3. Abort on unmount; stop on terminal / not-found / malformed ID.
-4. Fetch `/results` once after `completed`.
-5. Preserve last summary on network errors; show inline Retry.
-6. Ignore stale responses after retry generation bumps.
+### Provider-native timeline UI
+
+When `detailSource === 'provider'`, the timeline follows a **Transitous-inspired** continuous layout (not isolated leg cards):
+
+- Sticky journey header: participant context, origin → destination, date range, `+N day` arrival, route pill sequence
+- Colored **route pills** and vertical segments using MOTIS route colors (sanitized)
+- Time + station on one line; platform/track badges; tabular numerals
+- Cross-midnight **date separators** using station-local timezones (`Intl`, not +24h arithmetic)
+- Transfer blocks between services: connection window, walk, waiting, station-change warning
+- Progressive disclosure: intermediate stops, walking directions, alerts, ticket links (validated URLs)
+- **`displayName`** as primary service identity (ICE 1135, FlixBus N814, LNER — never generic “Train”)
+- Leg **alternatives** from MOTIS shown as informational only (do not mutate ranked journey)
+
+Legacy searches render the same timeline component from normalized ranking legs with generic mode labels.
+
+### Participant context
+
+Multi-traveler candidates show whose timeline is expanded, e.g. “David’s journey · Berlin Hbf → York”.
+
+## Polling
+
+On `/search/[searchId]`:
+
+1. Poll summary ~every 2 s without overlap.
+2. Abort on unmount; stop on terminal / not-found / malformed id.
+3. Fetch `/results` once when `completed`.
+4. Preserve last summary on network error with Retry.
+5. Ignore stale responses after retry generation bumps.
+
+Shared helpers in `@railmeet/shared` (`search-lifecycle.ts`) drive terminal vs polling behavior.
 
 ## Visual direction
 
-Restrained transportation aesthetic: neutral map background, white panels, navy text, teal
-selection accent, compact typography, subtle borders/shadows. No glassmorphism or dashboard
-stat tiles. MapLibre + OpenFreeMap Liberty style with attribution.
+Restrained transportation aesthetic: neutral map, white panels, navy text, teal selection accent, compact type. MapLibre + OpenFreeMap Liberty style.
 
-## Local environment
-
-| Variable       | Used by             | Notes                                        |
-| -------------- | ------------------- | -------------------------------------------- |
-| `API_BASE_URL` | Next Route Handlers | Server-only Fastify origin (default `:3001`) |
-
-Browser calls same-origin `/api/v1/...` only.
-
-## Browser visual verification (when tooling available)
-
-Capture at 1440 / 768 / 390 for: initial search, queued/running, ranked results, selected
-candidate with journeys, empty outcome, failed/network error, mobile collapsed + expanded
-sheet. Do not claim visual acceptance without screenshots or human review.
-
-## Tests
+## Local verification
 
 ```bash
+pnpm --filter @railmeet/web dev
 pnpm --filter @railmeet/web test
-pnpm --filter @railmeet/api test
-pnpm --filter @railmeet/database test:integration
+pnpm --filter @railmeet/web exec tsx ./scripts/journey-details-screenshots.tsx
 ```
 
-MapLibre is stubbed in unit tests (`disableMap` / module mock). Draft markers are asserted via
-the real `SearchPlannerPage` wiring (autocomplete select → live scene → SearchMap props)
-before any create-search call. Results markers/routes still come from `buildMapScene`.
-
-Station/railway context uses OpenFreeMap Liberty basemap layers (`road_*_rail`, `poi_transit`);
-no viewport station API is required for Phase 9.
+Screenshots land in `tmp/journey-details-screenshots/` for visual comparison (Berlin→York fixture, mobile/desktop).
 
 ## Out of scope
 
-Auth, accounts, SSE, cancel/retry controls, fabricated route geometry, Google Maps API,
-browser-direct Transitous plan calls, analytics, and Phase 10+ product work.
+Authentication, SSE, search cancellation UI, browser-direct Transitous plan, fabricated geometry, analytics.

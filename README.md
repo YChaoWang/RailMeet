@@ -10,14 +10,16 @@ reliability, clear architecture, and incremental delivery.
 
 | Doc                                                                                                  | Contents                                |
 | ---------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| [docs/README.md](./docs/README.md)                                                                   | Documentation index                     |
 | [docs/architecture.md](./docs/architecture.md)                                                       | Monorepo, packages, services, lifecycle |
-| [docs/domain.md](./docs/domain.md)                                                                   | Domain model, time, validation          |
+| [docs/domain.md](./docs/domain.md)                                                                   | Domain model, time, journey detail      |
 | [docs/persistence-and-api.md](./docs/persistence-and-api.md)                                         | Database, outbox, HTTP API              |
+| [docs/testing.md](./docs/testing.md)                                                                 | Test commands, layers, fixtures         |
 | [docs/outbox-dispatch.md](./docs/outbox-dispatch.md)                                                 | Dispatcher, BullMQ publish, retries     |
-| [docs/search-kickoff-and-routing.md](./docs/search-kickoff-and-routing.md)                           | Kickoff consumer, retention, Transitous |
-| [docs/candidate-generation-and-routing-fanout.md](./docs/candidate-generation-and-routing-fanout.md) | Phase 7 candidates and journey fan-out  |
-| [docs/finalization-and-ranking.md](./docs/finalization-and-ranking.md)                               | Phase 8 fan-in, ranking, completion     |
-| [docs/search-and-results-ux.md](./docs/search-and-results-ux.md)                                     | Phase 9 results API and search UI       |
+| [docs/search-kickoff-and-routing.md](./docs/search-kickoff-and-routing.md)                           | Kickoff consumer, Transitous boundary   |
+| [docs/candidate-generation-and-routing-fanout.md](./docs/candidate-generation-and-routing-fanout.md) | Candidates and journey fan-out          |
+| [docs/finalization-and-ranking.md](./docs/finalization-and-ranking.md)                               | Fan-in, ranking, completion             |
+| [docs/search-and-results-ux.md](./docs/search-and-results-ux.md)                                     | Map-first UI, journey details           |
 
 ## Architecture (summary)
 
@@ -45,8 +47,9 @@ See [docs/architecture.md](./docs/architecture.md) for the full layout and depen
 - Deterministic ranking for `fairest`, `fastest-overall`, `fewest-transfers`, `arrive-together`
 - Durable `completed` / `failed` search outcomes with relational ranking persistence
 - Provider-neutral routing boundary + Transitous MOTIS 2 `/api/v5/plan` adapter
-- `POST/GET /api/v1/meeting-searches` and `GET …/results` with shared envelopes
-- Next.js search form + durable status/results pages (same-origin Route Handlers)
+- `POST/GET /api/v1/meeting-searches`, `GET …/results`, `GET …/journeys/:journeyId`
+- Next.js map-first planner + results + Transitous-inspired journey detail timeline
+- Place autocomplete with mode chips; lazy journey detail with client cache
 - `/health`, Compose PostGIS + Redis, unit and integration tests
 
 `queued` means durably accepted. `running` means the async pipeline is in progress.
@@ -140,10 +143,10 @@ No secrets are committed.
 ```bash
 pnpm test
 pnpm test:integration
+pnpm test:integration:queue
 ```
 
-API tests use `fastify.inject()` (no real ports). Integration tests apply committed
-migrations against disposable PostGIS via Testcontainers.
+See [docs/testing.md](./docs/testing.md). API tests use `fastify.inject()` (no real ports). Integration tests apply committed migrations against disposable PostGIS via Testcontainers.
 
 ## Current limitations
 

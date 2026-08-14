@@ -1,27 +1,27 @@
 # Architecture
 
-RailMeet is a pnpm + Turborepo monorepo with three deployable apps and shared packages.
+RailMeet is a **pnpm + Turborepo** monorepo: three deployable apps, shared packages, and one async pipeline from search creation to ranked results.
 
-## Layout
+## Repository layout
 
 ```text
 railmeet/
 ├── apps/
-│   ├── web/           # Next.js UI (talks only to the API)
-│   ├── api/           # Fastify HTTP API
-│   └── worker/        # Outbox dispatcher + BullMQ kickoff consumer
+│   ├── web/              # Next.js 15 — map-first UI, same-origin API proxy
+│   ├── api/              # Fastify — HTTP boundary, no BullMQ/Transitous
+│   └── worker/           # Outbox dispatcher + BullMQ consumers
 ├── packages/
-│   ├── shared/        # Domain vocabulary — no Zod, no infrastructure
-│   ├── validation/    # Zod boundary schemas
-│   ├── database/      # Drizzle + PostGIS + outbox claim APIs
-│   ├── queue/         # BullMQ producer, dispatcher, kickoff consumer
-│   ├── config/        # Validated environment loaders
-│   ├── observability/ # Structured logging (Pino)
-│   ├── routing/       # Provider-neutral journey planning + Transitous
-│   └── search-engine/ # Pruning / scoring / ranking (stub)
+│   ├── shared/           # Domain vocabulary (enums, limits, lifecycle helpers)
+│   ├── validation/       # Zod request/response schemas
+│   ├── database/         # Drizzle, PostGIS, repositories, outbox claim
+│   ├── queue/            # BullMQ dispatcher, job contracts, consumers (shared)
+│   ├── config/           # Validated environment loaders
+│   ├── observability/    # Pino logging
+│   ├── routing/          # Provider-neutral plan + Transitous MOTIS v5 adapter
+│   ├── search-engine/    # Candidate ordinals, feasibility, ranking
+│   └── catalog/          # GeoNames + Transitous hub import pipeline
 ├── docs/
-├── docker-compose.yml # PostgreSQL+PostGIS and Redis
-└── turbo.json
+└── docker-compose.yml    # PostgreSQL 16 + PostGIS 3.5, Redis 7
 ```
 
 ## Dependency direction
@@ -29,50 +29,79 @@ railmeet/
 ```text
 packages/shared
     ↑
-packages/validation
+packages/validation · packages/search-engine
 packages/database
     ↑
-packages/queue          # depends on database + observability; not Fastify
-packages/routing        # Transitous adapter; no database/BullMQ imports
+packages/queue · packages/routing · packages/catalog
     ↑
 apps/api · apps/web · apps/worker
 ```
 
-`apps/api` must not import `@railmeet/queue`, `@railmeet/routing`, BullMQ, Redis, or Transitous.
+**Hard rules**
 
-Rules:
+| Layer | Must not import |
+| ----- | ---------------- |
+| `apps/api` | `@railmeet/queue`, `@railmeet/routing`, BullMQ, Redis clients, Transitous |
+| `apps/web` | PostgreSQL, Redis, BullMQ, direct Transitous plan calls |
+| `packages/shared` | Zod, Drizzle, Fastify, infrastructure |
+| `packages/routing` | Database, BullMQ (adapter only) |
 
-- Finite enums and numeric limits live once in `@railmeet/shared`.
-- Zod schemas and SQL `CHECK` constraints reuse those values — they must not drift.
-- Domain types (`SearchRequest`, …) describe internal concepts.
-- Boundary DTOs (`CreateMeetingSearchRequest`, …) are inferred from Zod.
-- Persistence commands (`CreateMeetingSearchCommand`, …) are explicit repository inputs,
-  not Drizzle row types and not HTTP DTOs.
-- Search/ranking logic must not import Fastify or Transitous directly.
-- Queue protocol constants live in `@railmeet/queue`, not `@railmeet/shared`.
+- Finite enums and numeric limits live **once** in `@railmeet/shared`.
+- Zod schemas and SQL `CHECK` constraints reuse those values.
+- Queue job names and outbox event types live in `@railmeet/queue`.
+- Ranking and feasibility logic live in `@railmeet/search-engine` — no Fastify or Transitous imports.
 
 ## Service responsibilities
 
-| Service    | Responsibility                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------ |
-| **web**    | UI only. Never touches PostgreSQL, Redis, BullMQ, or Transitous.                           |
-| **api**    | Validates requests, creates searches, returns status. Thin handlers over application code. |
-| **worker** | Outbox → BullMQ publish + kickoff consumer (`queued` → `running`).                         |
+| Service | Role |
+| ------- | ---- |
+| **web** | Planner, status polling, results, map, journey detail UI. Talks to Fastify via same-origin Route Handlers (`/api/v1/...`). |
+| **api** | Validates HTTP, creates searches, reads summary/results/journey detail. Thin routes → services → repositories. |
+| **worker** | Outbox dispatcher; kickoff, candidate, routing, and finalization BullMQ consumers; Transitous plan calls; Redis plan cache. |
 
-## Runtime lifecycle
+## End-to-end lifecycle
 
-- `buildServer()` / `buildWorker()` construct without listening as a side effect.
-- Database and Redis clients are created explicitly in entrypoints.
-- API `app.close()` awaits database pool shutdown when registered.
-- Worker shutdown: close BullMQ consumer → stop dispatcher → close queue → close Redis → close database.
-- Config is loaded via `@railmeet/config` — route and repository modules must not read
-  `process.env` directly.
+```text
+Browser → POST /api/v1/meeting-searches → 202 Accepted
+                ↓ (transaction)
+         search row + outbox event
+                ↓
+Worker dispatcher → BullMQ meeting-search.requested
+                ↓
+Kickoff consumer → status running
+                ↓
+Candidate generation → nearest meeting cities + routing work rows
+                ↓
+Routing consumers → Transitous /api/v5/plan → normalized journeys (+ optional provider itinerary JSON)
+                ↓
+Finalization → feasibility + rankAllModes → relational rankings
+                ↓
+status completed | failed
+                ↓
+Browser polls GET summary → GET results → lazy GET journey detail
+```
+
+Status meanings:
+
+| Status | Meaning |
+| ------ | ------- |
+| `queued` | Aggregate and outbox row committed; job may not be published yet |
+| `running` | Pipeline accepted; candidates/routing/finalization in progress |
+| `completed` | Terminal success — rankings (possibly empty outcome) persisted |
+| `failed` | Terminal technical failure — no partial rankings |
+
+## Runtime conventions
+
+- `buildServer()` / worker bootstrap construct dependencies without listening as a side effect.
+- Database and Redis clients are created in entrypoints, not at module import.
+- Config is loaded through `@railmeet/config`; route handlers do not read `process.env` directly.
+- Worker graceful shutdown: stop consumers → stop dispatcher → close queues/Redis → close database.
 
 ## Local infrastructure
 
-Compose provides PostgreSQL 16 + PostGIS 3.5 and Redis 7.
+Compose provides PostGIS and Redis:
 
-- Image: `ghcr.io/baosystems/postgis:16-3.5` (arm64-friendly; official `postgis/postgis`
-  is amd64-only).
-- Redis: `maxmemory-policy noeviction`, AOF enabled, named volume for local durability.
-  Production Redis HA/auth is separate from Compose.
+- Image: `ghcr.io/baosystems/postgis:16-3.5` (arm64-friendly).
+- Redis: `noeviction`, AOF enabled.
+
+Integration tests use Testcontainers against the same migration journal as production (`pnpm test:integration`, `pnpm test:integration:queue`).
