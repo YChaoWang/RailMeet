@@ -122,8 +122,8 @@ type Scenario = {
   height: number;
   title: string;
   render: (
-    JourneyItineraryDetails: typeof import('../src/components/search/journey-leg-details.tsx').JourneyItineraryDetails,
-    RankingJourneyLegs: typeof import('../src/components/search/journey-leg-details.tsx').RankingJourneyLegs,
+    JourneyItineraryTimeline: typeof import('../src/components/search/journey-itinerary-timeline.tsx').JourneyItineraryTimeline,
+    RankingJourneyLegs: typeof import('../src/components/search/journey-itinerary-timeline.tsx').RankingJourneyLegs,
   ) => ReturnType<typeof createElement>;
 };
 
@@ -133,8 +133,8 @@ const scenarios: Scenario[] = [
     width: 1280,
     height: 1600,
     title: 'Berlin Hbf → York (Transitous fixture)',
-    render: (JourneyItineraryDetails) =>
-      createElement(JourneyItineraryDetails, {
+    render: (JourneyItineraryTimeline) =>
+      createElement(JourneyItineraryTimeline, {
         itinerary: loadFixture('transitous-berlin-york.json'),
         context: {
           participantDisplayName: 'David',
@@ -148,8 +148,8 @@ const scenarios: Scenario[] = [
     width: 390,
     height: 2200,
     title: 'Berlin Hbf → York mobile',
-    render: (JourneyItineraryDetails) =>
-      createElement(JourneyItineraryDetails, {
+    render: (JourneyItineraryTimeline) =>
+      createElement(JourneyItineraryTimeline, {
         itinerary: loadFixture('transitous-berlin-york.json'),
         context: {
           participantDisplayName: 'David',
@@ -163,8 +163,8 @@ const scenarios: Scenario[] = [
     width: 480,
     height: 1200,
     title: 'Manchester → York',
-    render: (JourneyItineraryDetails) =>
-      createElement(JourneyItineraryDetails, {
+    render: (JourneyItineraryTimeline) =>
+      createElement(JourneyItineraryTimeline, {
         itinerary: loadFixture('transitous-manchester-york.json'),
         context: { originLabel: 'Manchester', destinationLabel: 'York' },
       }),
@@ -174,8 +174,8 @@ const scenarios: Scenario[] = [
     width: 480,
     height: 900,
     title: 'Station-changing transfer',
-    render: (JourneyItineraryDetails) =>
-      createElement(JourneyItineraryDetails, {
+    render: (JourneyItineraryTimeline) =>
+      createElement(JourneyItineraryTimeline, {
         itinerary: stationChangeItinerary,
         context: { originLabel: 'London Victoria', destinationLabel: 'London Bridge' },
       }),
@@ -185,15 +185,15 @@ const scenarios: Scenario[] = [
     width: 480,
     height: 700,
     title: 'Delayed service',
-    render: (JourneyItineraryDetails) =>
-      createElement(JourneyItineraryDetails, { itinerary: delayedItinerary }),
+    render: (JourneyItineraryTimeline) =>
+      createElement(JourneyItineraryTimeline, { itinerary: delayedItinerary }),
   },
   {
     id: 'legacy-fallback',
     width: 480,
     height: 700,
     title: 'Legacy fallback journey',
-    render: (_JourneyItineraryDetails, RankingJourneyLegs) =>
+    render: (_JourneyItineraryTimeline, RankingJourneyLegs) =>
       createElement(RankingJourneyLegs, {
         legs: legacyLegs,
         context: { originLabel: 'Berlin Hbf', destinationLabel: 'Munich Hbf' },
@@ -204,8 +204,8 @@ const scenarios: Scenario[] = [
 async function main() {
   // tsx SSR loads components compiled without the Next.js JSX runtime.
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
-  const { JourneyItineraryDetails, RankingJourneyLegs } = await import(
-    '../src/components/search/journey-leg-details.tsx'
+  const { JourneyItineraryTimeline, RankingJourneyLegs } = await import(
+    '../src/components/search/journey-itinerary-timeline.tsx'
   );
 
   mkdirSync(outDir, { recursive: true });
@@ -216,7 +216,7 @@ async function main() {
       createElement(
         'section',
         { id: 'journey', className: 'mx-auto max-w-md rounded-xl border border-ink-700/10 px-3 py-2' },
-        scenario.render(JourneyItineraryDetails, RankingJourneyLegs),
+        scenario.render(JourneyItineraryTimeline, RankingJourneyLegs),
       ),
     );
     const htmlPath = resolve(outDir, `${scenario.id}.html`);

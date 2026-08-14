@@ -22,17 +22,9 @@ import {
   buildTimelineItems,
   continuesAsStops,
   expandableIntermediateStops,
-  formatConnectionLabel,
   formatDelayLabel,
-  formatMotisDistance,
-  formatMotisDuration,
   httpUrl,
   journeyOverviewHeader,
-  motisChipColors,
-  motisIconKind,
-  motisOperatorLabel,
-  motisServiceLabel,
-  stopCountLabel,
   ticketUrl,
   type JourneyItineraryContext,
   type TimelineItem,
@@ -41,7 +33,15 @@ import {
 import {
   directionLine,
   formatMotisClock,
-  motisChipColors as chipColorsFromLeg,
+  formatMotisDistance,
+  formatMotisDuration,
+  motisChipColors,
+  motisIconKind,
+  motisOperatorLabel,
+  motisServiceLabel,
+  rankingLegToMotis,
+  stopCountLabel,
+  type RankingLeg,
 } from '@/lib/journey-leg-presentation';
 import { cn } from '@/lib/utils';
 import type { MotisItineraryJson, MotisLegJson, MotisModeIconKind, MotisPlaceJson } from '@railmeet/shared';
@@ -202,7 +202,7 @@ function TransferBlock({
       data-testid="journey-transfer"
     >
       <p className="font-medium text-ink-950">
-        {formatConnectionLabel(breakdown.connectionSeconds)} connection
+        {formatMotisDuration(breakdown.connectionSeconds)} connection
       </p>
       {walkLeg && breakdown.walkSeconds !== null ? (
         <p className="mt-0.5">
@@ -387,7 +387,6 @@ function LegAlternatives({ leg }: { readonly leg: MotisLegJson }) {
     <ul className="mt-2 space-y-1 text-[11px] text-ink-700" data-testid="journey-leg-alternatives">
       <li className="font-medium text-ink-900">Alternative departures (informational)</li>
       {alternatives.slice(0, 3).map((alt, index) => {
-        const transit = alt.find((entry) => motisServiceLabel(entry) !== motisServiceLabel(leg) || entry.startTime !== leg.startTime);
         const primary = alt.find((entry) => entry.displayName) ?? alt[0];
         if (!primary) {
           return null;
@@ -695,7 +694,7 @@ export function JourneyRouteSummary({
   return (
     <p className="mt-2 flex flex-wrap gap-1" data-testid="journey-route-summary">
       {segments.map((segment, index) => {
-        const colors = chipColorsFromLeg({
+        const colors = motisChipColors({
           mode: segment.mode,
           ...(segment.routeColor ? { routeColor: segment.routeColor } : {}),
           ...(segment.routeTextColor ? { routeTextColor: segment.routeTextColor } : {}),
@@ -712,5 +711,27 @@ export function JourneyRouteSummary({
         );
       })}
     </p>
+  );
+}
+
+/** Fallback when a search predates stored MOTIS itineraries (detailSource=legacy). */
+export function RankingJourneyLegs({
+  legs,
+  context,
+}: {
+  readonly legs: readonly RankingLeg[];
+  readonly context?: JourneyItineraryContext;
+}) {
+  const itinerary: MotisItineraryJson = {
+    duration: legs.reduce((sum, leg) => sum + leg.durationMinutes * 60, 0),
+    startTime: legs[0]?.departureAt ?? '',
+    endTime: legs[legs.length - 1]?.arrivalAt ?? '',
+    transfers: Math.max(0, legs.filter((leg) => rankingLegToMotis(leg).displayName).length - 1),
+    legs: legs.map(rankingLegToMotis),
+  };
+  return (
+    <div data-testid="ranking-journey-legs">
+      <JourneyItineraryTimeline itinerary={itinerary} context={context ?? {}} />
+    </div>
   );
 }

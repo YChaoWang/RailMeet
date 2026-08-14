@@ -371,6 +371,7 @@ describe('SearchResultsView', () => {
     );
     // Same journeyIds across modes — no additional detail fetches.
     expect(fetchSpy.mock.calls.length).toBe(afterInitial);
+    expect(fetchSpy.mock.calls.every((call) => !String(call[0]).includes('transitous'))).toBe(true);
   });
 
   it('selecting another candidate fetches its journeys without creating a search', async () => {
@@ -378,10 +379,13 @@ describe('SearchResultsView', () => {
     const fetchSpy = vi.mocked(globalThis.fetch);
     render(<SearchResultsViewStandalone results={rankedResults} />);
     await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
+    const afterInitial = fetchSpy.mock.calls.length;
     const cologne = screen.getByRole('button', { name: /Rank 2[\s\S]*Cologne/i });
     await user.click(cologne);
     expect(cologne).toHaveAttribute('aria-pressed', 'true');
     // Cologne reuses the same journeyIds as Munich in this fixture — still cached.
+    expect(fetchSpy.mock.calls.length).toBe(afterInitial);
     expect(fetchSpy.mock.calls.every((call) => String(call[0]).includes('/journeys/'))).toBe(true);
+    expect(fetchSpy.mock.calls.every((call) => !String(call[0]).includes('transitous'))).toBe(true);
   });
 });

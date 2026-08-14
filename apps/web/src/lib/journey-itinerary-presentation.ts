@@ -1,6 +1,5 @@
 import {
   isMotisTransitLeg,
-  isMotisWalkLeg,
   motisPlanModeLabel,
   type MotisItineraryJson,
   type MotisLegJson,
@@ -103,13 +102,6 @@ export function motisDayOffset(
     return 0;
   }
   return Math.round((tDay - refDay) / 86_400_000);
-}
-
-function weekdayLabel(iso: string, timeZone: string | undefined): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    weekday: 'long',
-    timeZone: timeZone ?? 'UTC',
-  }).format(new Date(iso));
 }
 
 function shortDateLabel(iso: string, timeZone: string | undefined): string {
@@ -294,14 +286,14 @@ function findNextTransit(legs: readonly MotisLegJson[], index: number): MotisLeg
   return null;
 }
 
-export function normalizeLegForDisplay(leg: MotisLegJson): MotisLegJson {
+function normalizeLegForDisplay(leg: MotisLegJson): MotisLegJson {
   if (isMotisTransitLeg(leg) || isWalkLike(leg)) {
     return leg;
   }
   return { ...leg, displayName: motisPlanModeLabel(leg.mode) };
 }
 
-export function displayLegsForTimeline(itinerary: MotisItineraryJson): MotisLegJson[] {
+function displayLegsForTimeline(itinerary: MotisItineraryJson): MotisLegJson[] {
   return displayLegsFromItinerary(itinerary).map(normalizeLegForDisplay);
 }
 
@@ -428,10 +420,6 @@ export function journeyOverviewHeader(itinerary: MotisItineraryJson, context: Jo
   };
 }
 
-export function formatConnectionLabel(seconds: number): string {
-  return formatMotisDuration(seconds);
-}
-
 export function formatDelayLabel(minutes: number): string {
   const abs = Math.abs(minutes);
   if (abs === 0) {
@@ -464,5 +452,3 @@ export function expandableIntermediateStops(leg: MotisLegJson): MotisPlaceJson[]
 export function continuesAsStops(leg: MotisLegJson): MotisPlaceJson[] {
   return (leg.intermediateStops ?? []).filter((stop) => stop.switchTo);
 }
-
-export { motisServiceLabel, motisOperatorLabel, motisChipColors, motisIconKind, formatMotisDuration, formatMotisDistance, stopCountLabel, isWalkLike, isMotisWalkLeg, isMotisTransitLeg, displayLegsFromItinerary, weekdayLabel };

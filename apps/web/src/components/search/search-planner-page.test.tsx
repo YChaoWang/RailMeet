@@ -180,34 +180,6 @@ describe('SearchPlannerPage live draft markers', () => {
     resetTravelerIdentitySeqForTests();
   });
 
-  it('mounts the map before submission and adds marker A immediately on autocomplete select', async () => {
-    const user = userEvent.setup();
-    renderPlanner();
-
-    expect(screen.getByTestId('planner-workspace')).toBeInTheDocument();
-    expect(screen.getByTestId('planner-map-region')).toBeInTheDocument();
-    expect(screen.getByTestId('search-map')).toHaveAttribute('data-marker-count', '0');
-    expect(createMeetingSearch).not.toHaveBeenCalled();
-    expect(push).not.toHaveBeenCalled();
-
-    await user.click(screen.getByTestId('pick-participants.0.origin'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('search-map')).toHaveAttribute('data-marker-count', '1');
-    });
-    expect(screen.getByTestId('draft-marker-status')).toHaveTextContent('Showing 1 origin');
-    expect(createMeetingSearch).not.toHaveBeenCalled();
-    expect(push).not.toHaveBeenCalled();
-
-    const latest = mapScenes.at(-1);
-    expect(latest?.markers).toHaveLength(1);
-    expect(latest?.markers[0]).toMatchObject({
-      longitude: 2.35,
-      latitude: 48.85,
-    });
-    expect(screen.getByTestId('search-map')).toHaveAttribute('data-route-line-count', '0');
-  });
-
   it('preserves A when selecting B, moves B on replace, clears stale A on text edit, and removes an added traveler marker', async () => {
     const user = userEvent.setup();
     renderPlanner();

@@ -2,7 +2,6 @@ import {
   canonicalMotisModeToken,
   getMotisModeStyle,
   getMotisRouteColors,
-  isMotisTransitLeg,
   isMotisWalkLeg,
   joinInterlinedMotisLegs,
   motisDirectionLabel,
@@ -93,10 +92,6 @@ export function rankingLegToMotis(leg: RankingLeg): MotisLegJson {
 
 export function displayLegsFromItinerary(itinerary: MotisItineraryJson): MotisLegJson[] {
   return joinInterlinedMotisLegs(itinerary.legs);
-}
-
-export function transitSummaryLegs(itinerary: MotisItineraryJson): MotisLegJson[] {
-  return displayLegsFromItinerary(itinerary).filter(isMotisTransitLeg);
 }
 
 export function motisServiceLabel(leg: MotisLegJson): string {

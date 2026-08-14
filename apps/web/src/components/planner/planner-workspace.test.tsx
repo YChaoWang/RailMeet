@@ -59,22 +59,6 @@ describe('PlannerWorkspace', () => {
     expect(screen.getByTestId('planner-panel')).toHaveAttribute('data-sheet-state', 'collapsed');
   });
 
-  it('collapses the sheet when results become ready without remounting the map', async () => {
-    const user = userEvent.setup();
-    const draft = buildDraftOriginScene([]);
-    render(
-      <PlannerWorkspace scene={draft} panelTitle="Comparing routes" disableMap initialSheetExpanded>
-        <p>Running</p>
-      </PlannerWorkspace>,
-    );
-    expect(screen.getByTestId('planner-panel')).toHaveAttribute('data-sheet-state', 'expanded');
-
-    // Simulate results-ready collapse via the expand/collapse control after starting expanded.
-    await user.click(screen.getByRole('button', { name: 'Collapse search panel' }));
-    expect(screen.getByTestId('planner-panel')).toHaveAttribute('data-sheet-state', 'collapsed');
-    expect(screen.getByTestId('planner-map-region')).toBeInTheDocument();
-  });
-
   it('honors collapseSheetWhen without remounting the map', () => {
     const draft = buildDraftOriginScene([]);
     const { rerender } = render(

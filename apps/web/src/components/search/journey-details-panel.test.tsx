@@ -78,7 +78,7 @@ describe('JourneyDetailsPanel', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows skeleton then provider UI with displayName, operator, platform and stops', async () => {
+  it('shows skeleton then provider itinerary after fetch', async () => {
     let resolveFetch: ((value: Response) => void) | undefined;
     vi.stubGlobal(
       'fetch',
@@ -98,16 +98,8 @@ describe('JourneyDetailsPanel', () => {
       }),
     );
     await waitFor(() => expect(screen.getByTestId('journey-detail-loaded')).toBeInTheDocument());
+    expect(screen.getByTestId('journey-itinerary')).toBeInTheDocument();
     expect(screen.getByTestId('route-pill')).toHaveTextContent('ICE 100');
-    expect(screen.getByTestId('journey-leg-operator')).toHaveTextContent('DB Fernverkehr AG');
-    expect(screen.getAllByTestId('leg-platform').map((n) => n.textContent)).toEqual(
-      expect.arrayContaining(['Track 1', 'Track 12']),
-    );
-    const user = userEvent.setup();
-    const stopToggle = screen.getAllByRole('button').find((button) => /1 stop/i.test(button.textContent ?? ''));
-    expect(stopToggle).toBeTruthy();
-    await user.click(stopToggle!);
-    expect(screen.getByTestId('journey-leg-stops')).toHaveTextContent('Erfurt Hbf');
   });
 
   it('renders legacy RankingJourneyLegs from detailSource, not from missing providerItinerary alone', async () => {

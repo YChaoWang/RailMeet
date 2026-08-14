@@ -5,9 +5,9 @@ import type { MotisItineraryJson } from '@railmeet/shared';
 import { useEffect, useState } from 'react';
 
 import {
-  JourneyItineraryDetails,
+  JourneyItineraryTimeline,
   RankingJourneyLegs,
-} from '@/components/search/journey-leg-details';
+} from '@/components/search/journey-itinerary-timeline';
 import {
   invalidateJourneyDetailCache,
   loadJourneyDetailCached,
@@ -47,7 +47,7 @@ function renderDetail(
   };
   if (detail.detailSource === 'provider' && detail.providerItinerary) {
     return (
-      <JourneyItineraryDetails
+      <JourneyItineraryTimeline
         itinerary={detail.providerItinerary.itinerary as MotisItineraryJson}
         context={journeyContext}
       />

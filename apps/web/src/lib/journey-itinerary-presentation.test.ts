@@ -21,57 +21,59 @@ function loadBerlinYork(): MotisItineraryJson {
 }
 
 describe('motisDayOffset', () => {
-  it('returns 0 for same local calendar day', () => {
-    expect(
-      motisDayOffset(
-        '2026-08-09T20:00:00Z',
-        '2026-08-09T10:00:00Z',
-        'Europe/Berlin',
-      ),
-    ).toBe(0);
-  });
-
-  it('returns 1 for next local day in same timezone', () => {
-    expect(
-      motisDayOffset(
-        '2026-08-10T06:00:00Z',
-        '2026-08-09T10:00:00Z',
-        'Europe/Berlin',
-      ),
-    ).toBe(1);
-  });
-
-  it('handles next local calendar day across timezones', () => {
-    expect(
-      motisDayOffset(
-        '2026-08-10T07:00:00+01:00',
-        '2026-08-09T23:00:00+01:00',
-        'Europe/London',
-      ),
-    ).toBe(1);
+  it.each([
+    {
+      label: 'same local calendar day',
+      timestamp: '2026-08-09T20:00:00Z',
+      reference: '2026-08-09T10:00:00Z',
+      timeZone: 'Europe/Berlin',
+      expected: 0,
+    },
+    {
+      label: 'next local day in same timezone',
+      timestamp: '2026-08-10T06:00:00Z',
+      reference: '2026-08-09T10:00:00Z',
+      timeZone: 'Europe/Berlin',
+      expected: 1,
+    },
+    {
+      label: 'next local calendar day across timezones',
+      timestamp: '2026-08-10T07:00:00+01:00',
+      reference: '2026-08-09T23:00:00+01:00',
+      timeZone: 'Europe/London',
+      expected: 1,
+    },
+  ])('$label', ({ timestamp, reference, timeZone, expected }) => {
+    expect(motisDayOffset(timestamp, reference, timeZone)).toBe(expected);
   });
 });
 
 describe('formatMotisDateRange', () => {
-  it('shows a single date when start and end share a local day', () => {
-    const label = formatMotisDateRange(
-      '2026-08-09T10:00:00Z',
-      '2026-08-09T18:00:00Z',
-      'Europe/Berlin',
-      'Europe/Berlin',
-    );
-    expect(label).toMatch(/Sunday/);
-    expect(label).not.toContain('–');
-  });
-
-  it('shows both dates when the journey crosses midnight locally', () => {
-    const label = formatMotisDateRange(
-      '2026-08-09T10:00:00Z',
-      '2026-08-10T08:00:00Z',
-      'Europe/Berlin',
-      'Europe/London',
-    );
-    expect(label).toContain('–');
+  it.each([
+    {
+      label: 'single date when start and end share a local day',
+      startIso: '2026-08-09T10:00:00Z',
+      endIso: '2026-08-09T18:00:00Z',
+      startTz: 'Europe/Berlin',
+      endTz: 'Europe/Berlin',
+      expectSingle: true,
+    },
+    {
+      label: 'both dates when the journey crosses midnight locally',
+      startIso: '2026-08-09T10:00:00Z',
+      endIso: '2026-08-10T08:00:00Z',
+      startTz: 'Europe/Berlin',
+      endTz: 'Europe/London',
+      expectSingle: false,
+    },
+  ])('shows $label', ({ startIso, endIso, startTz, endTz, expectSingle }) => {
+    const label = formatMotisDateRange(startIso, endIso, startTz, endTz);
+    if (expectSingle) {
+      expect(label).toMatch(/Sunday/);
+      expect(label).not.toContain('–');
+    } else {
+      expect(label).toContain('–');
+    }
   });
 });
 

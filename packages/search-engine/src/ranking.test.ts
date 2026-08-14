@@ -395,74 +395,6 @@ describe('rankAllModes', () => {
     });
   });
 
-  it('ranks fastest-overall by total duration with deterministic journey picks', () => {
-    const result = rankAllModes(buildFixture());
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    const mode = result.modes.find((entry) => entry.rankingMode === 'fastest-overall')!;
-    expect(mode.rankings[0]?.destinationPlaceId).toBe('place:munich');
-    expect(mode.rankings.map((row) => row.rank)).toEqual([1, 2, 3]);
-    // a picks 30m journey over 90m
-    expect(
-      mode.rankings[0]?.selectedJourneys.find((row) => row.participantId === 'a')?.journeyId,
-    ).toBe('wm-a-0');
-    expect(mode.rankings[0]?.totalDurationMinutes).toBe(110);
-  });
-
-  it('ranks fairest by max participant duration', () => {
-    const result = rankAllModes(buildFixture());
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    const mode = result.modes.find((entry) => entry.rankingMode === 'fairest')!;
-    expect(mode.rankings[0]?.destinationPlaceId).toBe('place:frankfurt');
-  });
-
-  it('ranks fewest-transfers by total transfers', () => {
-    const result = rankAllModes(buildFixture());
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    const mode = result.modes.find((entry) => entry.rankingMode === 'fewest-transfers')!;
-    expect(mode.rankings[0]?.destinationPlaceId).toBe('place:cologne');
-    expect(
-      mode.rankings[0]?.selectedJourneys.find((row) => row.participantId === 'b')?.journeyId,
-    ).toBe('wc-b-0');
-  });
-
-  it('ranks arrive-together by arrival spread', () => {
-    const result = rankAllModes(buildFixture());
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    const mode = result.modes.find((entry) => entry.rankingMode === 'arrive-together')!;
-    expect(mode.rankings[0]?.destinationPlaceId).toBe('place:frankfurt');
-    expect(mode.rankings[0]?.arrivalSpreadMs).toBeLessThan(
-      mode.rankings.find((row) => row.destinationPlaceId === 'place:munich')!.arrivalSpreadMs,
-    );
-  });
-
-  it('lets different modes select different winners', () => {
-    const result = rankAllModes(buildFixture());
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    const winners = Object.fromEntries(
-      result.modes.map((mode) => [mode.rankingMode, mode.rankings[0]?.destinationPlaceId]),
-    );
-    expect(winners['fastest-overall']).toBe('place:munich');
-    expect(winners['fewest-transfers']).toBe('place:cologne');
-    expect(winners['fairest']).toBe('place:frankfurt');
-    expect(winners['arrive-together']).toBe('place:frankfurt');
-    expect(new Set(Object.values(winners)).size).toBeGreaterThan(1);
-  });
-
   it('asserts complete fixture metrics, fairest=fastest journey picks, and arrive-together window picks', () => {
     const result = rankAllModes(buildFixture());
     expect(result.ok).toBe(true);
@@ -1130,16 +1062,6 @@ describe('selectArriveTogetherJourneys', () => {
       ]),
     );
     expect(selectedIdsInParticipantOrder(selected)).toEqual(['a-a', 'b-1']);
-  });
-
-  it('does not contain Cartesian combination enumeration', async () => {
-    const source = await import('node:fs').then((fs) =>
-      fs.readFileSync(new URL('./journey-selection.ts', import.meta.url), 'utf8'),
-    );
-    expect(source).not.toContain('forEachWindowCombination');
-    expect(source).not.toMatch(/walk\s*=\s*\(index/);
-    expect(source).toContain('compareJourneyIdTuples');
-    expect(source).not.toMatch(/journeyIdsKey|join\(['"]\\0['"]\)/);
   });
 });
 

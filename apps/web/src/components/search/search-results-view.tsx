@@ -23,7 +23,7 @@ import {
 import { candidateSelectionKey, type MapMissingGeometryNote } from '@/lib/map-markers';
 import { travelerColorAt, travelerLetterAt } from '@/lib/traveler-identity';
 import { cn } from '@/lib/utils';
-import { JourneyRouteSummary } from '@/components/search/journey-leg-details';
+import { JourneyRouteSummary } from '@/components/search/journey-itinerary-timeline';
 import { JourneyDetailsPanel } from '@/components/search/journey-details-panel';
 
 function placeLabel(place: { placeId: string; name?: string | undefined }): string {
