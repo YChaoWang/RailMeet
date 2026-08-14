@@ -4,8 +4,14 @@ import { PLACE_SEARCH_QUERY_MIN_LENGTH } from '@railmeet/shared';
 import type { PlaceSuggestionView } from '@railmeet/validation';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 
+import { PlaceSuggestionOption } from '@/components/search/place-suggestion-option';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  placeSuggestionLocalityLine,
+  placeSuggestionTypeIcon,
+  placeSuggestionTypeLabel,
+} from '@/lib/place-suggestion-presentation';
 import { searchPlaces } from '@/lib/place-search-client';
 import { cn } from '@/lib/utils';
 
@@ -229,9 +235,26 @@ export function PlaceCombobox({
         }}
       />
       {selected ? (
-        <p className="text-xs text-teal-800" data-testid="place-selected-hint">
-          Selected · {selected.secondaryLabel ?? selected.type}
-        </p>
+        <div
+          className="flex items-center gap-1.5 text-xs text-teal-800"
+          data-testid="place-selected-hint"
+        >
+          {(() => {
+            const SelectedIcon = placeSuggestionTypeIcon(selected.type);
+            const locality = placeSuggestionLocalityLine(selected);
+            const detail = [placeSuggestionTypeLabel(selected.type), locality]
+              .filter(Boolean)
+              .join(' · ');
+            return (
+              <>
+                <SelectedIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span>
+                  Selected · {detail || selected.type}
+                </span>
+              </>
+            );
+          })()}
+        </div>
       ) : null}
       {open ? (
         <div
@@ -299,8 +322,8 @@ export function PlaceCombobox({
                       optionRefs.current[index] = node;
                     }}
                     className={cn(
-                      'cursor-pointer px-3 py-2 text-sm',
-                      active ? 'bg-teal-50 text-ink-950' : 'text-ink-950',
+                      'cursor-pointer px-2 py-2',
+                      active ? 'bg-teal-50' : undefined,
                     )}
                     onMouseDown={(event) => {
                       event.preventDefault();
@@ -308,10 +331,7 @@ export function PlaceCombobox({
                     }}
                     onMouseEnter={() => setActiveIndex(index)}
                   >
-                    <div className="font-medium leading-snug">{suggestion.name}</div>
-                    <div className="truncate text-xs text-ink-700">
-                      {suggestion.secondaryLabel ?? suggestion.type}
-                    </div>
+                    <PlaceSuggestionOption suggestion={suggestion} />
                   </li>
                 );
               })}

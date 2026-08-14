@@ -135,8 +135,11 @@ describe('PlaceCombobox', () => {
     });
 
     await waitFor(() => expect(screen.getByText('Berlin Hbf')).toBeInTheDocument());
-    expect(screen.getByText('Station · Berlin, DE')).toBeInTheDocument();
-    expect(screen.getByText('City · DE')).toBeInTheDocument();
+    expect(screen.getByText('Berlin, DE')).toBeInTheDocument();
+    expect(screen.getByText('DE')).toBeInTheDocument();
+    expect(screen.getAllByText('Station').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('City')).toBeInTheDocument();
+    expect(screen.getByText('Rail')).toBeInTheDocument();
 
     await user.keyboard('{ArrowDown}{Enter}');
     expect(onSelect).toHaveBeenCalledWith(berlinCity);
