@@ -23,6 +23,8 @@ import {
 import { candidateSelectionKey, type MapMissingGeometryNote } from '@/lib/map-markers';
 import { travelerColorAt, travelerLetterAt } from '@/lib/traveler-identity';
 import { cn } from '@/lib/utils';
+import { JourneyRouteSummary } from '@/components/search/journey-leg-details';
+import { JourneyDetailsPanel } from '@/components/search/journey-details-panel';
 
 function placeLabel(place: { placeId: string; name?: string | undefined }): string {
   return place.name ?? place.placeId;
@@ -141,6 +143,14 @@ export function SearchResultsView({
                   {formatDurationMinutes(candidate.totalDurationMinutes)} combined ·{' '}
                   {candidate.totalTransfers} transfers
                 </p>
+                {candidate.journeys.map((journey) =>
+                  journey.routeSummary.length > 0 ? (
+                    <JourneyRouteSummary
+                      key={`summary-${journey.journeyId}`}
+                      segments={journey.routeSummary}
+                    />
+                  ) : null,
+                )}
                 <p className="mt-1 text-xs text-ink-700">
                   {candidate.journeys
                     .map(
@@ -169,7 +179,7 @@ export function SearchResultsView({
                             const color = travelerColorAt(journey.participantPosition);
                             return (
                               <div
-                                key={`legs-${journey.participantId}`}
+                                key={`legs-${journey.journeyId}`}
                                 style={{ opacity: emphasized ? 1 : 0.45 }}
                               >
                                 <button
@@ -196,32 +206,16 @@ export function SearchResultsView({
                                 <p className="text-xs text-ink-700">
                                   {placeLabel(journey.origin)} → {placeLabel(journey.destination)}
                                 </p>
-                                {journey.legs.length === 0 ? (
-                                  <p className="mt-1 text-xs text-ink-700">
-                                    Departure {new Date(journey.departureAt).toUTCString()} ·
-                                    Arrival {new Date(journey.arrivalAt).toUTCString()}
+                                {missingForTraveler.length > 0 ? (
+                                  <p className="mt-1 text-xs text-amber-800">
+                                    Route shape unavailable for {missingForTraveler.length} segment
+                                    {missingForTraveler.length === 1 ? '' : 's'}
                                   </p>
-                                ) : (
-                                  <ul className="mt-1 space-y-1 text-xs text-ink-700">
-                                    {journey.legs.map((leg, index) => {
-                                      const missing = missingForTraveler.some(
-                                        (note) => note.legIndex === index,
-                                      );
-                                      return (
-                                        <li key={`${journey.participantId}-${index}`}>
-                                          {leg.mode}: {new Date(leg.departureAt).toUTCString()} →{' '}
-                                          {new Date(leg.arrivalAt).toUTCString()} (
-                                          {formatDurationMinutes(leg.durationMinutes)})
-                                          {missing ? (
-                                            <span className="mt-0.5 block text-amber-800">
-                                              Route shape unavailable for this segment
-                                            </span>
-                                          ) : null}
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                )}
+                                ) : null}
+                                <JourneyDetailsPanel
+                                  searchId={results.searchId}
+                                  journeyId={journey.journeyId}
+                                />
                               </div>
                             );
                           })}

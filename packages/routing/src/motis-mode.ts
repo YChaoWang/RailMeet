@@ -1,36 +1,22 @@
-import { TRANSPORT_MODES, isTransportMode, type TransportMode } from '@railmeet/shared';
-
-import type { JourneyLeg, JourneyLegMode } from './types.js';
-
 /**
  * Canonical MOTIS / Transitous mode tokens → RailMeet domain modes.
  * Structured mode strings only — never display-name inference.
  * Keep in sync with map/stops rail-family handling.
+ *
+ * Precise MOTIS subtypes (HIGHSPEED_RAIL, SUBURBAN, …) stay on the leg as
+ * `motisMode`; this mapper only produces the coarse ranking/filter mode.
  */
-const MOTIS_MODE_ALIASES: Readonly<Record<string, JourneyLegMode>> = {
-  walk: 'walk',
-  foot: 'walk',
-  rail: 'train',
-  train: 'train',
-  intercity: 'train',
-  highspeed_rail: 'train',
-  high_speed_rail: 'train',
-  long_distance: 'train',
-  night_rail: 'train',
-  regional_rail: 'train',
-  regional_fast_rail: 'train',
-  suburban: 'train',
-  subway: 'metro',
-  metro: 'metro',
-  tram: 'tram',
-  // MOTIS light rail is tram-like for RailMeet domain vocabulary.
-  light_rail: 'tram',
-  lightrail: 'tram',
-  bus: 'bus',
-  coach: 'bus',
-  ferry: 'ferry',
-  boat: 'ferry',
-};
+import {
+  canonicalMotisModeToken,
+  isMotisPlanMode,
+  mapMotisPlanModeToDomain,
+  TRANSPORT_MODES,
+  isTransportMode,
+  type JourneyLegMode,
+  type TransportMode,
+} from '@railmeet/shared';
+
+import type { JourneyLeg } from './types.js';
 
 /** Canonical journey-level transport mode order (deterministic, locale-independent). */
 export const JOURNEY_TRANSPORT_MODE_ORDER: readonly TransportMode[] = TRANSPORT_MODES;
@@ -40,15 +26,11 @@ export const JOURNEY_TRANSPORT_MODE_ORDER: readonly TransportMode[] = TRANSPORT_
  * Unknown structured values become `other` (never silently treated as train).
  */
 export function mapMotisLegMode(rawMode: string): JourneyLegMode {
-  const normalized = rawMode
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_');
-  const mapped = MOTIS_MODE_ALIASES[normalized];
-  if (mapped) {
-    return mapped;
-  }
-  return 'other';
+  return mapMotisPlanModeToDomain(rawMode);
+}
+
+export function canonicalMotisLegMode(rawMode: string): string {
+  return canonicalMotisModeToken(rawMode);
 }
 
 /**
@@ -68,8 +50,19 @@ export function collectJourneyTransportModes(
 }
 
 /**
- * True when the itinerary has a non-walk leg that did not map to a domain transport mode.
+ * True when a non-walk leg used a token that is not in the pinned MOTIS v5 enum.
+ * Known MOTIS modes that are coarse-`other` (airplane, rental, …) are not unmapped.
  */
-export function hasUnmappedTransitLegs(legs: readonly Pick<JourneyLeg, 'mode'>[]): boolean {
-  return legs.some((leg) => leg.mode === 'other');
+export function hasUnmappedTransitLegs(
+  legs: readonly { readonly mode: JourneyLeg['mode']; readonly motisMode?: string }[],
+): boolean {
+  return legs.some((leg) => {
+    if (leg.mode !== 'other') {
+      return false;
+    }
+    if (!leg.motisMode) {
+      return true;
+    }
+    return !isMotisPlanMode(leg.motisMode);
+  });
 }

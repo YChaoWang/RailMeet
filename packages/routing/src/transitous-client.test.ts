@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createLogger } from '@railmeet/observability';
 
-import { MOTIS_PLAN_API_VERSION, normalizeMotisPlanResponse } from './motis-normalize.js';
+import {
+  MOTIS_PLAN_API_VERSION,
+  MOTIS_REFRESH_ITINERARY_SUPPORTED,
+  normalizeMotisPlanResponse,
+} from './motis-normalize.js';
 import { createTransitousJourneyPlanner } from './transitous-client.js';
 
 function startMockServer(
@@ -48,6 +52,11 @@ const sampleItinerary = {
 };
 
 describe('Transitous MOTIS plan client', () => {
+  it('stays on the v5 plan pin and does not claim refresh-itinerary support', () => {
+    expect(MOTIS_PLAN_API_VERSION).toBe('v5');
+    expect(MOTIS_REFRESH_ITINERARY_SUPPORTED).toBe(false);
+  });
+
   it('maps a successful plan response with User-Agent and UTC time', async () => {
     let seenUrl = '';
     let seenUa = '';
@@ -341,7 +350,7 @@ describe('Transitous MOTIS plan client', () => {
     }
   });
 
-  it('maps unsupported modes to other without leaking provider objects', () => {
+  it('maps known MOTIS cable-car to other while preserving the precise mode token', () => {
     const journeys = normalizeMotisPlanResponse({
       itineraries: [
         {
@@ -358,7 +367,7 @@ describe('Transitous MOTIS plan client', () => {
       ],
     });
     expect(journeys[0]?.legs[0]?.mode).toBe('other');
+    expect(journeys[0]?.legs[0]?.motisMode).toBe('CABLE_CAR');
     expect(journeys[0]).not.toHaveProperty('itineraries');
-    expect(JSON.stringify(journeys)).not.toContain('CABLE_CAR');
   });
 });

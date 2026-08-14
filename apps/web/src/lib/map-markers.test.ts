@@ -91,6 +91,8 @@ const results = {
       arrivalSpreadMs: 600_000,
       journeys: [
         {
+          journeyId: '00000001-aaaa-4aaa-8aaa-000000000001',
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           participantId: 'p1',
           participantDisplayName: 'Alex',
           participantPosition: 0,
@@ -152,6 +154,8 @@ const multiResults = {
       journeys: [
         results.rankings[0]!.journeys[0]!,
         {
+          journeyId: '00000002-aaaa-4aaa-8aaa-000000000002',
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           participantId: 'p2',
           participantDisplayName: 'Blake',
           participantPosition: 1,
@@ -185,6 +189,8 @@ const multiResults = {
           ],
         },
         {
+          journeyId: '00000003-aaaa-4aaa-8aaa-000000000003',
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           participantId: 'p3',
           participantDisplayName: 'Casey',
           participantPosition: 2,
@@ -247,6 +253,8 @@ const multiResults = {
       arrivalSpreadMs: 0,
       journeys: [
         {
+          journeyId: '00000004-aaaa-4aaa-8aaa-000000000004',
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           participantId: 'p1',
           participantDisplayName: 'Alex',
           participantPosition: 0,
@@ -283,6 +291,8 @@ const multiResults = {
           ],
         },
         {
+          journeyId: '00000005-aaaa-4aaa-8aaa-000000000005',
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           participantId: 'p2',
           participantDisplayName: 'Blake',
           participantPosition: 1,

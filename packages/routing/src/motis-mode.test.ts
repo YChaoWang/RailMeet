@@ -20,7 +20,7 @@ describe('mapMotisLegMode', () => {
     ['SUBURBAN', 'train'],
     ['INTERCITY', 'train'], // known intercity rail → train
     ['subway', 'metro'],
-    ['METRO', 'metro'],
+    ['METRO', 'train'], // deprecated MOTIS alias of SUBURBAN
     ['TRAM', 'tram'],
     ['LIGHT_RAIL', 'tram'],
     ['LIGHTRAIL', 'tram'],
@@ -30,6 +30,8 @@ describe('mapMotisLegMode', () => {
     ['BOAT', 'ferry'],
     ['WALK', 'walk'],
     ['FOOT', 'walk'],
+    ['AIRPLANE', 'other'],
+    ['RENTAL', 'other'],
     ['TELEPORTER', 'other'],
   ] as const)('maps %s → %s', (raw, expected) => {
     expect(mapMotisLegMode(raw)).toBe(expected);
@@ -106,6 +108,7 @@ describe('normalizeMotisPlanResponse modes', () => {
       ],
     });
     expect(journeys[0]?.legs.map((leg) => leg.mode)).toEqual(['walk', 'train']);
+    expect(journeys[0]?.legs[1]?.motisMode).toBe('LONG_DISTANCE');
     expect(collectJourneyTransportModes(journeys[0]!.legs)).toEqual(['train']);
   });
 
@@ -125,7 +128,7 @@ describe('normalizeMotisPlanResponse modes', () => {
               duration: 1800,
             },
             {
-              mode: 'METRO',
+              mode: 'SUBWAY',
               startTime: '2026-09-15T08:30:00Z',
               endTime: '2026-09-15T08:50:00Z',
               duration: 1200,
@@ -158,6 +161,14 @@ describe('normalizeMotisPlanResponse modes', () => {
         },
       ],
     });
+    expect(journeys[0]?.legs.map((leg) => leg.motisMode)).toEqual([
+      'COACH',
+      'SUBWAY',
+      'TRAM',
+      'SUBURBAN',
+      'LIGHT_RAIL',
+      'FERRY',
+    ]);
     expect(journeys[0]?.legs.map((leg) => leg.mode)).toEqual([
       'bus',
       'metro',
@@ -195,7 +206,14 @@ describe('normalizeMotisPlanResponse modes', () => {
       ],
     });
     expect(journeys[0]?.legs[0]?.mode).toBe('other');
+    expect(journeys[0]?.legs[0]?.motisMode).toBe('TELEPORTER');
     expect(collectJourneyTransportModes(journeys[0]!.legs)).toEqual([]);
     expect(hasUnmappedTransitLegs(journeys[0]!.legs)).toBe(true);
+  });
+
+  it('does not treat known MOTIS airplane/rental modes as unmapped', () => {
+    expect(hasUnmappedTransitLegs([{ mode: 'other', motisMode: 'AIRPLANE' }])).toBe(false);
+    expect(hasUnmappedTransitLegs([{ mode: 'other', motisMode: 'RENTAL' }])).toBe(false);
+    expect(hasUnmappedTransitLegs([{ mode: 'other', motisMode: 'HYPERLOOP' }])).toBe(true);
   });
 });

@@ -12,7 +12,7 @@ import {
   RoutingError,
   type JourneyPlanner,
 } from '@railmeet/routing';
-import { SEARCH_LIMITS } from '@railmeet/shared';
+import { pickJourneyLegIdentity, SEARCH_LIMITS } from '@railmeet/shared';
 import { wallTimeInZoneToUtc } from '@railmeet/search-engine';
 
 export type CreateRoutingWorkProcessorOptions = {
@@ -214,8 +214,10 @@ export function createRoutingWorkProcessor(
             durationMinutes: leg.durationMinutes,
             ...(leg.providerReference ? { providerReference: leg.providerReference } : {}),
             ...(leg.geometry ? { geometry: leg.geometry } : {}),
+            ...pickJourneyLegIdentity(leg),
           })),
           ...(journey.providerReference ? { providerReference: journey.providerReference } : {}),
+          ...(journey.providerItinerary ? { providerItinerary: journey.providerItinerary } : {}),
         };
       });
 

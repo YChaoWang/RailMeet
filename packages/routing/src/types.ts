@@ -1,4 +1,9 @@
-import type { TransportMode } from '@railmeet/shared';
+import type {
+  JourneyLegIdentityFields,
+  JourneyLegMode as SharedJourneyLegMode,
+  JourneyLegStopView,
+  MotisPlanItineraryPayload,
+} from '@railmeet/shared';
 
 /** Geographic coordinates in WGS84 degrees. */
 export type GeoCoordinates = {
@@ -22,7 +27,8 @@ export type PlanJourneyInput = {
   readonly signal?: AbortSignal;
 };
 
-export type JourneyLegMode = TransportMode | 'walk' | 'other';
+export type JourneyLegMode = SharedJourneyLegMode;
+export type JourneyLegStop = JourneyLegStopView;
 
 /**
  * Compact Google Encoded Polyline from MOTIS EncodedPolyline.
@@ -34,8 +40,10 @@ export type EncodedRouteGeometry = {
   readonly length: number;
 };
 
-export type JourneyLeg = {
+export type JourneyLeg = JourneyLegIdentityFields & {
   readonly mode: JourneyLegMode;
+  /** Exact MOTIS v5 Mode token (canonicalized). Unknown future tokens are preserved. */
+  readonly motisMode: string;
   readonly departureAt: Date;
   readonly arrivalAt: Date;
   readonly durationMinutes: number;
@@ -55,6 +63,8 @@ export type PlannedJourney = {
   readonly transfers: number;
   readonly legs: readonly JourneyLeg[];
   readonly providerReference?: string;
+  /** Full MOTIS itinerary retained for Journey Details. Ranking uses `legs`. */
+  readonly providerItinerary?: MotisPlanItineraryPayload;
 };
 
 export type PlanJourneyResult = {

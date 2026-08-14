@@ -116,15 +116,83 @@ export const meetingSearchJourneyLegGeometrySchema = z
   })
   .strict();
 
+export const meetingSearchJourneyLegStopSchema = z.object({
+  name: z.string().min(1),
+  track: z.string().min(1).optional(),
+});
+
 export const meetingSearchJourneyLegViewSchema = z.object({
   mode: z.string().min(1),
   departureAt: z.string().datetime({ offset: true }),
   arrivalAt: z.string().datetime({ offset: true }),
   durationMinutes: z.number().int().nonnegative(),
   geometry: meetingSearchJourneyLegGeometrySchema.nullable(),
+  motisMode: z.string().min(1).optional(),
+  displayName: z.string().min(1).optional(),
+  routeShortName: z.string().min(1).optional(),
+  routeLongName: z.string().min(1).optional(),
+  tripShortName: z.string().min(1).optional(),
+  headsign: z.string().min(1).optional(),
+  agencyName: z.string().min(1).optional(),
+  agencyId: z.string().min(1).optional(),
+  agencyUrl: z.string().url().optional(),
+  routeColor: z.string().min(1).optional(),
+  routeTextColor: z.string().min(1).optional(),
+  from: meetingSearchJourneyLegStopSchema.optional(),
+  to: meetingSearchJourneyLegStopSchema.optional(),
+  intermediateStopCount: z.number().int().nonnegative().optional(),
+  distanceMeters: z.number().nonnegative().optional(),
 });
 
+const motisLegPassthroughSchema = z
+  .object({
+    mode: z.string().min(1),
+    startTime: z.string().min(1),
+    endTime: z.string().min(1),
+    duration: z.number(),
+  })
+  .passthrough();
+
+/** Provider-native MOTIS itinerary. Extra itinerary/leg fields are retained. */
+export const motisItineraryViewSchema = z
+  .object({
+    duration: z.number(),
+    startTime: z.string().min(1),
+    endTime: z.string().min(1),
+    transfers: z.number().int().nonnegative(),
+    id: z.string().min(1).optional(),
+    legs: z.array(motisLegPassthroughSchema).min(1),
+  })
+  .passthrough();
+
+export const meetingSearchProviderItinerarySchema = z.object({
+  format: z.literal('motis-plan-itinerary-v1'),
+  motisPlanApiVersion: z.literal('v5'),
+  motisOpenApiPin: z.string().min(1),
+  itinerary: motisItineraryViewSchema,
+});
+
+/** Strict #RRGGBB / #RGB for compact route chips. */
+const routeSummaryHexColorSchema = z
+  .string()
+  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Route color must be #RGB or #RRGGBB');
+
+/** Soft caps align with @railmeet/shared route-summary builders. */
+export const meetingSearchRouteSummarySegmentSchema = z
+  .object({
+    mode: z.string().min(1).max(64),
+    displayName: z.string().min(1).max(64).optional(),
+    routeColor: routeSummaryHexColorSchema.optional(),
+    routeTextColor: routeSummaryHexColorSchema.optional(),
+  })
+  .strict();
+
+/**
+ * Compact selected journey on GET …/results.
+ * Ranking legs (map geometry) + routeSummary chips; never embeds providerItinerary.
+ */
 export const meetingSearchSelectedJourneyViewSchema = z.object({
+  journeyId: z.string().uuid(),
   participantId: z.string().min(1),
   participantDisplayName: z.string().min(1),
   participantPosition: z.number().int().nonnegative(),
@@ -135,6 +203,7 @@ export const meetingSearchSelectedJourneyViewSchema = z.object({
   durationMinutes: z.number().int().nonnegative(),
   transfers: z.number().int().nonnegative(),
   transportModes: z.array(z.string().min(1)),
+  routeSummary: z.array(meetingSearchRouteSummarySegmentSchema).max(24),
   legs: z.array(meetingSearchJourneyLegViewSchema),
 });
 
@@ -177,6 +246,41 @@ export const meetingSearchResultsEnvelopeSchema = z.object({
 });
 
 export type MeetingSearchResultsEnvelope = z.output<typeof meetingSearchResultsEnvelopeSchema>;
+
+/** Path params for GET …/journeys/:journeyId */
+export const meetingSearchJourneyIdParamsSchema = z
+  .object({
+    searchId: z.string().uuid({ message: 'Search ID must be a valid UUID' }),
+    journeyId: z.string().uuid({ message: 'Journey ID must be a valid UUID' }),
+  })
+  .strict();
+
+export type MeetingSearchJourneyIdParams = z.output<typeof meetingSearchJourneyIdParamsSchema>;
+
+/**
+ * Discriminated journey detail — Web must branch on detailSource, not missing providerItinerary.
+ */
+export const meetingSearchJourneyDetailDataSchema = z.object({
+  journeyId: z.string().uuid(),
+  detailSource: z.enum(['provider', 'legacy']),
+  itineraryId: z.string().min(1).nullable(),
+  providerItinerary: meetingSearchProviderItinerarySchema.nullable(),
+  legs: z.array(meetingSearchJourneyLegViewSchema),
+  providerItineraryUnavailableReason: z.string().min(1).nullable(),
+});
+
+export type MeetingSearchJourneyDetailData = z.output<typeof meetingSearchJourneyDetailDataSchema>;
+
+export const meetingSearchJourneyDetailEnvelopeSchema = z.object({
+  data: meetingSearchJourneyDetailDataSchema,
+  meta: z.object({
+    requestId: z.string().min(1),
+  }),
+});
+
+export type MeetingSearchJourneyDetailEnvelope = z.output<
+  typeof meetingSearchJourneyDetailEnvelopeSchema
+>;
 
 // Re-export builder for callers that compose envelopes in tests.
 export { successEnvelopeSchema };

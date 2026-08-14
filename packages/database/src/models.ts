@@ -1,6 +1,9 @@
 import type {
+  JourneyLegIdentityFields,
+  MotisPlanItineraryPayload,
   PlaceKind,
   RankingMode,
+  RouteSummarySegment,
   SearchCompletionOutcome,
   SearchStatus,
   TransportMode,
@@ -245,7 +248,7 @@ export type EncodedRouteGeometryRecord = {
   readonly length: number;
 };
 
-export type PersistedJourneyLeg = {
+export type PersistedJourneyLeg = JourneyLegIdentityFields & {
   readonly mode: string;
   readonly departureAt: Date;
   readonly arrivalAt: Date;
@@ -265,6 +268,7 @@ export type PersistedJourneyRecord = {
   readonly transportModes: readonly string[];
   readonly legs: readonly PersistedJourneyLeg[];
   readonly providerReference: string | null;
+  readonly providerItinerary: MotisPlanItineraryPayload | null;
   readonly createdAt: Date;
 };
 
@@ -277,6 +281,7 @@ export type PersistJourneyInput = {
   readonly transportModes: readonly string[];
   readonly legs: readonly PersistedJourneyLeg[];
   readonly providerReference?: string;
+  readonly providerItinerary?: MotisPlanItineraryPayload;
 };
 
 export type ClaimOutboxEventsCommand = {
@@ -317,7 +322,7 @@ export type PlaceViewRecord = {
   readonly latitude: number | null;
 };
 
-export type RankedJourneyLegRecord = {
+export type RankedJourneyLegRecord = JourneyLegIdentityFields & {
   readonly mode: string;
   readonly departureAt: Date;
   readonly arrivalAt: Date;
@@ -326,6 +331,7 @@ export type RankedJourneyLegRecord = {
 };
 
 export type RankedParticipantJourneyRecord = {
+  readonly journeyId: string;
   readonly participantId: string;
   readonly participantDisplayName: string;
   readonly participantPosition: number;
@@ -337,7 +343,39 @@ export type RankedParticipantJourneyRecord = {
   readonly transfers: number;
   readonly transportModes: readonly string[];
   readonly legs: readonly RankedJourneyLegRecord[];
+  readonly routeSummary: readonly RouteSummarySegment[];
+  /** Internal only — used to build routeSummary / detail; never mapped into compact results. */
+  readonly providerItinerary: MotisPlanItineraryPayload | null;
 };
+
+export type JourneyDetailSource = 'provider' | 'legacy';
+
+export type JourneyDetailRecord = {
+  readonly journeyId: string;
+  readonly detailSource: JourneyDetailSource;
+  readonly itineraryId: string | null;
+  readonly providerItinerary: MotisPlanItineraryPayload | null;
+  readonly legs: readonly RankedJourneyLegRecord[];
+  readonly providerItineraryUnavailableReason: string | null;
+};
+
+export type JourneyDetailReadModel =
+  | { readonly kind: 'not_found' }
+  | {
+      readonly kind: 'not_ready';
+      readonly searchId: string;
+      readonly status: SearchStatus;
+    }
+  | {
+      readonly kind: 'failed';
+      readonly searchId: string;
+      readonly failureCode: string | null;
+    }
+  | {
+      readonly kind: 'completed';
+      readonly searchId: string;
+      readonly detail: JourneyDetailRecord;
+    };
 
 export type RankedCandidateRecord = {
   readonly rankingMode: RankingMode;

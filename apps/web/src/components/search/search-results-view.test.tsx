@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MeetingSearchResultsData } from '@railmeet/validation';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SearchResultsViewStandalone } from './search-results-view';
+import { clearJourneyDetailCache } from '@/lib/journey-detail-cache';
 
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: ReactNode; href: string }) => (
@@ -45,6 +46,7 @@ const rankedResults = {
       arrivalSpreadMs: 2_400_000,
       journeys: [
         {
+          journeyId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
           participantId: 'b',
           participantDisplayName: 'Blake',
           participantPosition: 1,
@@ -59,10 +61,12 @@ const rankedResults = {
           arrivalAt: '2026-06-15T11:40:00.000Z',
           durationMinutes: 100,
           transfers: 2,
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           transportModes: ['train'],
           legs: [],
         },
         {
+          journeyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           participantId: 'a',
           participantDisplayName: 'Alex',
           participantPosition: 0,
@@ -77,6 +81,7 @@ const rankedResults = {
           arrivalAt: '2026-06-15T11:00:00.000Z',
           durationMinutes: 100,
           transfers: 2,
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           transportModes: ['train'],
           legs: [
             {
@@ -110,6 +115,7 @@ const rankedResults = {
       arrivalSpreadMs: 600_000,
       journeys: [
         {
+          journeyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           participantId: 'a',
           participantDisplayName: 'Alex',
           participantPosition: 0,
@@ -124,6 +130,7 @@ const rankedResults = {
           arrivalAt: '2026-06-15T10:00:00.000Z',
           durationMinutes: 60,
           transfers: 0,
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           transportModes: ['train'],
           legs: [
             {
@@ -136,6 +143,7 @@ const rankedResults = {
           ],
         },
         {
+          journeyId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
           participantId: 'b',
           participantDisplayName: 'Blake',
           participantPosition: 1,
@@ -150,6 +158,7 @@ const rankedResults = {
           arrivalAt: '2026-06-15T10:10:00.000Z',
           durationMinutes: 60,
           transfers: 1,
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           transportModes: ['train'],
           legs: [],
         },
@@ -173,7 +182,48 @@ const rankedResults = {
       earliestArrivalAt: '2026-06-15T09:50:00.000Z',
       latestArrivalAt: '2026-06-15T09:55:00.000Z',
       arrivalSpreadMs: 300_000,
-      journeys: [],
+      journeys: [
+        {
+          journeyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          participantId: 'a',
+          participantDisplayName: 'Alex',
+          participantPosition: 0,
+          origin: { placeId: 'place:berlin', name: 'Berlin', longitude: 13.4, latitude: 52.52 },
+          destination: {
+            placeId: 'place:munich',
+            name: 'Munich',
+            longitude: 11.582,
+            latitude: 48.1351,
+          },
+          departureAt: '2026-06-15T08:00:00.000Z',
+          arrivalAt: '2026-06-15T09:50:00.000Z',
+          durationMinutes: 50,
+          transfers: 0,
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
+          transportModes: ['train'],
+          legs: [],
+        },
+        {
+          journeyId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          participantId: 'b',
+          participantDisplayName: 'Blake',
+          participantPosition: 1,
+          origin: { placeId: 'place:paris', name: 'Paris', longitude: 2.35, latitude: 48.85 },
+          destination: {
+            placeId: 'place:munich',
+            name: 'Munich',
+            longitude: 11.582,
+            latitude: 48.1351,
+          },
+          departureAt: '2026-06-15T08:10:00.000Z',
+          arrivalAt: '2026-06-15T09:55:00.000Z',
+          durationMinutes: 55,
+          transfers: 1,
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
+          transportModes: ['train'],
+          legs: [],
+        },
+      ],
     },
     {
       rankingMode: 'fewest-transfers',
@@ -219,8 +269,38 @@ const rankedResults = {
 } as MeetingSearchResultsData;
 
 describe('SearchResultsView', () => {
-  it('renders all four modes and preserves intentionally shuffled server order', () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+  beforeEach(() => {
+    clearJourneyDetailCache();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/journeys/')) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                journeyId: url.split('/').pop(),
+                detailSource: 'legacy',
+                itineraryId: null,
+                providerItinerary: null,
+                legs: [],
+                providerItineraryUnavailableReason: null,
+              },
+              meta: { requestId: 'test' },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        return new Response('{}', { status: 404 });
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders all four modes and preserves intentionally shuffled server order', async () => {
     render(<SearchResultsViewStandalone results={rankedResults} />);
     expect(screen.getByRole('tab', { name: 'Fairest' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Fastest overall' })).toBeInTheDocument();
@@ -233,13 +313,15 @@ describe('SearchResultsView', () => {
     expect(candidateButtons[0]).toHaveTextContent('Cologne');
     expect(candidateButtons[1]).toHaveTextContent('Rank 1');
     expect(candidateButtons[1]).toHaveTextContent('Munich');
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+    expect(screen.getAllByTestId('journey-route-summary').length).toBeGreaterThan(0);
   });
 
-  it('does not invent legs when absent and shows empty outcomes without failure styling', () => {
+  it('does not invent intermediate stops from compact results and shows empty outcomes', async () => {
     render(<SearchResultsViewStandalone results={rankedResults} />);
     expect(screen.queryByText(/intermediate stop/i)).not.toBeInTheDocument();
+    // Compact chips come from routeSummary — never from embedded providerItinerary.
+    expect(JSON.stringify(rankedResults)).not.toContain('providerItinerary');
+    expect(screen.getAllByTestId('journey-route-summary')[0]).toHaveTextContent('ICE');
 
     for (const outcome of ['no_candidates', 'no_feasible_candidates'] as const) {
       const { unmount } = render(
@@ -258,25 +340,48 @@ describe('SearchResultsView', () => {
     }
   });
 
-  it('selecting a candidate updates selection state without creating a new search', async () => {
-    const user = userEvent.setup();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+  it('expanding the selected candidate fetches each journey detail once', async () => {
+    const fetchSpy = vi.mocked(globalThis.fetch);
     render(<SearchResultsViewStandalone results={rankedResults} />);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const journeyUrls = fetchSpy.mock.calls
+      .map((call) => String(call[0]))
+      .filter((url) => url.includes('/journeys/'));
+    expect(new Set(journeyUrls).size).toBe(2);
+    expect(journeyUrls).toHaveLength(2);
+  });
+
+  it('reopening a journey uses cache and ranking-mode switches reuse journeyId cache', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.mocked(globalThis.fetch);
+    render(<SearchResultsViewStandalone results={rankedResults} />);
+    await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
+    const afterInitial = fetchSpy.mock.calls.length;
+
+    await user.click(screen.getByRole('button', { name: /Journey details/i }));
+    await user.click(screen.getByRole('button', { name: /Journey details/i }));
+    expect(fetchSpy.mock.calls.length).toBe(afterInitial);
+
+    await user.click(screen.getByRole('tab', { name: 'Fastest overall' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Rank 1[\s\S]*Munich/i })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    // Same journeyIds across modes — no additional detail fetches.
+    expect(fetchSpy.mock.calls.length).toBe(afterInitial);
+  });
+
+  it('selecting another candidate fetches its journeys without creating a search', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.mocked(globalThis.fetch);
+    render(<SearchResultsViewStandalone results={rankedResults} />);
+    await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
     const cologne = screen.getByRole('button', { name: /Rank 2[\s\S]*Cologne/i });
     await user.click(cologne);
     expect(cologne).toHaveAttribute('aria-pressed', 'true');
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
-  });
-
-  it('switching ranking mode selects that mode’s rank-1 candidate without fetching', async () => {
-    const user = userEvent.setup();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    render(<SearchResultsViewStandalone results={rankedResults} />);
-    await user.click(screen.getByRole('tab', { name: 'Fastest overall' }));
-    const munich = screen.getByRole('button', { name: /Rank 1[\s\S]*Munich/i });
-    expect(munich).toHaveAttribute('aria-pressed', 'true');
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+    // Cologne reuses the same journeyIds as Munich in this fixture — still cached.
+    expect(fetchSpy.mock.calls.every((call) => String(call[0]).includes('/journeys/'))).toBe(true);
   });
 });

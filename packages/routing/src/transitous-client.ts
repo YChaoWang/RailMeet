@@ -44,6 +44,8 @@ export function createTransitousJourneyPlanner(options: TransitousClientOptions)
         throw new RoutingError('INVALID_REQUEST', 'permanent', 'departureAt must be a valid Date');
       }
 
+      // Pinned to `/api/v5/plan`. Do not call `/api/v5/refresh-itinerary` (404)
+      // or mix in `/api/v6/refresh-itinerary` while this adapter stays on v5.
       const url = new URL(joinUrl(options.baseUrl, `/${MOTIS_PLAN_API_VERSION}/plan`));
       url.searchParams.set('fromPlace', placeParam(input.origin.latitude, input.origin.longitude));
       url.searchParams.set(

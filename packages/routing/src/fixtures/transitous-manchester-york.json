@@ -1,0 +1,584 @@
+{
+  "duration": 6180,
+  "startTime": "2026-09-15T08:15:00Z",
+  "endTime": "2026-09-15T09:58:00Z",
+  "transfers": 2,
+  "id": "itinerary:fixture:manchester-york:v1",
+  "legs": [
+    {
+      "startTime": "2026-09-15T08:15:00Z",
+      "realTime": false,
+      "from": {
+        "vertexType": "NORMAL",
+        "tz": "Europe/London",
+        "name": "START",
+        "lat": 53.4774,
+        "departure": "2026-09-15T08:15:00Z",
+        "scheduledDeparture": "2026-09-15T08:15:00Z",
+        "lon": -2.2309
+      },
+      "distance": 188.0,
+      "legGeometry": {
+        "points": "i___eBr`dgCzFtC??`ExB??a@bD??x@h",
+        "precision": 6,
+        "length": 8
+      },
+      "duration": 180,
+      "scheduledStartTime": "2026-09-15T08:15:00Z",
+      "mode": "WALK",
+      "endTime": "2026-09-15T08:18:00Z",
+      "to": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9400ZZMAPIC2",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T08:18:00Z",
+        "name": "Piccadilly",
+        "lat": 53.477079999999994,
+        "scheduledArrival": "2026-09-15T08:18:00Z",
+        "lon": -2.2304215000000003,
+        "track": "To Ashton",
+        "scheduledTrack": "To Ashton"
+      },
+      "steps": [
+        {
+          "relativeDirection": "CONTINUE",
+          "distance": 21.0,
+          "streetName": ""
+        },
+        {
+          "relativeDirection": "CONTINUE",
+          "distance": 12.0,
+          "streetName": "Piccadilly Station"
+        },
+        {
+          "relativeDirection": "CONTINUE",
+          "distance": 6.0,
+          "streetName": ""
+        }
+      ],
+      "scheduledEndTime": "2026-09-15T08:18:00Z",
+      "scheduled": false
+    },
+    {
+      "intermediateStops": [
+        {
+          "vertexType": "TRANSIT",
+          "stopId": "gb-great-britain_9400ZZMAPGD2",
+          "tz": "Europe/London",
+          "arrival": "2026-09-15T08:21:00Z",
+          "name": "Piccadilly Gardens",
+          "lat": 53.480259999999994,
+          "departure": "2026-09-15T08:21:00Z",
+          "scheduledArrival": "2026-09-15T08:21:00Z",
+          "dropoffType": "NORMAL",
+          "scheduledDeparture": "2026-09-15T08:21:00Z",
+          "lon": -2.2369292,
+          "track": "To City",
+          "scheduledTrack": "To City",
+          "pickupType": "NORMAL"
+        },
+        {
+          "vertexType": "TRANSIT",
+          "stopId": "gb-great-britain_9400ZZMAMKT2",
+          "tz": "Europe/London",
+          "arrival": "2026-09-15T08:23:00Z",
+          "name": "Market Street",
+          "lat": 53.481933999999995,
+          "departure": "2026-09-15T08:23:00Z",
+          "scheduledArrival": "2026-09-15T08:23:00Z",
+          "dropoffType": "NORMAL",
+          "scheduledDeparture": "2026-09-15T08:23:00Z",
+          "lon": -2.2388947000000003,
+          "track": "From City",
+          "scheduledTrack": "From City",
+          "pickupType": "NORMAL"
+        },
+        {
+          "vertexType": "TRANSIT",
+          "stopId": "gb-great-britain_9400ZZMASHU1",
+          "tz": "Europe/London",
+          "arrival": "2026-09-15T08:26:00Z",
+          "name": "Shudehill",
+          "lat": 53.485218,
+          "departure": "2026-09-15T08:26:00Z",
+          "scheduledArrival": "2026-09-15T08:26:00Z",
+          "dropoffType": "NORMAL",
+          "scheduledDeparture": "2026-09-15T08:26:00Z",
+          "lon": -2.239116,
+          "track": "From City",
+          "scheduledTrack": "From City",
+          "pickupType": "NORMAL"
+        }
+      ],
+      "routeColor": "efbb00",
+      "headsign": "Bury",
+      "routeUrl": "",
+      "tripShortName": "",
+      "wheelchairAccessible": "NOT_ACCESSIBLE",
+      "routeTextColor": "000000",
+      "startTime": "2026-09-15T08:18:00Z",
+      "realTime": false,
+      "from": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9400ZZMAPIC2",
+        "tz": "Europe/London",
+        "name": "Piccadilly",
+        "lat": 53.477079999999994,
+        "departure": "2026-09-15T08:18:00Z",
+        "dropoffType": "NOT_ALLOWED",
+        "scheduledDeparture": "2026-09-15T08:18:00Z",
+        "lon": -2.2304215000000003,
+        "track": "To Ashton",
+        "scheduledTrack": "To Ashton",
+        "pickupType": "NORMAL"
+      },
+      "routeShortName": "Yellow Line",
+      "legGeometry": {
+        "points": "ol~~dBjhcgCnA`N_D~S{@fH{@hIu@vI}",
+        "precision": 6,
+        "length": 8
+      },
+      "duration": 600,
+      "agencyId": "METL",
+      "agencyUrl": "http://www.beenetwork.com",
+      "scheduledStartTime": "2026-09-15T08:18:00Z",
+      "routeLongName": "",
+      "mode": "TRAM",
+      "cancelled": false,
+      "bikesAllowed": false,
+      "endTime": "2026-09-15T08:28:00Z",
+      "to": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9400ZZMAVIC1",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T08:28:00Z",
+        "name": "Victoria",
+        "lat": 53.487899999999996,
+        "scheduledArrival": "2026-09-15T08:28:00Z",
+        "dropoffType": "NORMAL",
+        "lon": -2.2416403,
+        "track": "From City",
+        "scheduledTrack": "From City",
+        "pickupType": "NORMAL"
+      },
+      "reservation": "NONE",
+      "tripTo": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9400ZZMABUR1",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T08:55:00Z",
+        "name": "Bury",
+        "lat": 53.590393000000006,
+        "scheduledArrival": "2026-09-15T08:55:00Z",
+        "dropoffType": "NORMAL",
+        "lon": -2.2974808,
+        "track": "From Manchester",
+        "scheduledTrack": "From Manchester",
+        "pickupType": "NOT_ALLOWED"
+      },
+      "interlineWithPreviousLeg": false,
+      "scheduledEndTime": "2026-09-15T08:28:00Z",
+      "agencyName": "Metrolink",
+      "scheduled": true,
+      "displayName": "Yellow Line"
+    },
+    {
+      "startTime": "2026-09-15T08:28:00Z",
+      "realTime": false,
+      "from": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9400ZZMAVIC1",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T08:28:00Z",
+        "name": "Victoria",
+        "lat": 53.487899999999996,
+        "departure": "2026-09-15T08:28:00Z",
+        "scheduledArrival": "2026-09-15T08:28:00Z",
+        "scheduledDeparture": "2026-09-15T08:28:00Z",
+        "lon": -2.2416403,
+        "track": "From City",
+        "scheduledTrack": "From City"
+      },
+      "distance": 285.0,
+      "legGeometry": {
+        "points": "gps_eBpdygCjHjM??fHdK|FfDtCElDqA",
+        "precision": 6,
+        "length": 8
+      },
+      "duration": 120,
+      "scheduledStartTime": "2026-09-15T08:28:00Z",
+      "mode": "WALK",
+      "endTime": "2026-09-15T08:30:00Z",
+      "to": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9100MNCRVIC4",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T08:30:00Z",
+        "name": "Manchester Victoria",
+        "lat": 53.487975999999996,
+        "scheduledArrival": "2026-09-15T08:30:00Z",
+        "lon": -2.2429698,
+        "track": "4",
+        "scheduledTrack": "4"
+      },
+      "steps": [
+        {
+          "relativeDirection": "CONTINUE",
+          "distance": 23.0,
+          "streetName": ""
+        },
+        {
+          "relativeDirection": "CONTINUE",
+          "distance": 54.0,
+          "streetName": ""
+        },
+        {
+          "relativeDirection": "CONTINUE",
+          "distance": 3.0,
+          "streetName": ""
+        }
+      ],
+      "scheduledEndTime": "2026-09-15T08:30:00Z",
+      "scheduled": false
+    },
+    {
+      "intermediateStops": [
+        {
+          "vertexType": "TRANSIT",
+          "stopId": "gb-great-britain_9100SBYD4",
+          "tz": "Europe/London",
+          "arrival": "2026-09-15T08:39:00Z",
+          "name": "Stalybridge",
+          "lat": 53.48420699999999,
+          "departure": "2026-09-15T08:40:00Z",
+          "scheduledArrival": "2026-09-15T08:39:00Z",
+          "dropoffType": "NORMAL",
+          "scheduledDeparture": "2026-09-15T08:40:00Z",
+          "lon": -2.0643487,
+          "track": "4",
+          "scheduledTrack": "4",
+          "pickupType": "NORMAL"
+        },
+        {
+          "vertexType": "TRANSIT",
+          "stopId": "gb-great-britain_9100HDRSFLD3",
+          "tz": "Europe/London",
+          "arrival": "2026-09-15T08:58:00Z",
+          "name": "Huddersfield",
+          "lat": 53.64850200000001,
+          "departure": "2026-09-15T09:01:00Z",
+          "scheduledArrival": "2026-09-15T08:58:00Z",
+          "dropoffType": "NORMAL",
+          "scheduledDeparture": "2026-09-15T09:01:00Z",
+          "lon": -1.7846901000000002,
+          "track": "3",
+          "scheduledTrack": "3",
+          "pickupType": "NORMAL"
+        }
+      ],
+      "routeColor": "09a4ec",
+      "headsign": "Hull",
+      "routeUrl": "",
+      "tripShortName": "TP5418",
+      "wheelchairAccessible": "ACCESSIBLE",
+      "routeTextColor": "000000",
+      "startTime": "2026-09-15T08:30:00Z",
+      "realTime": false,
+      "from": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9100MNCRVIC4",
+        "tz": "Europe/London",
+        "name": "Manchester Victoria",
+        "lat": 53.487975999999996,
+        "departure": "2026-09-15T08:30:00Z",
+        "dropoffType": "NORMAL",
+        "scheduledDeparture": "2026-09-15T08:30:00Z",
+        "lon": -2.2429698,
+        "track": "4",
+        "scheduledTrack": "4",
+        "pickupType": "NORMAL"
+      },
+      "routeShortName": "TPE",
+      "legGeometry": {
+        "points": "ous_eBrx{gC{gOujz@lsVco`HsviBssa",
+        "precision": 6,
+        "length": 8
+      },
+      "duration": 3120,
+      "agencyId": "=TP",
+      "agencyUrl": "https://www.tpexpress.co.uk/",
+      "scheduledStartTime": "2026-09-15T08:30:00Z",
+      "routeLongName": "TransPennine Express",
+      "mode": "REGIONAL_RAIL",
+      "cancelled": false,
+      "bikesAllowed": true,
+      "endTime": "2026-09-15T09:22:00Z",
+      "to": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9100LEEDS15",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T09:22:00Z",
+        "name": "Leeds",
+        "lat": 53.79562800000001,
+        "scheduledArrival": "2026-09-15T09:22:00Z",
+        "dropoffType": "NORMAL",
+        "lon": -1.5480255,
+        "track": "15",
+        "scheduledTrack": "15",
+        "pickupType": "NORMAL"
+      },
+      "reservation": "NONE",
+      "tripTo": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9100HULL5",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T10:25:00Z",
+        "name": "Hull",
+        "lat": 53.74415200000001,
+        "scheduledArrival": "2026-09-15T10:25:00Z",
+        "dropoffType": "NORMAL",
+        "lon": -0.3456799400000001,
+        "track": "5",
+        "scheduledTrack": "5",
+        "pickupType": "NORMAL"
+      },
+      "interlineWithPreviousLeg": false,
+      "scheduledEndTime": "2026-09-15T09:22:00Z",
+      "agencyName": "TransPennine Express",
+      "scheduled": true,
+      "displayName": "TPE"
+    },
+    {
+      "startTime": "2026-09-15T09:22:00Z",
+      "realTime": false,
+      "from": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9100LEEDS15",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T09:22:00Z",
+        "name": "Leeds",
+        "lat": 53.79562800000001,
+        "departure": "2026-09-15T09:22:00Z",
+        "scheduledArrival": "2026-09-15T09:22:00Z",
+        "scheduledDeparture": "2026-09-15T09:22:00Z",
+        "lon": -1.5480255,
+        "track": "15",
+        "scheduledTrack": "15"
+      },
+      "distance": 0.0,
+      "legGeometry": {
+        "points": "wqlreBrnn}A??",
+        "precision": 6,
+        "length": 2
+      },
+      "duration": 120,
+      "scheduledStartTime": "2026-09-15T09:22:00Z",
+      "mode": "WALK",
+      "endTime": "2026-09-15T09:24:00Z",
+      "to": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9100LEEDS11D",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T09:24:00Z",
+        "name": "Leeds",
+        "lat": 53.79562800000001,
+        "scheduledArrival": "2026-09-15T09:24:00Z",
+        "lon": -1.5480255,
+        "track": "11D",
+        "scheduledTrack": "11D"
+      },
+      "steps": [
+        {
+          "relativeDirection": "CONTINUE",
+          "distance": 0.0,
+          "streetName": ""
+        }
+      ],
+      "scheduledEndTime": "2026-09-15T09:24:00Z",
+      "scheduled": false
+    },
+    {
+      "intermediateStops": [
+        {
+          "vertexType": "TRANSIT",
+          "stopId": "gb-great-britain_9100GARFRTH1",
+          "tz": "Europe/London",
+          "arrival": "2026-09-15T09:38:00Z",
+          "name": "Garforth",
+          "lat": 53.796577000000006,
+          "departure": "2026-09-15T09:39:00Z",
+          "scheduledArrival": "2026-09-15T09:38:00Z",
+          "dropoffType": "NORMAL",
+          "scheduledDeparture": "2026-09-15T09:39:00Z",
+          "lon": -1.3823096,
+          "track": "1",
+          "scheduledTrack": "1",
+          "pickupType": "NORMAL"
+        },
+        {
+          "vertexType": "TRANSIT",
+          "stopId": "gb-great-britain_9100CHFN4",
+          "tz": "Europe/London",
+          "arrival": "2026-09-15T09:46:00Z",
+          "name": "Church Fenton",
+          "lat": 53.8266,
+          "departure": "2026-09-15T09:46:00Z",
+          "scheduledArrival": "2026-09-15T09:46:00Z",
+          "dropoffType": "NORMAL",
+          "scheduledDeparture": "2026-09-15T09:46:00Z",
+          "lon": -1.2275888,
+          "track": "4",
+          "scheduledTrack": "4",
+          "pickupType": "NORMAL"
+        }
+      ],
+      "routeColor": "0f0d78",
+      "headsign": "York",
+      "routeUrl": "",
+      "tripShortName": "NT2109",
+      "wheelchairAccessible": "ACCESSIBLE",
+      "routeTextColor": "ffffff",
+      "startTime": "2026-09-15T09:30:00Z",
+      "realTime": false,
+      "from": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9100LEEDS11D",
+        "tz": "Europe/London",
+        "name": "Leeds",
+        "lat": 53.79562800000001,
+        "departure": "2026-09-15T09:30:00Z",
+        "dropoffType": "NORMAL",
+        "scheduledDeparture": "2026-09-15T09:30:00Z",
+        "lon": -1.5480255,
+        "track": "11D",
+        "scheduledTrack": "11D",
+        "pickupType": "NORMAL"
+      },
+      "routeShortName": "Northern",
+      "legGeometry": {
+        "points": "wqlreBrnn}A`vAidv@kzSqedC~gOkhfC",
+        "precision": 6,
+        "length": 8
+      },
+      "duration": 1620,
+      "agencyId": "=NT",
+      "agencyUrl": "https://www.northernrail.org/",
+      "scheduledStartTime": "2026-09-15T09:30:00Z",
+      "alerts": [
+        {
+          "communicationPeriod": [
+            {
+              "start": "2026-08-13T13:13:00Z",
+              "end": "2026-08-13T22:59:00Z"
+            }
+          ],
+          "impactPeriod": [
+            {
+              "start": "2026-08-13T13:13:00Z",
+              "end": "2026-08-13T22:59:00Z"
+            }
+          ],
+          "cause": "OTHER_CAUSE",
+          "effect": "MODIFIED_SERVICE",
+          "headerText": "Special Service",
+          "descriptionText": "https://www.nationalrail.co.uk/service-disruptions/northern-weather-20260811/"
+        }
+      ],
+      "routeLongName": "",
+      "mode": "REGIONAL_RAIL",
+      "cancelled": false,
+      "bikesAllowed": true,
+      "endTime": "2026-09-15T09:57:00Z",
+      "to": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9100YORK7",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T09:57:00Z",
+        "name": "York",
+        "lat": 53.95796599999999,
+        "scheduledArrival": "2026-09-15T09:57:00Z",
+        "dropoffType": "NORMAL",
+        "lon": -1.0931821000000002,
+        "track": "7",
+        "scheduledTrack": "7",
+        "pickupType": "NORMAL"
+      },
+      "reservation": "NONE",
+      "tripTo": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9100YORK7",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T09:57:00Z",
+        "name": "York",
+        "lat": 53.95796599999999,
+        "scheduledArrival": "2026-09-15T09:57:00Z",
+        "dropoffType": "NORMAL",
+        "lon": -1.0931821000000002,
+        "track": "7",
+        "scheduledTrack": "7",
+        "pickupType": "NORMAL"
+      },
+      "interlineWithPreviousLeg": false,
+      "scheduledEndTime": "2026-09-15T09:57:00Z",
+      "agencyName": "Northern Rail",
+      "scheduled": true,
+      "displayName": "Northern"
+    },
+    {
+      "startTime": "2026-09-15T09:57:00Z",
+      "realTime": false,
+      "from": {
+        "vertexType": "TRANSIT",
+        "stopId": "gb-great-britain_9100YORK7",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T09:57:00Z",
+        "name": "York",
+        "lat": 53.95796599999999,
+        "departure": "2026-09-15T09:57:00Z",
+        "scheduledArrival": "2026-09-15T09:57:00Z",
+        "scheduledDeparture": "2026-09-15T09:57:00Z",
+        "lon": -1.0931821000000002,
+        "track": "7",
+        "scheduledTrack": "7"
+      },
+      "distance": 44.0,
+      "legGeometry": {
+        "points": "usi|eBfavaAp@L??lHhB??h@gL??[E??",
+        "precision": 6,
+        "length": 8
+      },
+      "duration": 60,
+      "scheduledStartTime": "2026-09-15T09:57:00Z",
+      "mode": "WALK",
+      "endTime": "2026-09-15T09:58:00Z",
+      "to": {
+        "vertexType": "NORMAL",
+        "tz": "Europe/London",
+        "arrival": "2026-09-15T09:58:00Z",
+        "name": "END",
+        "lat": 53.9578,
+        "scheduledArrival": "2026-09-15T09:58:00Z",
+        "lon": -1.0931
+      },
+      "steps": [
+        {
+          "relativeDirection": "CONTINUE",
+          "distance": 4.0,
+          "streetName": ""
+        },
+        {
+          "relativeDirection": "CONTINUE",
+          "distance": 17.0,
+          "streetName": ""
+        },
+        {
+          "relativeDirection": "CONTINUE",
+          "distance": 14.0,
+          "streetName": ""
+        }
+      ],
+      "scheduledEndTime": "2026-09-15T09:58:00Z",
+      "scheduled": false
+    }
+  ]
+}

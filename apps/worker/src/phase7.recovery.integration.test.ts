@@ -81,43 +81,117 @@ const sampleItinerary = {
   startTime: '2026-06-15T08:00:00Z',
   endTime: '2026-06-15T10:00:00Z',
   transfers: 0,
+  id: 'itinerary:fixture:phase7:v1',
   legs: [
     {
-      mode: 'RAIL',
+      mode: 'HIGHSPEED_RAIL',
+      displayName: 'ICE 100',
+      agencyName: 'DB Fernverkehr AG',
       startTime: '2026-06-15T08:00:00Z',
       endTime: '2026-06-15T10:00:00Z',
       duration: 7200,
       tripId: 'trip:1',
-      from: { name: 'Berlin' },
-      to: { name: 'Munich' },
-      intermediateStops: [],
+      from: { name: 'Berlin', track: '1' },
+      to: { name: 'Munich', track: '12' },
+      intermediateStops: [{ name: 'Erfurt', track: '3' }],
       realtime: false,
       agencyId: 'db',
       routeId: 'ice',
+      headsign: 'München Hbf',
     },
   ],
 };
 
-const PROVIDER_ONLY_KEYS = new Set([
-  'itineraries',
-  'tripId',
-  'startTime',
-  'endTime',
-  'from',
-  'to',
-  'intermediateStops',
-  'realtime',
-  'agencyId',
-  'routeId',
-]);
-
-const ALLOWED_LEG_KEYS = new Set([
+const RANKING_LEG_KEYS = new Set([
   'mode',
   'departureAt',
   'arrivalAt',
   'durationMinutes',
   'providerReference',
+  'geometry',
+  'motisMode',
+  'displayName',
+  'routeShortName',
+  'routeLongName',
+  'tripShortName',
+  'headsign',
+  'agencyName',
+  'agencyId',
+  'agencyUrl',
+  'routeColor',
+  'routeTextColor',
+  'from',
+  'to',
+  'intermediateStopCount',
+  'distanceMeters',
 ]);
+
+function assertRankingLegShape(leg: Record<string, unknown>, path: string): void {
+  for (const key of Object.keys(leg)) {
+    if (!RANKING_LEG_KEYS.has(key)) {
+      throw new Error(`Unexpected ranking leg field "${key}" at ${path}`);
+    }
+  }
+}
+
+function assertNormalizedJourneyPersistence(value: unknown, path = 'root'): void {
+  if (value === null || value === undefined) {
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const [index, entry] of value.entries()) {
+      if (
+        entry &&
+        typeof entry === 'object' &&
+        typeof (entry as { mode?: unknown }).mode === 'string' &&
+        ((entry as { departureAt?: unknown }).departureAt instanceof Date ||
+          typeof (entry as { departureAt?: unknown }).departureAt === 'string') &&
+        typeof (entry as { durationMinutes?: unknown }).durationMinutes === 'number'
+      ) {
+        assertRankingLegShape(entry as Record<string, unknown>, `${path}[${index}]`);
+        continue;
+      }
+      assertNormalizedJourneyPersistence(entry, `${path}[${index}]`);
+    }
+    return;
+  }
+  if (typeof value !== 'object') {
+    return;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(record, 'itineraries')) {
+    throw new Error(`Persisted journey graph must not embed raw Transitous response at ${path}`);
+  }
+
+  // Versioned MOTIS document in legs jsonb, or providerItinerary payload on the record.
+  if (record.format === 'motis-plan-itinerary-v1') {
+    if (Array.isArray(record.rankingLegs)) {
+      assertNormalizedJourneyPersistence(record.rankingLegs, `${path}.rankingLegs`);
+      if (!record.itinerary || typeof record.itinerary !== 'object') {
+        throw new Error(`motis-plan-itinerary-v1 missing itinerary at ${path}`);
+      }
+      return;
+    }
+    if (record.itinerary && typeof record.itinerary === 'object') {
+      return;
+    }
+    throw new Error(`motis-plan-itinerary-v1 missing itinerary at ${path}`);
+  }
+
+  if (
+    typeof record.mode === 'string' &&
+    (record.departureAt instanceof Date || typeof record.departureAt === 'string') &&
+    typeof record.durationMinutes === 'number'
+  ) {
+    assertRankingLegShape(record, path);
+    return;
+  }
+
+  for (const [key, child] of Object.entries(record)) {
+    assertNormalizedJourneyPersistence(child, `${path}.${key}`);
+  }
+}
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -153,52 +227,6 @@ function startMockServer(
       resolve({ server, baseUrl: `http://127.0.0.1:${address.port}` });
     });
   });
-}
-
-function assertNormalizedJourneyPersistence(value: unknown, path = 'root'): void {
-  if (value === null || value === undefined) {
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const [index, entry] of value.entries()) {
-      assertNormalizedJourneyPersistence(entry, `${path}[${index}]`);
-    }
-    return;
-  }
-  if (typeof value !== 'object') {
-    return;
-  }
-
-  const record = value as Record<string, unknown>;
-  if (Object.prototype.hasOwnProperty.call(record, 'itineraries')) {
-    throw new Error(`Persisted journey graph must not embed raw Transitous response at ${path}`);
-  }
-
-  for (const key of Object.keys(record)) {
-    if (PROVIDER_ONLY_KEYS.has(key)) {
-      throw new Error(`Provider-only field "${key}" found at ${path}.${key}`);
-    }
-  }
-
-  if (path.endsWith('.legs') || /\[legs\]|\.legs\[\d+\]$/.test(path)) {
-    // handled below via leg objects
-  }
-
-  if (
-    typeof record.mode === 'string' &&
-    (record.departureAt instanceof Date || typeof record.departureAt === 'string') &&
-    typeof record.durationMinutes === 'number'
-  ) {
-    for (const key of Object.keys(record)) {
-      if (!ALLOWED_LEG_KEYS.has(key)) {
-        throw new Error(`Unexpected leg field "${key}" at ${path}`);
-      }
-    }
-  }
-
-  for (const [key, child] of Object.entries(record)) {
-    assertNormalizedJourneyPersistence(child, `${path}.${key}`);
-  }
 }
 
 describe('Phase 7 recovery integration (real candidate/routing processors)', () => {
@@ -574,6 +602,9 @@ describe('Phase 7 recovery integration (real candidate/routing processors)', () 
       await database.searchPipeline.listJourneysForRoutingWork(routingWorkId);
     expect(journeysAfterFirst.length).toBeGreaterThan(0);
     assertNormalizedJourneyPersistence(journeysAfterFirst);
+    expect(journeysAfterFirst[0]?.providerItinerary?.format).toBe('motis-plan-itinerary-v1');
+    expect(journeysAfterFirst[0]?.providerItinerary?.itinerary.legs[0]?.displayName).toBe('ICE 100');
+    expect(journeysAfterFirst[0]?.legs[0]?.motisMode).toBe('HIGHSPEED_RAIL');
     expect(planCalls).toBe(1);
 
     const second = await queue.add(

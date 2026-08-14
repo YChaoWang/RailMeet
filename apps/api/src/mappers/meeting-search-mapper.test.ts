@@ -1,11 +1,22 @@
-import type { CreateMeetingSearchCommand, MeetingSearchRecord } from '@railmeet/database';
+import type {
+  CreateMeetingSearchCommand,
+  MeetingSearchRecord,
+  RankedResultsReadModel,
+} from '@railmeet/database';
+import { MOTIS_PLAN_ITINERARY_FORMAT } from '@railmeet/shared';
 import type { CreateMeetingSearchRequest } from '@railmeet/validation';
+import {
+  meetingSearchJourneyDetailDataSchema,
+  meetingSearchResultsDataSchema,
+} from '@railmeet/validation';
 import { describe, expect, it } from 'vitest';
 
 import {
   toCreateMeetingSearchCommand,
   toMeetingSearchAcceptedData,
   toMeetingSearchDetailData,
+  toMeetingSearchJourneyDetailData,
+  toMeetingSearchResultsData,
 } from './meeting-search-mapper.js';
 
 const sampleRequest: CreateMeetingSearchRequest = {
@@ -136,5 +147,186 @@ describe('meeting-search mapper', () => {
     });
     expect(detail).not.toHaveProperty('id');
     expect(JSON.stringify(detail)).not.toContain('position');
+  });
+
+  it('projects compact results with journeyId and routeSummary without providerItinerary', () => {
+    const model: Extract<RankedResultsReadModel, { kind: 'completed' }> = {
+      kind: 'completed',
+      searchId: '44444444-4444-4444-8444-444444444444',
+      completionOutcome: 'ranked',
+      rankingMode: 'fairest',
+      recommendedDestination: {
+        placeId: 'place:york',
+        name: 'York',
+        longitude: -1.09,
+        latitude: 53.96,
+      },
+      rankings: [
+        {
+          rankingMode: 'fairest',
+          rank: 1,
+          destination: {
+            placeId: 'place:york',
+            name: 'York',
+            longitude: -1.09,
+            latitude: 53.96,
+          },
+          recommended: true,
+          totalDurationMinutes: 103,
+          maxDurationMinutes: 103,
+          durationRangeMinutes: 0,
+          totalTransfers: 2,
+          maxTransfers: 2,
+          earliestArrivalAt: new Date('2026-09-15T09:58:00.000Z'),
+          latestArrivalAt: new Date('2026-09-15T09:58:00.000Z'),
+          arrivalSpreadMs: 0,
+          journeys: [
+            {
+              journeyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              participantId: 'p1',
+              participantDisplayName: 'Alex',
+              participantPosition: 0,
+              origin: {
+                placeId: 'place:manchester',
+                name: 'Manchester',
+                longitude: -2.24,
+                latitude: 53.48,
+              },
+              destination: {
+                placeId: 'place:york',
+                name: 'York',
+                longitude: -1.09,
+                latitude: 53.96,
+              },
+              departureAt: new Date('2026-09-15T08:15:00.000Z'),
+              arrivalAt: new Date('2026-09-15T09:58:00.000Z'),
+              durationMinutes: 103,
+              transfers: 2,
+              transportModes: ['tram', 'train'],
+              legs: [
+                {
+                  mode: 'train',
+                  departureAt: new Date('2026-09-15T08:23:00.000Z'),
+                  arrivalAt: new Date('2026-09-15T09:22:00.000Z'),
+                  durationMinutes: 59,
+                  geometry: null,
+                  displayName: 'TPE',
+                },
+              ],
+              routeSummary: [
+                {
+                  mode: 'REGIONAL_RAIL',
+                  displayName: 'TPE',
+                  routeColor: '#09a4ec',
+                },
+              ],
+              providerItinerary: {
+                format: MOTIS_PLAN_ITINERARY_FORMAT,
+                motisPlanApiVersion: 'v5',
+                motisOpenApiPin: 'motis@2.10.2:/api/v5/plan',
+                itinerary: {
+                  duration: 6180,
+                  startTime: '2026-09-15T08:15:00Z',
+                  endTime: '2026-09-15T09:58:00Z',
+                  transfers: 2,
+                  id: 'itinerary:fixture:manchester-york:v1',
+                  legs: [
+                    {
+                      mode: 'REGIONAL_RAIL',
+                      startTime: '2026-09-15T08:23:00Z',
+                      endTime: '2026-09-15T09:22:00Z',
+                      duration: 3540,
+                      displayName: 'TPE',
+                      agencyName: 'TransPennine Express',
+                      alerts: [{ headerText: 'Special Service' }],
+                      intermediateStops: [{ name: 'Huddersfield', track: '4' }],
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
+      queryCount: 1,
+    };
+
+    const data = toMeetingSearchResultsData(model);
+    const parsed = meetingSearchResultsDataSchema.parse(data);
+    const journey = parsed.rankings[0]?.journeys[0];
+    expect(journey?.journeyId).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    expect(journey?.routeSummary[0]).toMatchObject({
+      mode: 'REGIONAL_RAIL',
+      displayName: 'TPE',
+      routeColor: '#09a4ec',
+    });
+    expect(JSON.stringify(parsed)).not.toContain('providerItinerary');
+    expect(JSON.stringify(parsed)).not.toContain('itineraryId');
+    expect(JSON.stringify(parsed)).not.toContain('Special Service');
+  });
+
+  it('maps provider and legacy journey detail discriminators', () => {
+    const provider = toMeetingSearchJourneyDetailData({
+      journeyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      detailSource: 'provider',
+      itineraryId: 'itinerary:fixture:manchester-york:v1',
+      providerItinerary: {
+        format: MOTIS_PLAN_ITINERARY_FORMAT,
+        motisPlanApiVersion: 'v5',
+        motisOpenApiPin: 'motis@2.10.2:/api/v5/plan',
+        itinerary: {
+          duration: 6180,
+          startTime: '2026-09-15T08:15:00Z',
+          endTime: '2026-09-15T09:58:00Z',
+          transfers: 2,
+          id: 'itinerary:fixture:manchester-york:v1',
+          legs: [
+            {
+              mode: 'REGIONAL_RAIL',
+              startTime: '2026-09-15T08:23:00Z',
+              endTime: '2026-09-15T09:22:00Z',
+              duration: 3540,
+              displayName: 'TPE',
+              agencyName: 'TransPennine Express',
+            },
+          ],
+        },
+      },
+      legs: [
+        {
+          mode: 'train',
+          departureAt: new Date('2026-09-15T08:23:00.000Z'),
+          arrivalAt: new Date('2026-09-15T09:22:00.000Z'),
+          durationMinutes: 59,
+          geometry: null,
+          displayName: 'TPE',
+        },
+      ],
+      providerItineraryUnavailableReason: null,
+    });
+    expect(meetingSearchJourneyDetailDataSchema.parse(provider).detailSource).toBe('provider');
+    expect(provider.providerItinerary?.itinerary.legs[0]).toMatchObject({
+      displayName: 'TPE',
+      agencyName: 'TransPennine Express',
+    });
+
+    const legacy = toMeetingSearchJourneyDetailData({
+      journeyId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      detailSource: 'legacy',
+      itineraryId: null,
+      providerItinerary: null,
+      legs: [
+        {
+          mode: 'train',
+          departureAt: new Date('2026-09-15T08:00:00.000Z'),
+          arrivalAt: new Date('2026-09-15T10:00:00.000Z'),
+          durationMinutes: 120,
+          geometry: null,
+        },
+      ],
+      providerItineraryUnavailableReason: null,
+    });
+    expect(meetingSearchJourneyDetailDataSchema.parse(legacy).detailSource).toBe('legacy');
+    expect(legacy.providerItinerary).toBeNull();
   });
 });

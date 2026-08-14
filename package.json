@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "turbo run dev --filter=@railmeet/web --filter=@railmeet/api --filter=@railmeet/worker --filter=@railmeet/config --filter=@railmeet/observability --filter=@railmeet/shared --filter=@railmeet/validation",
+    "dev": "turbo run dev --filter=@railmeet/web --filter=@railmeet/api --filter=@railmeet/worker --filter=@railmeet/config --filter=@railmeet/observability --filter=@railmeet/shared --filter=@railmeet/validation --filter=@railmeet/routing --filter=@railmeet/database --filter=@railmeet/search-engine --filter=@railmeet/queue",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

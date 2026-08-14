@@ -33,6 +33,8 @@ const sampleResults = {
       arrivalSpreadMs: 1_200_000,
       journeys: [
         {
+          journeyId: '00000006-aaaa-4aaa-8aaa-000000000006',
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           participantId: 'a',
           participantDisplayName: 'A',
           participantPosition: 0,
@@ -46,6 +48,8 @@ const sampleResults = {
           legs: [],
         },
         {
+          journeyId: '00000007-aaaa-4aaa-8aaa-000000000007',
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           participantId: 'b',
           participantDisplayName: 'B',
           participantPosition: 1,

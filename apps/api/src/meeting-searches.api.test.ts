@@ -83,6 +83,7 @@ const resultsValue = {
       arrivalSpreadMs: 600_000,
       journeys: [
         {
+          journeyId: '11111111-1111-4111-8111-111111111111',
           participantId: 'p1',
           participantDisplayName: 'Alex',
           participantPosition: 0,
@@ -93,6 +94,7 @@ const resultsValue = {
           durationMinutes: 120,
           transfers: 0,
           transportModes: ['train'],
+          routeSummary: [{ mode: 'HIGHSPEED_RAIL', displayName: 'ICE', routeColor: '#9c27b0' }],
           legs: [
             {
               mode: 'train',
@@ -104,6 +106,7 @@ const resultsValue = {
           ],
         },
         {
+          journeyId: '22222222-2222-4222-8222-222222222222',
           participantId: 'p2',
           participantDisplayName: 'Blake',
           participantPosition: 1,
@@ -114,6 +117,7 @@ const resultsValue = {
           durationMinutes: 120,
           transfers: 1,
           transportModes: ['train'],
+          routeSummary: [{ mode: 'HIGHSPEED_RAIL', displayName: 'TGV', routeColor: '#9c27b0' }],
           legs: [
             {
               mode: 'train',
@@ -144,11 +148,53 @@ const resultsValue = {
   ],
 };
 
+const journeyDetailValue = {
+  journeyId: '11111111-1111-4111-8111-111111111111',
+  detailSource: 'provider' as const,
+  itineraryId: 'itinerary:fixture:v1',
+  providerItinerary: {
+    format: 'motis-plan-itinerary-v1' as const,
+    motisPlanApiVersion: 'v5' as const,
+    motisOpenApiPin: 'motis@2.10.2:/api/v5/plan',
+    itinerary: {
+      duration: 100,
+      startTime: '2026-06-15T08:00:00Z',
+      endTime: '2026-06-15T10:00:00Z',
+      transfers: 0,
+      id: 'itinerary:fixture:v1',
+      legs: [
+        {
+          mode: 'HIGHSPEED_RAIL',
+          displayName: 'ICE',
+          agencyName: 'DB',
+          startTime: '2026-06-15T08:00:00Z',
+          endTime: '2026-06-15T10:00:00Z',
+          duration: 7200,
+          from: { name: 'Berlin', track: '1' },
+          to: { name: 'Munich', track: '2' },
+        },
+      ],
+    },
+  },
+  legs: [
+    {
+      mode: 'train',
+      departureAt: '2026-06-15T08:00:00.000Z',
+      arrivalAt: '2026-06-15T10:00:00.000Z',
+      durationMinutes: 120,
+      geometry: null,
+      displayName: 'ICE',
+    },
+  ],
+  providerItineraryUnavailableReason: null,
+};
+
 function createFakeService(overrides: Partial<MeetingSearchService> = {}): MeetingSearchService {
   return {
     createAcceptedSearch: vi.fn().mockResolvedValue({ ok: true, value: acceptedValue }),
     getSearchById: vi.fn().mockResolvedValue({ ok: true, value: detailValue }),
     getSearchResults: vi.fn().mockResolvedValue({ ok: true, value: resultsValue }),
+    getJourneyDetail: vi.fn().mockResolvedValue({ ok: true, value: journeyDetailValue }),
     ...overrides,
   };
 }
@@ -533,6 +579,8 @@ describe('meeting-search API', () => {
           destination: { placeId: 'place:munich', name: 'Munich' },
           journeys: [
             {
+              journeyId: '00000009-aaaa-4aaa-8aaa-000000000009',
+              routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
               participantId: 'p1',
               participantDisplayName: 'Alex',
               participantPosition: 0,
@@ -546,6 +594,8 @@ describe('meeting-search API', () => {
               legs: [],
             },
             {
+              journeyId: '0000000a-aaaa-4aaa-8aaa-00000000000a',
+              routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
               participantId: 'p2',
               participantDisplayName: 'Blake',
               participantPosition: 1,
@@ -665,4 +715,84 @@ describe('meeting-search API', () => {
     expect(response.json().meta.requestId).toBe(REQUEST_ID);
     await app.close();
   });
+
+  it('GET results exposes journeyId and routeSummary without providerItinerary', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/meeting-searches/${resultsValue.searchId}/results`,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    const journey = body.data.rankings[0].journeys[0];
+    expect(journey.journeyId).toBe('11111111-1111-4111-8111-111111111111');
+    expect(journey.routeSummary[0].displayName).toBe('ICE');
+    expect(JSON.stringify(body)).not.toContain('providerItinerary');
+    await app.close();
+  });
+
+  it('GET journey detail returns provider source', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/meeting-searches/${resultsValue.searchId}/journeys/11111111-1111-4111-8111-111111111111`,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.data.detailSource).toBe('provider');
+    expect(body.data.providerItinerary?.itinerary.legs[0].displayName).toBe('ICE');
+    await app.close();
+  });
+
+  it('GET journey detail returns legacy source', async () => {
+    const app = await buildTestApp(
+      createFakeService({
+        getJourneyDetail: vi.fn().mockResolvedValue({
+          ok: true,
+          value: {
+            journeyId: '11111111-1111-4111-8111-111111111111',
+            detailSource: 'legacy',
+            itineraryId: null,
+            providerItinerary: null,
+            legs: [
+              {
+                mode: 'train',
+                departureAt: '2026-06-15T08:00:00.000Z',
+                arrivalAt: '2026-06-15T10:00:00.000Z',
+                durationMinutes: 120,
+                geometry: null,
+              },
+            ],
+            providerItineraryUnavailableReason: null,
+          },
+        }),
+      }),
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/meeting-searches/${resultsValue.searchId}/journeys/11111111-1111-4111-8111-111111111111`,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.detailSource).toBe('legacy');
+    expect(response.json().data.providerItinerary).toBeNull();
+    await app.close();
+  });
+
+  it('GET journey detail returns 404 for mismatched association', async () => {
+    const app = await buildTestApp(
+      createFakeService({
+        getJourneyDetail: vi.fn().mockResolvedValue({
+          ok: false,
+          error: { kind: 'not_found', searchId: resultsValue.searchId },
+        }),
+      }),
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/meeting-searches/${resultsValue.searchId}/journeys/99999999-9999-4999-8999-999999999999`,
+    });
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+
 });

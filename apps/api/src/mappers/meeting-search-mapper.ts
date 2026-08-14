@@ -1,17 +1,20 @@
 import type {
   CreateMeetingSearchCommand,
+  JourneyDetailRecord,
   MeetingSearchRecord,
   PlaceViewRecord,
+  RankedJourneyLegRecord,
   RankedResultsReadModel,
   UpsertProviderPlaceCommand,
 } from '@railmeet/database';
 import { placeKindFromSuggestionType } from '@railmeet/database';
 import type { SearchFailureCode } from '@railmeet/shared';
-import { isSearchFailureCode } from '@railmeet/shared';
+import { isSearchFailureCode, pickJourneyLegIdentity, sanitizeMotisHexColor } from '@railmeet/shared';
 import type {
   CreateMeetingSearchRequest,
   MeetingSearchAcceptedData,
   MeetingSearchDetailData,
+  MeetingSearchJourneyDetailData,
   MeetingSearchResultsData,
 } from '@railmeet/validation';
 import { isSelectedPlaceOrigin } from '@railmeet/validation';
@@ -173,6 +176,41 @@ function mapPlace(place: PlaceViewRecord): {
   return toPlaceView(place)!;
 }
 
+function mapRankingLeg(leg: RankedJourneyLegRecord) {
+  const identity = pickJourneyLegIdentity(leg);
+  const routeColor = sanitizeMotisHexColor(identity.routeColor);
+  const routeTextColor = sanitizeMotisHexColor(identity.routeTextColor);
+  const { routeColor: _rc, routeTextColor: _rtc, ...restIdentity } = identity;
+  return {
+    mode: leg.mode,
+    departureAt: leg.departureAt.toISOString(),
+    arrivalAt: leg.arrivalAt.toISOString(),
+    durationMinutes: leg.durationMinutes,
+    geometry: leg.geometry
+      ? {
+          points: leg.geometry.points,
+          precision: leg.geometry.precision,
+          length: leg.geometry.length,
+        }
+      : null,
+    ...restIdentity,
+    ...(routeColor ? { routeColor } : {}),
+    ...(routeTextColor ? { routeTextColor } : {}),
+  };
+}
+
+type ProviderItineraryView = NonNullable<MeetingSearchJourneyDetailData['providerItinerary']>;
+
+function toProviderItineraryView(
+  payload: JourneyDetailRecord['providerItinerary'],
+): ProviderItineraryView | null {
+  if (!payload) {
+    return null;
+  }
+  return JSON.parse(JSON.stringify(payload)) as ProviderItineraryView;
+}
+
+/** Compact ranked results — no providerItinerary embedding. */
 export function toMeetingSearchResultsData(
   model: Extract<RankedResultsReadModel, { kind: 'completed' }>,
 ): MeetingSearchResultsData {
@@ -196,6 +234,7 @@ export function toMeetingSearchResultsData(
       latestArrivalAt: candidate.latestArrivalAt.toISOString(),
       arrivalSpreadMs: candidate.arrivalSpreadMs,
       journeys: candidate.journeys.map((journey) => ({
+        journeyId: journey.journeyId,
         participantId: journey.participantId,
         participantDisplayName: journey.participantDisplayName,
         participantPosition: journey.participantPosition,
@@ -206,20 +245,27 @@ export function toMeetingSearchResultsData(
         durationMinutes: journey.durationMinutes,
         transfers: journey.transfers,
         transportModes: [...journey.transportModes],
-        legs: journey.legs.map((leg) => ({
-          mode: leg.mode,
-          departureAt: leg.departureAt.toISOString(),
-          arrivalAt: leg.arrivalAt.toISOString(),
-          durationMinutes: leg.durationMinutes,
-          geometry: leg.geometry
-            ? {
-                points: leg.geometry.points,
-                precision: leg.geometry.precision,
-                length: leg.geometry.length,
-              }
-            : null,
+        legs: journey.legs.map(mapRankingLeg),
+        routeSummary: journey.routeSummary.map((segment) => ({
+          mode: segment.mode,
+          ...(segment.displayName ? { displayName: segment.displayName } : {}),
+          ...(segment.routeColor ? { routeColor: segment.routeColor } : {}),
+          ...(segment.routeTextColor ? { routeTextColor: segment.routeTextColor } : {}),
         })),
       })),
     })),
+  };
+}
+
+export function toMeetingSearchJourneyDetailData(
+  detail: JourneyDetailRecord,
+): MeetingSearchJourneyDetailData {
+  return {
+    journeyId: detail.journeyId,
+    detailSource: detail.detailSource,
+    itineraryId: detail.itineraryId,
+    providerItinerary: toProviderItineraryView(detail.providerItinerary),
+    legs: detail.legs.map(mapRankingLeg),
+    providerItineraryUnavailableReason: detail.providerItineraryUnavailableReason,
   };
 }

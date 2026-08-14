@@ -4,19 +4,25 @@ import {
   ENCODED_POLYLINE_POINTS_MAX_LENGTH,
   ENCODED_POLYLINE_PRECISION_MAX,
   ENCODED_POLYLINE_PRECISION_MIN,
+  MOTIS_PLAN_ITINERARY_FORMAT,
+  pickJourneyLegIdentity,
+  type JourneyLegStopView,
+  type MotisItineraryJson,
 } from '@railmeet/shared';
 
 import { RoutingError } from './errors.js';
-import { mapMotisLegMode } from './motis-mode.js';
+import { canonicalMotisLegMode, mapMotisLegMode } from './motis-mode.js';
 import type { EncodedRouteGeometry, JourneyLeg, PlannedJourney } from './types.js';
 
 /**
- * Pinned MOTIS OpenAPI surface used by this adapter:
- * MOTIS 2.10.2 /api/v5/plan (see docs/routing-transitous.md).
- * Do not regenerate clients during ordinary build/test.
+ * RailMeet plan adapter pin. Transitous current OpenAPI uses `/api/v6/plan`
+ * and `/api/v6/refresh-itinerary`; this adapter still calls `/api/v5/plan`.
+ * Live `/api/v5/refresh-itinerary` is 404, so RailMeet does not expose refresh
+ * while pinned to v5 (itinerary.id is still persisted for a future v6 pin).
  */
 export const MOTIS_PLAN_API_VERSION = 'v5' as const;
 export const MOTIS_OPENAPI_PIN = 'motis@2.10.2:/api/v5/plan' as const;
+export const MOTIS_REFRESH_ITINERARY_SUPPORTED = false;
 
 const coordinateSchema = z.number().finite().gte(-90).lte(90);
 const longitudeSchema = z.number().finite().gte(-180).lte(180);
@@ -49,6 +55,14 @@ export const motisEncodedPolylineSchema = z
   })
   .strict();
 
+const motisPlaceSchema = z
+  .object({
+    name: z.string().optional(),
+    track: z.string().optional().nullable(),
+    scheduledTrack: z.string().optional().nullable(),
+  })
+  .passthrough();
+
 const motisLegSchema = z
   .object({
     mode: motisModeSchema,
@@ -57,6 +71,20 @@ const motisLegSchema = z
     duration: z.number().finite().nonnegative(),
     tripId: z.string().optional(),
     routeId: z.string().optional(),
+    headsign: z.string().optional().nullable(),
+    agencyName: z.string().optional().nullable(),
+    agencyId: z.string().optional().nullable(),
+    agencyUrl: z.string().optional().nullable(),
+    routeShortName: z.string().optional().nullable(),
+    routeLongName: z.string().optional().nullable(),
+    tripShortName: z.string().optional().nullable(),
+    displayName: z.string().optional().nullable(),
+    routeColor: z.string().optional().nullable(),
+    routeTextColor: z.string().optional().nullable(),
+    distance: z.number().finite().nonnegative().optional(),
+    from: motisPlaceSchema.optional(),
+    to: motisPlaceSchema.optional(),
+    intermediateStops: z.array(z.unknown()).nullable().optional(),
     // Validated in normalizeLegGeometry — empty points must not fail the whole plan.
     legGeometry: z.unknown().optional(),
   })
@@ -68,6 +96,7 @@ const motisItinerarySchema = z
     startTime: z.string().min(1),
     endTime: z.string().min(1),
     transfers: z.number().int().nonnegative(),
+    id: z.string().optional(),
     legs: z.array(motisLegSchema).min(1),
   })
   .passthrough();
@@ -88,6 +117,37 @@ function parseInstant(value: string, label: string): Date {
     );
   }
   return date;
+}
+
+function optionalText(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function optionalUrl(value: string | null | undefined): string | undefined {
+  const trimmed = optionalText(value);
+  if (!trimmed) {
+    return undefined;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return undefined;
+}
+
+function normalizeStop(
+  place: z.infer<typeof motisPlaceSchema> | undefined,
+): JourneyLegStopView | undefined {
+  if (!place) {
+    return undefined;
+  }
+  const name = optionalText(place.name);
+  if (!name) {
+    return undefined;
+  }
+  const track =
+    optionalText(place.track ?? undefined) ?? optionalText(place.scheduledTrack ?? undefined);
+  return track ? { name, track } : { name };
 }
 
 function normalizeLegGeometry(raw: unknown): EncodedRouteGeometry | undefined {
@@ -167,13 +227,34 @@ function normalizeOneItinerary(itinerary: z.infer<typeof motisItinerarySchema>):
         'Leg arrival precedes departure',
       );
     }
-    const providerReference = leg.tripId ?? leg.routeId;
+    const providerReference = optionalText(leg.tripId) ?? optionalText(leg.routeId);
     const geometry = normalizeLegGeometry(leg.legGeometry);
+    const identity = pickJourneyLegIdentity({
+      motisMode: canonicalMotisLegMode(leg.mode),
+      displayName: optionalText(leg.displayName ?? undefined),
+      routeShortName: optionalText(leg.routeShortName ?? undefined),
+      routeLongName: optionalText(leg.routeLongName ?? undefined),
+      tripShortName: optionalText(leg.tripShortName ?? undefined),
+      headsign: optionalText(leg.headsign ?? undefined),
+      agencyName: optionalText(leg.agencyName ?? undefined),
+      agencyId: optionalText(leg.agencyId ?? undefined),
+      agencyUrl: optionalUrl(leg.agencyUrl ?? undefined),
+      routeColor: optionalText(leg.routeColor ?? undefined),
+      routeTextColor: optionalText(leg.routeTextColor ?? undefined),
+      from: normalizeStop(leg.from),
+      to: normalizeStop(leg.to),
+      ...(Array.isArray(leg.intermediateStops)
+        ? { intermediateStopCount: leg.intermediateStops.length }
+        : {}),
+      ...(typeof leg.distance === 'number' ? { distanceMeters: leg.distance } : {}),
+    });
     const mapped: JourneyLeg = {
       mode: mapMotisLegMode(leg.mode),
+      motisMode: identity.motisMode ?? canonicalMotisLegMode(leg.mode),
       departureAt: legDeparture,
       arrivalAt: legArrival,
       durationMinutes: Math.max(0, Math.round(leg.duration / 60)),
+      ...identity,
       ...(geometry ? { geometry } : {}),
     };
     if (providerReference) {
@@ -182,11 +263,22 @@ function normalizeOneItinerary(itinerary: z.infer<typeof motisItinerarySchema>):
     return mapped;
   });
 
-  return {
+  const planned: PlannedJourney = {
     departureAt,
     arrivalAt,
     durationMinutes,
     transfers: itinerary.transfers,
     legs,
+    providerItinerary: {
+      format: MOTIS_PLAN_ITINERARY_FORMAT,
+      motisPlanApiVersion: 'v5',
+      motisOpenApiPin: MOTIS_OPENAPI_PIN,
+      itinerary: itinerary as MotisItineraryJson,
+    },
   };
+  const itineraryId = optionalText(itinerary.id);
+  if (itineraryId) {
+    return { ...planned, providerReference: itineraryId };
+  }
+  return planned;
 }

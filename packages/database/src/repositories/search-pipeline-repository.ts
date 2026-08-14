@@ -21,7 +21,7 @@ import type {
   RoutingWorkRecord,
   RoutingWorkStatus,
 } from '../models.js';
-import type { NormalizedJourneyLegJson } from '../schema/tables.js';
+import { jsonFromPersistedLeg, parseStoredJourneyLegs, persistedLegFromJson, storedJourneyLegsJson } from '../journey-leg-json.js';
 import {
   meetingCityHubs,
   meetingSearchCandidateGenerations,
@@ -104,22 +104,8 @@ function mapRoutingWork(row: typeof meetingSearchRoutingWork.$inferSelect): Rout
 }
 
 function mapJourney(row: typeof meetingSearchJourneys.$inferSelect): PersistedJourneyRecord {
-  const legs = (row.legs as readonly NormalizedJourneyLegJson[]).map((leg) => ({
-    mode: leg.mode,
-    departureAt: new Date(leg.departureAt),
-    arrivalAt: new Date(leg.arrivalAt),
-    durationMinutes: leg.durationMinutes,
-    ...(leg.providerReference ? { providerReference: leg.providerReference } : {}),
-    ...(leg.geometry
-      ? {
-          geometry: {
-            points: leg.geometry.points,
-            precision: leg.geometry.precision,
-            length: leg.geometry.length,
-          },
-        }
-      : {}),
-  }));
+  const parsed = parseStoredJourneyLegs(row.legs);
+  const legs = parsed.rankingLegs.map(persistedLegFromJson);
   return {
     id: row.id,
     routingWorkId: row.routingWorkId,
@@ -131,6 +117,7 @@ function mapJourney(row: typeof meetingSearchJourneys.$inferSelect): PersistedJo
     transportModes: row.transportModes,
     legs,
     providerReference: row.providerReference ?? null,
+    providerItinerary: parsed.providerItinerary,
     createdAt: row.createdAt,
   };
 }
@@ -728,22 +715,12 @@ export function createSearchPipelineRepository(db: Db): SearchPipelineRepository
                 durationMinutes: journey.durationMinutes,
                 transfers: journey.transfers,
                 transportModes: [...journey.transportModes],
-                legs: journey.legs.map((leg): NormalizedJourneyLegJson => ({
-                  mode: leg.mode,
-                  departureAt: leg.departureAt.toISOString(),
-                  arrivalAt: leg.arrivalAt.toISOString(),
-                  durationMinutes: leg.durationMinutes,
-                  ...(leg.providerReference ? { providerReference: leg.providerReference } : {}),
-                  ...(leg.geometry
-                    ? {
-                        geometry: {
-                          points: leg.geometry.points,
-                          precision: leg.geometry.precision,
-                          length: leg.geometry.length,
-                        },
-                      }
+                legs: storedJourneyLegsJson({
+                  rankingLegs: journey.legs.map((leg) => jsonFromPersistedLeg(leg)),
+                  ...(journey.providerItinerary
+                    ? { providerItinerary: journey.providerItinerary }
                     : {}),
-                })),
+                }),
                 providerReference: journey.providerReference ?? null,
               })),
             )

@@ -62,6 +62,7 @@ function createFinalizationMock(
   return {
     finalizeMeetingSearch: vi.fn(),
     loadRankedResults: vi.fn(),
+    loadJourneyDetail: vi.fn(),
     listCandidateEvaluations: vi.fn(),
     listCandidateRankings: vi.fn(),
     listRankingJourneys: vi.fn(),
@@ -208,6 +209,43 @@ describe('meeting-search service', () => {
     expect(failed.ok).toBe(false);
     if (!failed.ok) {
       expect(failed.error.kind).toBe('search_failed');
+    }
+  });
+
+  it('maps journey detail and not_found from loadJourneyDetail', async () => {
+    const loadJourneyDetail = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: 'completed',
+        searchId: '33333333-3333-4333-8333-333333333333',
+        detail: {
+          journeyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          detailSource: 'legacy',
+          itineraryId: null,
+          providerItinerary: null,
+          legs: [],
+          providerItineraryUnavailableReason: null,
+        },
+      })
+      .mockResolvedValueOnce({ kind: 'not_found' });
+    const service = createService({ finalization: { loadJourneyDetail } });
+
+    const ok = await service.getJourneyDetail(
+      '33333333-3333-4333-8333-333333333333',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.value.detailSource).toBe('legacy');
+    }
+
+    const missing = await service.getJourneyDetail(
+      '33333333-3333-4333-8333-333333333333',
+      '99999999-9999-4999-8999-999999999999',
+    );
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) {
+      expect(missing.error.kind).toBe('not_found');
     }
   });
 });

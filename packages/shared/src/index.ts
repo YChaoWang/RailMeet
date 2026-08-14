@@ -57,6 +57,60 @@ export { asNonEmptyStringTuple } from './tuple.js';
 
 export { RANKING_MODES, isRankingMode, type RankingMode } from './ranking-mode.js';
 export { TRANSPORT_MODES, isTransportMode, type TransportMode } from './transport-mode.js';
+export {
+  MOTIS_PLAN_MODES,
+  MOTIS_PLAN_MODE_LABELS,
+  MOTIS_PLAN_OPENAPI_PIN,
+  UNKNOWN_MOTIS_MODE_LABEL,
+  canonicalMotisModeToken,
+  formatJourneyOperatorLabel,
+  formatJourneyServiceLabel,
+  isMotisPlanMode,
+  mapMotisPlanModeToDomain,
+  motisPlanModeLabel,
+  parseMotisPlanMode,
+  type JourneyLegMode,
+  type JourneyServiceIdentity,
+  type MotisPlanMode,
+} from './motis-plan-mode.js';
+export {
+  MOTIS_PLAN_ITINERARY_FORMAT,
+  isMotisTransitLeg,
+  isMotisWalkLeg,
+  joinInterlinedMotisLegs,
+  motisDirectionLabel,
+  motisLegAgencyName,
+  motisLegDisplayName,
+  motisPlaceName,
+  motisPlaceTrack,
+  type MotisAlertJson,
+  type MotisItineraryJson,
+  type MotisLegJson,
+  type MotisPlaceJson,
+  type MotisPlanItineraryPayload,
+  type MotisStepJson,
+} from './motis-itinerary.js';
+export {
+  getMotisModeStyle,
+  getMotisRouteColors,
+  sanitizeMotisHexColor,
+  type MotisColorable,
+  type MotisModeIconKind,
+} from './motis-mode-style.js';
+export {
+  ROUTE_SUMMARY_DISPLAY_NAME_MAX,
+  ROUTE_SUMMARY_SEGMENTS_MAX,
+  buildRouteSummary,
+  buildRouteSummaryFromProviderItinerary,
+  buildRouteSummaryFromRankingLegs,
+  type RankingLegForRouteSummary,
+  type RouteSummarySegment,
+} from './route-summary.js';
+export {
+  pickJourneyLegIdentity,
+  type JourneyLegIdentityFields,
+  type JourneyLegStopView,
+} from './journey-leg-identity.js';
 export { SEARCH_STATUSES, isSearchStatus, type SearchStatus } from './search-status.js';
 export {
   TERMINAL_SEARCH_STATUSES,

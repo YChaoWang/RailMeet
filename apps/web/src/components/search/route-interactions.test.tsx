@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SearchResultsViewStandalone } from '@/components/search/search-results-view';
 import type { MeetingSearchResultsData } from '@railmeet/validation';
+import { clearJourneyDetailCache } from '@/lib/journey-detail-cache';
 import { encodeEncodedPolyline } from '@/lib/polyline';
 
 vi.mock('next/link', () => ({
@@ -58,6 +59,8 @@ const results = {
       arrivalSpreadMs: 0,
       journeys: [
         {
+          journeyId: '00000008-aaaa-4aaa-8aaa-000000000008',
+          routeSummary: [{ mode: 'RAIL', displayName: 'ICE' }],
           participantId: 'p1',
           participantDisplayName: 'Alex',
           participantPosition: 0,
@@ -109,18 +112,51 @@ const results = {
 } as MeetingSearchResultsData;
 
 describe('ranking interactions do not call providers', () => {
-  it('switching ranking mode does not call Transitous or fetch', async () => {
-    const user = userEvent.setup();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    render(<SearchResultsViewStandalone results={results} />);
-    await user.click(screen.getByRole('tab', { name: 'Arrive together' }));
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+  beforeEach(() => {
+    clearJourneyDetailCache();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/journeys/')) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                journeyId: url.split('/').pop(),
+                detailSource: 'legacy',
+                itineraryId: null,
+                providerItinerary: null,
+                legs: [],
+                providerItineraryUnavailableReason: null,
+              },
+              meta: { requestId: 'test' },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        return new Response('{}', { status: 404 });
+      }),
+    );
   });
 
-  it('selecting another candidate row does not call Transitous or fetch', async () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('switching ranking mode does not call Transitous', async () => {
     const user = userEvent.setup();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.mocked(globalThis.fetch);
+    render(<SearchResultsViewStandalone results={results} />);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    await user.click(screen.getByRole('tab', { name: 'Arrive together' }));
+    expect(fetchSpy.mock.calls.every((call) => !String(call[0]).includes('transitous'))).toBe(
+      true,
+    );
+  });
+
+  it('selecting another candidate row does not call Transitous', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.mocked(globalThis.fetch);
     const withTwo = {
       ...results,
       rankings: [
@@ -140,7 +176,8 @@ describe('ranking interactions do not call providers', () => {
     } as MeetingSearchResultsData;
     render(<SearchResultsViewStandalone results={withTwo} />);
     await user.click(screen.getByRole('button', { name: /Cologne/i }));
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+    expect(fetchSpy.mock.calls.every((call) => !String(call[0]).includes('transitous'))).toBe(
+      true,
+    );
   });
 });

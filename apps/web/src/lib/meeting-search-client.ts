@@ -1,6 +1,7 @@
 import type {
   CreateMeetingSearchRequest,
   MeetingSearchDetailData,
+  MeetingSearchJourneyDetailData,
   MeetingSearchResultsData,
 } from '@railmeet/validation';
 
@@ -29,6 +30,25 @@ function requestInit(signal?: AbortSignal, init?: RequestInit): RequestInit {
   return signal ? { ...init, signal } : { ...init };
 }
 
+function failureResult(
+  response: Response,
+  json: unknown,
+  fallbackMessage: string,
+): ClientResult<never> {
+  return {
+    ok: false,
+    status: response.status,
+    error:
+      json && typeof json === 'object' && json !== null && 'error' in json
+        ? (json as ApiErrorBody).error
+        : {
+            code: 'INTERNAL_ERROR',
+            message: fallbackMessage,
+            requestId: 'unknown',
+          },
+  };
+}
+
 export async function createMeetingSearch(
   body: CreateMeetingSearchRequest,
   signal?: AbortSignal,
@@ -42,20 +62,11 @@ export async function createMeetingSearch(
     }),
   );
   const json = (await parseJson(response)) as
-    { data: { searchId: string; status: 'queued'; createdAt: string } } | ApiErrorBody | null;
+    | { data: { searchId: string; status: 'queued'; createdAt: string } }
+    | ApiErrorBody
+    | null;
   if (!response.ok || !json || !('data' in json)) {
-    return {
-      ok: false,
-      status: response.status,
-      error:
-        json && 'error' in json
-          ? json.error
-          : {
-              code: 'INTERNAL_ERROR',
-              message: 'Could not create the search',
-              requestId: 'unknown',
-            },
-    };
+    return failureResult(response, json, 'Could not create the search');
   }
   return { ok: true, status: response.status, data: json.data };
 }
@@ -69,20 +80,11 @@ export async function fetchMeetingSearch(
     requestInit(signal),
   );
   const json = (await parseJson(response)) as
-    { data: MeetingSearchDetailData } | ApiErrorBody | null;
+    | { data: MeetingSearchDetailData }
+    | ApiErrorBody
+    | null;
   if (!response.ok || !json || !('data' in json)) {
-    return {
-      ok: false,
-      status: response.status,
-      error:
-        json && 'error' in json
-          ? json.error
-          : {
-              code: 'INTERNAL_ERROR',
-              message: 'Could not load the search',
-              requestId: 'unknown',
-            },
-    };
+    return failureResult(response, json, 'Could not load the search');
   }
   return { ok: true, status: response.status, data: json.data };
 }
@@ -96,20 +98,30 @@ export async function fetchMeetingSearchResults(
     requestInit(signal),
   );
   const json = (await parseJson(response)) as
-    { data: MeetingSearchResultsData } | ApiErrorBody | null;
+    | { data: MeetingSearchResultsData }
+    | ApiErrorBody
+    | null;
   if (!response.ok || !json || !('data' in json)) {
-    return {
-      ok: false,
-      status: response.status,
-      error:
-        json && 'error' in json
-          ? json.error
-          : {
-              code: 'INTERNAL_ERROR',
-              message: 'Could not load results',
-              requestId: 'unknown',
-            },
-    };
+    return failureResult(response, json, 'Could not load results');
+  }
+  return { ok: true, status: response.status, data: json.data };
+}
+
+export async function fetchMeetingSearchJourneyDetail(
+  searchId: string,
+  journeyId: string,
+  signal?: AbortSignal,
+): Promise<ClientResult<MeetingSearchJourneyDetailData>> {
+  const response = await fetch(
+    `/api/v1/meeting-searches/${encodeURIComponent(searchId)}/journeys/${encodeURIComponent(journeyId)}`,
+    requestInit(signal),
+  );
+  const json = (await parseJson(response)) as
+    | { data: MeetingSearchJourneyDetailData }
+    | ApiErrorBody
+    | null;
+  if (!response.ok || !json || !('data' in json)) {
+    return failureResult(response, json, 'Could not load journey details');
   }
   return { ok: true, status: response.status, data: json.data };
 }

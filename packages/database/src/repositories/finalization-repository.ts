@@ -5,19 +5,22 @@ import {
   type RankingRoutingWorkInput,
 } from '@railmeet/search-engine';
 import type { RankingMode, SearchStatus } from '@railmeet/shared';
-import { RANKING_MODES, SEARCH_LIMITS } from '@railmeet/shared';
+import { RANKING_MODES, SEARCH_LIMITS, buildRouteSummary } from '@railmeet/shared';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import type {
   CandidateFeasibilityReason,
   FinalizeMeetingSearchResult,
+  JourneyDetailReadModel,
+  JourneyDetailRecord,
   PlaceViewRecord,
   RankedCandidateRecord,
   RankedParticipantJourneyRecord,
   RankedResultsReadModel,
   SearchCompletionOutcome,
 } from '../models.js';
+import { parseStoredJourneyLegs, rankedLegFromJson } from '../journey-leg-json.js';
 import {
   meetingSearchCandidateEvaluations,
   meetingSearchCandidateGenerations,
@@ -29,7 +32,6 @@ import {
   meetingSearchRoutingWork,
   meetingSearches,
   places,
-  type NormalizedJourneyLegJson,
 } from '../schema/tables.js';
 import type * as schema from '../schema/index.js';
 import type {
@@ -50,6 +52,11 @@ export type FinalizationRepository = {
    * without ranking rows.
    */
   loadRankedResults: (searchId: string) => Promise<RankedResultsReadModel>;
+  /**
+   * Load one journey detail for a completed search. Verifies the journey belongs
+   * to the search via routing_work. Same status gating as loadRankedResults.
+   */
+  loadJourneyDetail: (searchId: string, journeyId: string) => Promise<JourneyDetailReadModel>;
   listCandidateEvaluations: (searchId: string) => Promise<
     readonly {
       readonly destinationPlaceId: string;
@@ -473,6 +480,7 @@ export function createFinalizationRepository(
           rankingMode: meetingSearchCandidateRankingJourneys.rankingMode,
           destinationPlaceId: meetingSearchCandidateRankingJourneys.destinationPlaceId,
           rank: meetingSearchCandidateRankings.rank,
+          journeyId: meetingSearchJourneys.id,
           participantId: meetingSearchCandidateRankingJourneys.participantId,
           participantDisplayName: meetingSearchParticipants.displayName,
           participantPosition: meetingSearchParticipants.position,
@@ -566,8 +574,10 @@ export function createFinalizationRepository(
       for (const row of journeyRows) {
         const key = `${row.rankingMode}\0${row.destinationPlaceId}`;
         const list = journeysByKey.get(key) ?? [];
-        const legsJson = row.legs as readonly NormalizedJourneyLegJson[];
+        const parsedLegs = parseStoredJourneyLegs(row.legs);
+        const rankingLegs = parsedLegs.rankingLegs.map((leg) => rankedLegFromJson(leg));
         list.push({
+          journeyId: row.journeyId,
           participantId: row.participantId,
           participantDisplayName: row.participantDisplayName,
           participantPosition: row.participantPosition,
@@ -578,19 +588,12 @@ export function createFinalizationRepository(
           durationMinutes: row.durationMinutes,
           transfers: row.transfers,
           transportModes: [...row.transportModes],
-          legs: legsJson.map((leg) => ({
-            mode: leg.mode,
-            departureAt: new Date(leg.departureAt),
-            arrivalAt: new Date(leg.arrivalAt),
-            durationMinutes: leg.durationMinutes,
-            geometry: leg.geometry
-              ? {
-                  points: leg.geometry.points,
-                  precision: leg.geometry.precision,
-                  length: leg.geometry.length,
-                }
-              : null,
-          })),
+          legs: rankingLegs,
+          routeSummary: buildRouteSummary({
+            providerItinerary: parsedLegs.providerItinerary?.itinerary ?? null,
+            rankingLegs,
+          }),
+          providerItinerary: parsedLegs.providerItinerary,
         });
         journeysByKey.set(key, list);
       }
@@ -647,6 +650,90 @@ export function createFinalizationRepository(
         rankings,
         queryCount: placeIdList.length > 0 ? 4 : 3,
       };
+    },
+
+    async loadJourneyDetail(searchId, journeyId) {
+      const [header] = await db
+        .select({
+          status: meetingSearches.status,
+          failureCode: meetingSearches.failureCode,
+          completionOutcome: meetingSearches.completionOutcome,
+        })
+        .from(meetingSearches)
+        .where(eq(meetingSearches.id, searchId))
+        .limit(1);
+
+      if (!header) {
+        return { kind: 'not_found' };
+      }
+
+      const status = header.status as SearchStatus;
+      if (status === 'failed' || status === 'cancelled') {
+        return {
+          kind: 'failed',
+          searchId,
+          failureCode: header.failureCode ?? null,
+        };
+      }
+      if (status !== 'completed' || !header.completionOutcome) {
+        return { kind: 'not_ready', searchId, status };
+      }
+
+      const [row] = await db
+        .select({
+          journeyId: meetingSearchJourneys.id,
+          legs: meetingSearchJourneys.legs,
+        })
+        .from(meetingSearchJourneys)
+        .innerJoin(
+          meetingSearchRoutingWork,
+          eq(meetingSearchJourneys.routingWorkId, meetingSearchRoutingWork.id),
+        )
+        .where(
+          and(
+            eq(meetingSearchJourneys.id, journeyId),
+            eq(meetingSearchRoutingWork.searchId, searchId),
+          ),
+        )
+        .limit(1);
+
+      if (!row) {
+        return { kind: 'not_found' };
+      }
+
+      const parsed = parseStoredJourneyLegs(row.legs);
+      const legs = parsed.rankingLegs.map((leg) => rankedLegFromJson(leg));
+      let detail: JourneyDetailRecord;
+      if (parsed.storageKind === 'provider_document') {
+        detail = {
+          journeyId: row.journeyId,
+          detailSource: 'provider',
+          itineraryId: parsed.providerItinerary?.itinerary.id ?? null,
+          providerItinerary: parsed.providerItinerary,
+          legs,
+          providerItineraryUnavailableReason: parsed.unavailableReason,
+        };
+      } else if (parsed.storageKind === 'legacy_array') {
+        detail = {
+          journeyId: row.journeyId,
+          detailSource: 'legacy',
+          itineraryId: null,
+          providerItinerary: null,
+          legs,
+          providerItineraryUnavailableReason: null,
+        };
+      } else {
+        detail = {
+          journeyId: row.journeyId,
+          detailSource: 'legacy',
+          itineraryId: null,
+          providerItinerary: null,
+          legs,
+          providerItineraryUnavailableReason: parsed.unavailableReason,
+        };
+      }
+
+      return { kind: 'completed', searchId, detail };
     },
 
     async listCandidateEvaluations(searchId) {

@@ -34,6 +34,7 @@ export { RoutingError, type RoutingErrorClass, type RoutingErrorCode } from './e
 export {
   MOTIS_OPENAPI_PIN,
   MOTIS_PLAN_API_VERSION,
+  MOTIS_REFRESH_ITINERARY_SUPPORTED,
   assertPlanJourneyCoordinates,
   motisEncodedPolylineSchema,
   normalizeMotisPlanResponse,
@@ -44,6 +45,7 @@ export {
   collectJourneyTransportModes,
   hasUnmappedTransitLegs,
   mapMotisLegMode,
+  canonicalMotisLegMode,
 } from './motis-mode.js';
 
 export {
@@ -67,9 +69,10 @@ export {
   type TransitousClientOptions,
 } from './transitous-client.js';
 
-export { buildPlanCacheKey } from './plan-cache-key.js';
+export { buildPlanCacheKey, PLAN_CACHE_SCHEMA_VERSION } from './plan-cache-key.js';
 export {
   createCachedJourneyPlanner,
+  isUsableCachedPlanResult,
   type CachedJourneyPlannerOptions,
   type PlanCacheRedis,
 } from './plan-cache.js';

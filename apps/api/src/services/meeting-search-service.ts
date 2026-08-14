@@ -9,6 +9,7 @@ import type {
   CreateMeetingSearchRequest,
   MeetingSearchAcceptedData,
   MeetingSearchDetailData,
+  MeetingSearchJourneyDetailData,
   MeetingSearchResultsData,
 } from '@railmeet/validation';
 
@@ -16,6 +17,7 @@ import {
   toCreateMeetingSearchCommand,
   toMeetingSearchAcceptedData,
   toMeetingSearchDetailData,
+  toMeetingSearchJourneyDetailData,
   toMeetingSearchResultsData,
 } from '../mappers/meeting-search-mapper.js';
 
@@ -44,6 +46,10 @@ export type MeetingSearchService = {
   getSearchResults: (
     searchId: string,
   ) => Promise<MeetingSearchServiceResult<MeetingSearchResultsData>>;
+  getJourneyDetail: (
+    searchId: string,
+    journeyId: string,
+  ) => Promise<MeetingSearchServiceResult<MeetingSearchJourneyDetailData>>;
 };
 
 export type MeetingSearchServiceDeps = {
@@ -134,6 +140,35 @@ export function createMeetingSearchService(deps: MeetingSearchServiceDeps): Meet
             };
           case 'completed':
             return { ok: true, value: toMeetingSearchResultsData(model) };
+          default: {
+            const _exhaustive: never = model;
+            return { ok: false, error: { kind: 'internal', cause: _exhaustive } };
+          }
+        }
+      } catch (error) {
+        return { ok: false, error: mapUnexpectedPersistenceFailure(error) };
+      }
+    },
+
+    async getJourneyDetail(searchId, journeyId) {
+      try {
+        const model = await deps.finalization.loadJourneyDetail(searchId, journeyId);
+        switch (model.kind) {
+          case 'not_found':
+            return { ok: false, error: { kind: 'not_found', searchId } };
+          case 'not_ready':
+            return { ok: false, error: { kind: 'results_not_ready', searchId } };
+          case 'failed':
+            return {
+              ok: false,
+              error: {
+                kind: 'search_failed',
+                searchId,
+                failureCode: model.failureCode,
+              },
+            };
+          case 'completed':
+            return { ok: true, value: toMeetingSearchJourneyDetailData(model.detail) };
           default: {
             const _exhaustive: never = model;
             return { ok: false, error: { kind: 'internal', cause: _exhaustive } };

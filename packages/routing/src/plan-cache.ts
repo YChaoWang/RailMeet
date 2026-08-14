@@ -54,6 +54,34 @@ function serializeResult(result: PlanJourneyResult): string {
   });
 }
 
+/**
+ * Reject pre-providerItinerary cache payloads so stale Redis entries cannot
+ * collapse Journey Details back to coarse mode-only ranking legs.
+ */
+export function isUsableCachedPlanResult(result: PlanJourneyResult): boolean {
+  for (const journey of result.journeys) {
+    const hasTransit = journey.legs.some((leg) => leg.mode !== 'walk');
+    if (!hasTransit) {
+      continue;
+    }
+    if (!journey.providerItinerary?.itinerary?.legs?.length) {
+      return false;
+    }
+    if (journey.providerItinerary.format !== 'motis-plan-itinerary-v1') {
+      return false;
+    }
+    for (const leg of journey.legs) {
+      if (leg.mode === 'walk') {
+        continue;
+      }
+      if (!leg.motisMode) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 function deserializeResult(raw: string): PlanJourneyResult {
   const parsed = JSON.parse(raw) as CachedPlanPayload;
   return {
@@ -86,16 +114,28 @@ export function createCachedJourneyPlanner(options: CachedJourneyPlannerOptions)
           try {
             const cached = await options.redis.get(cacheKey);
             if (cached) {
-              options.logger?.info(
-                { event: 'routing_plan_cache_hit', cacheKey },
-                'Routing plan cache hit',
+              const restored = deserializeResult(cached);
+              if (isUsableCachedPlanResult(restored)) {
+                options.logger?.info(
+                  { event: 'routing_plan_cache_hit', cacheKey },
+                  'Routing plan cache hit',
+                );
+                return restored;
+              }
+              options.logger?.warn(
+                {
+                  event: 'routing_plan_cache_rejected',
+                  cacheKey,
+                  reason: 'missing_provider_itinerary_or_identity',
+                },
+                'Rejected stale routing plan cache entry',
               );
-              return deserializeResult(cached);
+            } else {
+              options.logger?.info(
+                { event: 'routing_plan_cache_miss', cacheKey },
+                'Routing plan cache miss',
+              );
             }
-            options.logger?.info(
-              { event: 'routing_plan_cache_miss', cacheKey },
-              'Routing plan cache miss',
-            );
           } catch (error) {
             options.logger?.warn(
               { event: 'routing_plan_cache_read_failed', cacheKey, err: error },

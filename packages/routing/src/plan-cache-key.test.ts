@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildPlanCacheKey } from './plan-cache-key.js';
+import { buildPlanCacheKey, PLAN_CACHE_SCHEMA_VERSION } from './plan-cache-key.js';
 
 describe('buildPlanCacheKey', () => {
   it('is stable for identical routing inputs', () => {
@@ -12,6 +12,7 @@ describe('buildPlanCacheKey', () => {
       maxTransfers: 2,
     };
     expect(buildPlanCacheKey(input)).toBe(buildPlanCacheKey(input));
+    expect(buildPlanCacheKey(input)).toContain(PLAN_CACHE_SCHEMA_VERSION);
   });
 
   it('changes when coordinates or time differ', () => {

@@ -645,6 +645,20 @@ export type NormalizedEncodedRouteGeometryJson = {
   readonly length: number;
 };
 
+export const STORED_JOURNEY_LEGS_FORMAT = 'motis-plan-itinerary-v1' as const;
+
+export type StoredMotisPlanItineraryDocument = {
+  readonly format: typeof STORED_JOURNEY_LEGS_FORMAT;
+  readonly motisPlanApiVersion: 'v5';
+  readonly motisOpenApiPin: string;
+  readonly itinerary: unknown;
+  readonly rankingLegs: readonly NormalizedJourneyLegJson[];
+};
+
+export type StoredJourneyLegsJson =
+  | readonly NormalizedJourneyLegJson[]
+  | StoredMotisPlanItineraryDocument;
+
 export type NormalizedJourneyLegJson = {
   readonly mode: string;
   readonly departureAt: string;
@@ -656,10 +670,25 @@ export type NormalizedJourneyLegJson = {
    * property is omitted. Never store partial geometry objects.
    */
   readonly geometry?: NormalizedEncodedRouteGeometryJson;
+  readonly motisMode?: string;
+  readonly displayName?: string;
+  readonly routeShortName?: string;
+  readonly routeLongName?: string;
+  readonly tripShortName?: string;
+  readonly headsign?: string;
+  readonly agencyName?: string;
+  readonly agencyId?: string;
+  readonly agencyUrl?: string;
+  readonly routeColor?: string;
+  readonly routeTextColor?: string;
+  readonly from?: { readonly name: string; readonly track?: string };
+  readonly to?: { readonly name: string; readonly track?: string };
+  readonly intermediateStopCount?: number;
+  readonly distanceMeters?: number;
 };
 
 /**
- * Provider-neutral persisted journeys for Phase 8 ranking (raw Transitous bodies never stored).
+ * Provider-neutral ranking fields plus a versioned MOTIS itinerary snapshot in `legs` jsonb.
  */
 export const meetingSearchJourneys = pgTable(
   'meeting_search_journeys',
@@ -674,7 +703,7 @@ export const meetingSearchJourneys = pgTable(
     durationMinutes: integer('duration_minutes').notNull(),
     transfers: integer('transfers').notNull(),
     transportModes: text('transport_modes').array().notNull(),
-    legs: jsonb('legs').$type<readonly NormalizedJourneyLegJson[]>().notNull(),
+    legs: jsonb('legs').$type<StoredJourneyLegsJson>().notNull(),
     providerReference: text('provider_reference'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
