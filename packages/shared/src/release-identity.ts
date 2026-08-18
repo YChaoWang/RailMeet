@@ -13,7 +13,7 @@ export function buildReleaseIdentity(service: string): ReleaseIdentity {
   return {
     service,
     version: process.env['APP_VERSION'] || '0.0.0-local',
-    gitSha: process.env['GIT_SHA'] || 'unknown',
+    gitSha: process.env['GIT_SHA'] || process.env['NF_DEPLOYMENT_SHA'] || 'unknown',
     deployedAt: process.env['DEPLOYED_AT'] || new Date().toISOString(),
   };
 }
