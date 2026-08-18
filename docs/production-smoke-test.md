@@ -36,7 +36,9 @@ Perform after every production deployment. Browser-based, not automated.
 - Build context: `/`
 - Path Rules mode: Allow
 - Path Rules: see `docs/ci-cd.md`
-- Environment: `DATABASE_URL`, `REDIS_URL`, `API_BASE_URL`, `WEB_ORIGIN`, `TRANSITOUS_USER_AGENT`, `GIT_SHA`, `APP_VERSION`, `DEPLOYED_AT`
+- Environment: `DATABASE_URL`, `REDIS_URL`, `API_BASE_URL`, `WEB_ORIGIN`, `TRANSITOUS_USER_AGENT`, `APP_VERSION`, `DEPLOYED_AT`
+- `gitSha`: Northflank injects `NF_DEPLOYMENT_SHA` automatically. `GIT_SHA` is an optional override.
+- `APP_VERSION` remains operator-defined.
 
 ### Northflank — Worker Combined Service
 
@@ -46,7 +48,9 @@ Perform after every production deployment. Browser-based, not automated.
 - Build context: `/`
 - Path Rules mode: Allow
 - Path Rules: see `docs/ci-cd.md`
-- Environment: `DATABASE_URL`, `REDIS_URL`, `API_BASE_URL`, `TRANSITOUS_USER_AGENT`, `GIT_SHA`, `APP_VERSION`, `DEPLOYED_AT`
+- Environment: `DATABASE_URL`, `REDIS_URL`, `API_BASE_URL`, `TRANSITOUS_USER_AGENT`, `APP_VERSION`, `DEPLOYED_AT`
+- `gitSha`: Northflank injects `NF_DEPLOYMENT_SHA` automatically. `GIT_SHA` is an optional override.
+- `APP_VERSION` remains operator-defined.
 
 ### Northflank — Migration Manual Job
 
@@ -65,7 +69,8 @@ Perform after every production deployment. Browser-based, not automated.
 | API_BASE_URL | ✓ | ✓ | | |
 | WEB_ORIGIN | ✓ | | | |
 | TRANSITOUS_USER_AGENT | ✓ | ✓ | | |
-| GIT_SHA | ✓ | ✓ | ✓ | auto |
-| APP_VERSION | ✓ | ✓ | | auto |
+| GIT_SHA (optional override) | ✓ | ✓ | ✓ | auto |
+| NF_DEPLOYMENT_SHA (Northflank injected) | auto | auto | | |
+| APP_VERSION (operator-defined) | ✓ | ✓ | | auto |
 | DEPLOYED_AT | ✓ | ✓ | | |
 | NEXT_PUBLIC_API_BASE_URL | | | | ✓ |

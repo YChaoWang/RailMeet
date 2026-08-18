@@ -104,6 +104,14 @@ tsconfig.base.json
 Each service exposes safe metadata (never secrets):
 - `SERVICE_NAME`, `APP_VERSION`, `GIT_SHA`, `DEPLOYED_AT`
 
+`gitSha` resolution for API and Worker:
+
+- `GIT_SHA` is an optional platform-independent override.
+- If `GIT_SHA` is unset, Northflank automatically provides `NF_DEPLOYMENT_SHA` at runtime.
+- If both are unset, `gitSha` is `"unknown"`.
+
+`APP_VERSION` remains operator-defined. There is no Northflank-injected version; unset values fall back to `"0.0.0-local"`.
+
 **API**: `/health` returns `{ status, service, version, gitSha, timestamp }`.
 **Worker**: Structured `worker_ready` log includes release fields.
 **Web**: `NEXT_PUBLIC_GIT_SHA` and `NEXT_PUBLIC_APP_VERSION` (derived from `VERCEL_GIT_COMMIT_SHA`).
