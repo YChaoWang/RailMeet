@@ -24,7 +24,7 @@ import {
   type JourneyPlanner,
   type PlanCacheRedis,
 } from '@railmeet/routing';
-import { SEARCH_LIMITS } from '@railmeet/shared';
+import { buildReleaseIdentity, SEARCH_LIMITS } from '@railmeet/shared';
 
 import { createCandidateGenerationProcessor } from './candidate-generation.js';
 import { createFinalizationProcessor } from './finalization.js';
@@ -219,9 +219,11 @@ export async function buildWorker(options: BuildWorkerOptions): Promise<WorkerRu
       void candidateConsumer.worker.run();
       void routingConsumer.worker.run();
       void finalizationConsumer.worker.run();
+      const release = buildReleaseIdentity('railmeet-worker');
       logger.info(
         {
           event: 'worker_ready',
+          ...release,
           nodeEnv: options.config.nodeEnv,
           hasDatabaseUrl: options.config.databaseUrl.length > 0,
           hasRedisUrl: options.config.redisUrl.length > 0,

@@ -1,6 +1,7 @@
 import type { Database } from '@railmeet/database';
 import type { Logger } from '@railmeet/observability';
 import type { MapStopsClient, PlaceGeocoder } from '@railmeet/routing';
+import { buildReleaseIdentity } from '@railmeet/shared';
 import Fastify from 'fastify';
 import {
   serializerCompiler,
@@ -25,7 +26,9 @@ import {
 
 export type HealthResponse = {
   status: 'ok';
-  service: 'railmeet-api';
+  service: string;
+  version: string;
+  gitSha: string;
   timestamp: string;
 };
 
@@ -45,7 +48,30 @@ export type BuildServerOptions = {
   readonly mapStopsService?: MapStopsService;
   /** Optional map-stops client used when mapStopsService is not provided. */
   readonly mapStopsClient?: MapStopsClient;
+  /** Override readiness probe timeout (tests only). */
+  readonly readinessProbeTimeoutMs?: number;
+  /** Override readiness cache TTL (tests only). */
+  readonly readinessCacheTtlMs?: number;
 };
+
+const DEFAULT_READINESS_PROBE_TIMEOUT_MS = 1_500;
+const DEFAULT_READINESS_CACHE_TTL_MS = 5_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('readiness_probe_timeout')), timeoutMs);
+    void promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 /**
  * Builds a Fastify application without listening.
@@ -147,12 +173,43 @@ export async function buildServer(options: BuildServerOptions) {
     });
   });
 
+  const release = buildReleaseIdentity('railmeet-api');
+  const readinessProbeTimeoutMs = options.readinessProbeTimeoutMs ?? DEFAULT_READINESS_PROBE_TIMEOUT_MS;
+  const readinessCacheTtlMs = options.readinessCacheTtlMs ?? DEFAULT_READINESS_CACHE_TTL_MS;
+  let readinessCache:
+    | { readonly status: 'ready' | 'unavailable'; readonly checkedAtMs: number }
+    | undefined;
+
   app.get('/health', async (): Promise<HealthResponse> => {
     return {
       status: 'ok',
-      service: 'railmeet-api',
+      service: release.service,
+      version: release.version,
+      gitSha: release.gitSha,
       timestamp: new Date().toISOString(),
     };
+  });
+
+  app.get('/ready', async (_req, reply) => {
+    if (!options.database) {
+      return reply.status(503).send({ status: 'unavailable', reason: 'database_unavailable' });
+    }
+    const now = Date.now();
+    if (readinessCache && now - readinessCache.checkedAtMs <= readinessCacheTtlMs) {
+      if (readinessCache.status === 'ready') {
+        return { status: 'ready', service: release.service };
+      }
+      return reply.status(503).send({ status: 'unavailable', reason: 'database_unavailable' });
+    }
+
+    try {
+      await withTimeout(options.database.ping(), readinessProbeTimeoutMs);
+      readinessCache = { status: 'ready', checkedAtMs: now };
+      return { status: 'ready', service: release.service };
+    } catch {
+      readinessCache = { status: 'unavailable', checkedAtMs: now };
+      return reply.status(503).send({ status: 'unavailable', reason: 'database_unavailable' });
+    }
   });
 
   const meetingSearchService =

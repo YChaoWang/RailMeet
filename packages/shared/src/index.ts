@@ -153,3 +153,5 @@ export type { SearchConstraints } from './search-constraints.js';
 export type { SearchRequest } from './search-request.js';
 
 export { err, ok, type Result } from './result.js';
+
+export { buildReleaseIdentity, type ReleaseIdentity } from './release-identity.js';

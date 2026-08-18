@@ -1,0 +1,228 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '10.8.0'
+
+jobs:
+  # ------------------------------------------------------------------
+  # Affected-change detection
+  # ------------------------------------------------------------------
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      web: ${{ steps.affected.outputs.web }}
+      api: ${{ steps.affected.outputs.api }}
+      worker: ${{ steps.affected.outputs.worker }}
+      database: ${{ steps.affected.outputs.database }}
+      migration: ${{ steps.affected.outputs.migration }}
+      migration_image: ${{ steps.affected.outputs.migration_image }}
+      catalog: ${{ steps.affected.outputs.catalog }}
+      integration: ${{ steps.affected.outputs.integration }}
+      docs_only: ${{ steps.affected.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Detect affected areas
+        id: affected
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          else
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          fi
+          # Handle initial commit (all-zeros base)
+          if echo "$BASE" | grep -qE '^0{40}$'; then
+            BASE=$(git rev-list --max-parents=0 HEAD | head -1)
+          fi
+          node scripts/ci/detect-affected.mjs --base "$BASE" --head "$HEAD"
+
+  # ------------------------------------------------------------------
+  # Lint + Typecheck + Unit Tests + Builds
+  # ------------------------------------------------------------------
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [detect]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "store=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.store }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build API
+        if: needs.detect.outputs.api == 'true'
+        run: pnpm --filter @railmeet/api... build
+
+      - name: Build Worker
+        if: needs.detect.outputs.worker == 'true'
+        run: pnpm --filter @railmeet/worker... build
+
+      - name: Build Web
+        if: needs.detect.outputs.web == 'true'
+        run: pnpm --filter @railmeet/web... build
+
+  # ------------------------------------------------------------------
+  # Integration tests (database + queue/worker)
+  # ------------------------------------------------------------------
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [detect]
+    if: needs.detect.outputs.integration == 'true'
+    services:
+      postgres:
+        image: ghcr.io/baosystems/postgis:16-3.5
+        env:
+          POSTGRES_USER: railmeet
+          POSTGRES_PASSWORD: railmeet
+          POSTGRES_DB: railmeet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U railmeet -d railmeet"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://railmeet:railmeet@localhost:5432/railmeet
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "store=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.store }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Database integration tests
+        run: pnpm test:integration
+
+      - name: Queue + Worker integration tests
+        run: pnpm test:integration:queue
+
+  # ------------------------------------------------------------------
+  # Required check gate — always runs, reports final status
+  # ------------------------------------------------------------------
+  required-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs: [detect, check, integration]
+    steps:
+      - name: Evaluate results
+        run: |
+          echo "## CI Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| detect | ${{ needs.detect.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| check | ${{ needs.check.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| integration | ${{ needs.integration.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Migration warning
+          if [ "${{ needs.detect.outputs.migration }}" = "true" ]; then
+            echo "---" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**DATABASE MIGRATION RELEASE REQUIRED:**" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Pause Northflank API and Worker CD, verify a Neon backup, run the migration Job for the selected SHA, deploy the selected API/Worker builds, smoke test, and re-enable CD." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Fail if required jobs did not succeed
+          if [ "${{ needs.detect.result }}" != "success" ]; then
+            echo "::error::detect job did not succeed"
+            exit 1
+          fi
+          if [ "${{ needs.check.result }}" != "success" ]; then
+            echo "::error::check job did not succeed"
+            exit 1
+          fi
+
+          # Integration gate:
+          # - if integration is not required, skipped is acceptable
+          # - if integration is required, result must be exactly success
+          if [ "${{ needs.detect.outputs.integration }}" = "true" ]; then
+            if [ "${{ needs.integration.result }}" != "success" ]; then
+              echo "::error::integration job was required but did not succeed"
+              exit 1
+            fi
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "All required checks passed." >> "$GITHUB_STEP_SUMMARY"

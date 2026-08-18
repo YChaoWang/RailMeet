@@ -38,12 +38,18 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const gitSha = process.env['GIT_SHA'] || 'unknown';
+  console.info(`[migration] starting (sha=${gitSha})`);
+
   const config: DatabaseConfig = { connectionString };
   const database = createDatabase(config);
 
   try {
     await database.migrate();
-    console.info('Migrations applied successfully');
+    console.info(`[migration] completed successfully (sha=${gitSha})`);
+  } catch (err) {
+    console.error(`[migration] failed (sha=${gitSha})`);
+    throw err;
   } finally {
     await database.close();
   }

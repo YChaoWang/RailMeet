@@ -38,6 +38,7 @@ export type Database = {
   readonly outbox: OutboxRepository;
   readonly searchPipeline: SearchPipelineRepository;
   readonly finalization: FinalizationRepository;
+  ping: () => Promise<void>;
   migrate: () => Promise<void>;
   close: () => Promise<void>;
 };
@@ -65,6 +66,13 @@ export function createDatabase(config: DatabaseConfig): Database {
     outbox,
     searchPipeline,
     finalization,
+    async ping() {
+      const client = sqlClient;
+      if (!client) {
+        throw new Error('database client is closed');
+      }
+      await client`select 1`;
+    },
     async migrate() {
       const folder = config.migrationsFolder ?? join(packageRoot, 'migrations');
       await migrate(db, { migrationsFolder: folder });
