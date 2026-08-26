@@ -88,6 +88,8 @@ describe('Transitous MOTIS plan client', () => {
       expect(seenUrl).toContain('fromPlace=52.52%2C13.405');
       expect(seenUrl).toContain('toPlace=48.8566%2C2.3522');
       expect(seenUrl).toContain('time=2026-09-01T07%3A00%3A00.000Z');
+      // Required for intermediateStops on transit legs.
+      expect(seenUrl).toContain('detailedLegs=true');
       expect(seenUa).toBe('RailMeet/0.0.0 (+https://example.com/contact)');
       expect(result.journeys).toHaveLength(2);
       expect(result.journeys[0]?.transfers).toBe(1);

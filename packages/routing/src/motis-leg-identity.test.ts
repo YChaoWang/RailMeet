@@ -29,7 +29,12 @@ describe('normalizeMotisPlanResponse service identity', () => {
       intermediateStopCount: 5,
     });
     expect(ice?.from?.name).toBe('S+U Berlin Hauptbahnhof');
-    expect(ice?.to).toEqual({ name: 'München Hbf', track: '22' });
+    expect(ice?.to).toEqual({
+      name: 'München Hbf',
+      track: '22',
+      latitude: 48.1402,
+      longitude: 11.5583,
+    });
     expect(ice?.agencyUrl).toBeUndefined();
     expect(formatJourneyServiceLabel(ice!)).toBe('ICE 1007');
     expect(formatJourneyOperatorLabel(ice!)).toBe('DB Fernverkehr AG');
@@ -66,6 +71,87 @@ describe('normalizeMotisPlanResponse service identity', () => {
     expect(walk?.mode).toBe('walk');
     expect(walk?.distanceMeters).toBe(173);
     expect(formatJourneyOperatorLabel(walk!)).toBeUndefined();
+  });
+});
+
+describe('normalizeMotisPlanResponse intermediate stops', () => {
+  function legWithStops(intermediateStops: readonly unknown[]) {
+    return normalizeMotisPlanResponse({
+      itineraries: [
+        {
+          duration: 600,
+          startTime: '2026-09-15T08:00:00Z',
+          endTime: '2026-09-15T08:10:00Z',
+          transfers: 0,
+          legs: [
+            {
+              mode: 'REGIONAL_RAIL',
+              startTime: '2026-09-15T08:00:00Z',
+              endTime: '2026-09-15T08:10:00Z',
+              duration: 600,
+              intermediateStops,
+            },
+          ],
+        },
+      ],
+    })[0]!.legs[0]!;
+  }
+
+  it('normalizes provider intermediate stops with coordinates, times, and track', () => {
+    const leg = legWithStops([
+      {
+        name: 'Stalybridge',
+        lat: 53.484207,
+        lon: -2.0643487,
+        arrival: '2026-09-15T08:02:00Z',
+        departure: '2026-09-15T08:03:00Z',
+        scheduledArrival: '2026-09-15T08:02:00Z',
+        scheduledDeparture: '2026-09-15T08:03:00Z',
+        track: '4',
+        vertexType: 'TRANSIT',
+      },
+    ]);
+    expect(leg.intermediateStopCount).toBe(1);
+    expect(leg.intermediateStops).toEqual([
+      {
+        name: 'Stalybridge',
+        latitude: 53.484207,
+        longitude: -2.0643487,
+        arrivalAt: '2026-09-15T08:02:00Z',
+        departureAt: '2026-09-15T08:03:00Z',
+        scheduledArrivalAt: '2026-09-15T08:02:00Z',
+        scheduledDepartureAt: '2026-09-15T08:03:00Z',
+        track: '4',
+      },
+    ]);
+  });
+
+  it('omits coordinates the provider did not supply and drops unusable entries', () => {
+    const leg = legWithStops([
+      { name: 'Bamberg' },
+      { name: 'Broken', lat: 'north', lon: 11 },
+      { lat: 50.1, lon: 11.1 },
+      'not-a-stop',
+    ]);
+    // intermediateStopCount still reflects the provider's own array length.
+    expect(leg.intermediateStopCount).toBe(4);
+    expect(leg.intermediateStops).toEqual([{ name: 'Bamberg' }]);
+  });
+
+  it('leaves intermediateStops absent when the provider sent none', () => {
+    const leg = legWithStops([]);
+    expect(leg.intermediateStops).toBeUndefined();
+    expect(leg.intermediateStopCount).toBe(0);
+  });
+
+  it('keeps from/to coordinates for map stop markers', () => {
+    const journeys = normalizeMotisPlanResponse(TRANSITOUS_BERLIN_MAGDEBURG_ODEG_PLAN);
+    const regional = journeys[0]?.legs.find((leg) => leg.motisMode === 'REGIONAL_RAIL');
+    expect(regional?.from).toMatchObject({ latitude: 52.5048, longitude: 13.3038 });
+    expect(regional?.to).toMatchObject({ latitude: 52.1307, longitude: 11.6269 });
+    // The S-Bahn leg's stops carry no coordinates in this feed snapshot.
+    const suburban = journeys[0]?.legs.find((leg) => leg.motisMode === 'SUBURBAN');
+    expect(suburban?.intermediateStops?.every((stop) => stop.latitude === undefined)).toBe(true);
   });
 });
 

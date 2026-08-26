@@ -116,8 +116,25 @@ export const meetingSearchJourneyLegGeometrySchema = z
   })
   .strict();
 
+const stopLatitudeSchema = z.number().finite().min(-90).max(90);
+const stopLongitudeSchema = z.number().finite().min(-180).max(180);
+
 export const meetingSearchJourneyLegStopSchema = z.object({
   name: z.string().min(1),
+  track: z.string().min(1).optional(),
+  latitude: stopLatitudeSchema.optional(),
+  longitude: stopLongitudeSchema.optional(),
+});
+
+/** MOTIS intermediate stop projection used for map stop markers. */
+export const meetingSearchJourneyIntermediateStopSchema = z.object({
+  name: z.string().min(1),
+  latitude: stopLatitudeSchema.optional(),
+  longitude: stopLongitudeSchema.optional(),
+  arrivalAt: z.string().min(1).optional(),
+  departureAt: z.string().min(1).optional(),
+  scheduledArrivalAt: z.string().min(1).optional(),
+  scheduledDepartureAt: z.string().min(1).optional(),
   track: z.string().min(1).optional(),
 });
 
@@ -141,6 +158,7 @@ export const meetingSearchJourneyLegViewSchema = z.object({
   from: meetingSearchJourneyLegStopSchema.optional(),
   to: meetingSearchJourneyLegStopSchema.optional(),
   intermediateStopCount: z.number().int().nonnegative().optional(),
+  intermediateStops: z.array(meetingSearchJourneyIntermediateStopSchema).optional(),
   distanceMeters: z.number().nonnegative().optional(),
 });
 

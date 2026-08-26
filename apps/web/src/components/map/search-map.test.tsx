@@ -8,6 +8,8 @@ import {
   SEARCH_MAP_ORIGIN_SOURCE_ID,
   SEARCH_MAP_ROUTE_LAYER_IDS,
   SEARCH_MAP_ROUTE_SOURCE_ID,
+  SEARCH_MAP_ROUTE_STOP_LABEL_LAYER_ID,
+  SEARCH_MAP_ROUTE_STOP_SOURCE_ID,
   SEARCH_MAP_STATION_LAYER_IDS,
   SEARCH_MAP_STATION_SOURCE_ID,
   SearchMap,
@@ -310,11 +312,18 @@ const routeScene: MapScene = {
       participantId: 'p1',
       participantPosition: 0,
       letter: 'A',
-      color: '#0f766e',
+      color: '#09a4ec',
+      textColor: '#000000',
+      colorSource: 'provider',
       emphasized: true,
       legIndex: 0,
       mode: 'train',
+      motisMode: 'HIGHSPEED_RAIL',
       style: 'transit',
+      serviceLabel: 'ICE 1007',
+      departureAt: '2026-06-15T08:00:00.000Z',
+      arrivalAt: '2026-06-15T10:00:00.000Z',
+      intermediateStopCount: 0,
       coordinates: [
         [13.4, 52.52],
         [11.58, 48.13],
@@ -336,11 +345,18 @@ const routeScene: MapScene = {
       participantId: 'p1',
       participantPosition: 0,
       letter: 'A',
-      color: '#0f766e',
+      color: '#6b7280',
+      textColor: '#ffffff',
+      colorSource: 'mode-fallback',
       emphasized: true,
       legIndex: 1,
       mode: 'walk',
+      motisMode: 'WALK',
       style: 'walk',
+      serviceLabel: 'Walk',
+      departureAt: '2026-06-15T10:00:00.000Z',
+      arrivalAt: '2026-06-15T10:05:00.000Z',
+      intermediateStopCount: 0,
       coordinates: [
         [11.58, 48.13],
         [11.581, 48.131],
@@ -359,7 +375,23 @@ const routeScene: MapScene = {
     },
   ],
   missingGeometry: [],
-  legend: [{ participantId: 'p1', displayName: 'Alex', letter: 'A', color: '#0f766e' }],
+  legend: [
+    {
+      participantId: 'p1',
+      displayName: 'Alex',
+      letter: 'A',
+      color: '#0f766e',
+      services: [
+        {
+          color: '#09a4ec',
+          textColor: '#000000',
+          mode: 'HIGHSPEED_RAIL',
+          displayName: 'ICE 1007',
+          colorSource: 'provider',
+        },
+      ],
+    },
+  ],
   cameraKey: 'route-scene-v1',
 };
 
@@ -416,6 +448,9 @@ describe('SearchMap route layers', () => {
     const walk = layers.get('railmeet-selected-routes-walk');
     const transit = layers.get('railmeet-selected-routes-transit');
     expect(walk?.paint?.['line-dasharray']).toEqual([1.2, 1.6]);
+    // Walking never takes a per-feature color; transit reads the Transitous route color.
+    expect(walk?.paint?.['line-color']).toBe('#6b7280');
+    expect(transit?.paint?.['line-color']).toEqual(['get', 'color']);
     expect(transit?.paint?.['line-dasharray']).toBeUndefined();
 
     await waitFor(() => {
@@ -423,8 +458,16 @@ describe('SearchMap route layers', () => {
       expect(lastSetData?.data).toMatchObject({
         type: 'FeatureCollection',
         features: [
-          { id: 'route:place:munich:p1:0', properties: { style: 'transit' } },
-          { id: 'route:place:munich:p1:1', properties: { style: 'walk' } },
+          {
+            id: 'route:place:munich:p1:0',
+            properties: {
+              style: 'transit',
+              color: '#09a4ec',
+              colorSource: 'provider',
+              serviceLabel: 'ICE 1007',
+            },
+          },
+          { id: 'route:place:munich:p1:1', properties: { style: 'walk', color: '#6b7280' } },
         ],
       });
     });
@@ -446,15 +489,18 @@ describe('SearchMap route layers', () => {
     expect(SEARCH_MAP_ROUTE_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
     expect(SEARCH_MAP_ORIGIN_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
     expect(SEARCH_MAP_STATION_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
+    expect(layers.has(SEARCH_MAP_ROUTE_STOP_LABEL_LAYER_ID)).toBe(true);
     expect(layers.size).toBe(
       SEARCH_MAP_ROUTE_LAYER_IDS.length +
         SEARCH_MAP_ORIGIN_LAYER_IDS.length +
         SEARCH_MAP_STATION_LAYER_IDS.length +
+        1 + // route stop labels
         1, // hillshade
     );
-    expect(sources.size).toBe(4); // routes, origins, stations, terrain dem
+    expect(sources.size).toBe(5); // routes, route stops, origins, stations, terrain dem
     expect(sources.has(SEARCH_MAP_ORIGIN_SOURCE_ID)).toBe(true);
     expect(sources.has(SEARCH_MAP_STATION_SOURCE_ID)).toBe(true);
+    expect(sources.has(SEARCH_MAP_ROUTE_STOP_SOURCE_ID)).toBe(true);
     const clickHandlersAfter =
       layerHandlers.get('railmeet-selected-routes-transit')?.get('click')?.length ?? 0;
     expect(clickHandlersAfter).toBe(clickHandlersBefore);

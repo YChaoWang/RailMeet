@@ -91,11 +91,14 @@ export {
   type MotisStepJson,
 } from './motis-itinerary.js';
 export {
+  contrastTextForBackground,
   getMotisModeStyle,
   getMotisRouteColors,
+  resolveMapRoutePaint,
   sanitizeMotisHexColor,
   type MotisColorable,
   type MotisModeIconKind,
+  type MotisRoutePaint,
 } from './motis-mode-style.js';
 export {
   ROUTE_SUMMARY_DISPLAY_NAME_MAX,
@@ -109,6 +112,7 @@ export {
 export {
   pickJourneyLegIdentity,
   type JourneyLegIdentityFields,
+  type JourneyLegIntermediateStop,
   type JourneyLegStopView,
 } from './journey-leg-identity.js';
 export { SEARCH_STATUSES, isSearchStatus, type SearchStatus } from './search-status.js';

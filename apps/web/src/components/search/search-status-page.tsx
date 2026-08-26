@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import type { RankingMode } from '@railmeet/shared';
+import { motisPlanModeLabel, type RankingMode } from '@railmeet/shared';
 import type { MeetingSearchDetailData } from '@railmeet/validation';
 
 import { usePlannerMap } from '@/components/search/planner-map-context';
@@ -214,6 +214,34 @@ function RouteLegend({
                 <span>
                   {traveler.letter} · {traveler.displayName}
                 </span>
+                {traveler.services.length > 0 ? (
+                  <span className="flex flex-wrap items-center gap-1" data-testid="route-services">
+                    {traveler.services.map((service) => (
+                      <span
+                        key={`${service.mode}:${service.displayName}:${service.color}`}
+                        className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                        style={{
+                          backgroundColor: service.color,
+                          color: service.textColor,
+                          // Provider-published colors are solid; mode fallbacks are outlined
+                          // so an unofficial color is never mistaken for the operator's.
+                          border:
+                            service.colorSource === 'provider'
+                              ? '1px solid transparent'
+                              : '1px dashed rgba(15,23,42,0.55)',
+                        }}
+                        title={
+                          service.colorSource === 'provider'
+                            ? `${motisPlanModeLabel(service.mode)} · ${service.displayName}`
+                            : `${motisPlanModeLabel(service.mode)} · ${service.displayName} (mode fallback)`
+                        }
+                        data-color-source={service.colorSource}
+                      >
+                        {service.displayName}
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
               </button>
             </li>
           );

@@ -3,13 +3,21 @@
 import { useEffect, useRef, useState } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
+import { motisPlanModeLabel } from '@railmeet/shared';
+
 import type {
   MapCandidateMarker,
   MapOriginMarker,
   MapScene,
+  MapStopMarker,
   MapTravelerPopup,
 } from '@/lib/map-markers';
-import { collectSceneCoordinates, originsToGeoJson } from '@/lib/map-markers';
+import {
+  MAP_WALK_COLOR,
+  collectSceneCoordinates,
+  originsToGeoJson,
+  routeStopsToGeoJson,
+} from '@/lib/map-markers';
 import { ensureMapLibreWorker } from '@/lib/ensure-maplibre-worker';
 import {
   fetchMapStops,
@@ -30,6 +38,8 @@ const ROUTE_SOURCE_ID = 'railmeet-selected-routes';
 const ROUTE_CASING_LAYER_ID = 'railmeet-selected-routes-casing';
 const ROUTE_TRANSIT_LAYER_ID = 'railmeet-selected-routes-transit';
 const ROUTE_WALK_LAYER_ID = 'railmeet-selected-routes-walk';
+const ROUTE_STOP_SOURCE_ID = 'railmeet-route-stops';
+const ROUTE_STOP_LABEL_LAYER_ID = 'railmeet-route-stops-label';
 const ORIGIN_SOURCE_ID = 'railmeet-traveler-origins';
 const ORIGIN_CIRCLE_LAYER_ID = 'railmeet-traveler-origins-circle';
 const ORIGIN_LABEL_LAYER_ID = 'railmeet-traveler-origins-label';
@@ -99,6 +109,7 @@ type SearchMapProps = {
 
 type MapLibreModule = typeof import('maplibre-gl');
 type MapInstance = InstanceType<MapLibreModule['Map']>;
+type MapLibreExpression = import('maplibre-gl').ExpressionSpecification;
 
 type GeoJsonFeatureCollection = {
   type: 'FeatureCollection';
@@ -196,8 +207,9 @@ export function SearchMap({
       const applyCurrentScene = (forceFit: boolean) => {
         ensureStationLayers(map);
         ensureRouteLayers(map);
+        ensureRouteStopLayers(map);
         ensureOriginLayers(map);
-        bindRouteInteractions(map, onTravelerSelectRef, routeHandlersBoundRef);
+        bindRouteInteractions(map, maplibregl, onTravelerSelectRef, routeHandlersBoundRef);
         applyScene({
           maplibregl,
           map,
@@ -435,6 +447,7 @@ export function SearchMap({
       if (map) {
         removeStationLayers(map);
         removeOriginLayers(map);
+        removeRouteStopLayers(map);
         removeRouteLayers(map);
         map.remove();
       }
@@ -451,8 +464,9 @@ export function SearchMap({
     }
     ensureStationLayers(map);
     ensureRouteLayers(map);
+    ensureRouteStopLayers(map);
     ensureOriginLayers(map);
-    bindRouteInteractions(map, onTravelerSelectRef, routeHandlersBoundRef);
+    bindRouteInteractions(map, maplibregl, onTravelerSelectRef, routeHandlersBoundRef);
     applyScene({
       maplibregl,
       map,
@@ -677,6 +691,7 @@ function raiseTravelerLayers(map: MapInstance) {
     ROUTE_CASING_LAYER_ID,
     ROUTE_TRANSIT_LAYER_ID,
     ROUTE_WALK_LAYER_ID,
+    ROUTE_STOP_LABEL_LAYER_ID,
     ORIGIN_CIRCLE_LAYER_ID,
     ORIGIN_LABEL_LAYER_ID,
   ]) {
@@ -891,7 +906,8 @@ function ensureRouteLayers(map: MapInstance) {
       source: ROUTE_SOURCE_ID,
       filter: ['==', ['get', 'style'], 'walk'],
       paint: {
-        'line-color': ['get', 'color'],
+        // Walking is never a route or traveler color — always neutral gray dashes.
+        'line-color': MAP_WALK_COLOR,
         'line-width': ['case', ['get', 'emphasized'], 4, 2.5],
         'line-opacity': ['case', ['get', 'emphasized'], 0.95, 0.3],
         'line-dasharray': [1.2, 1.6],
@@ -903,6 +919,7 @@ function ensureRouteLayers(map: MapInstance) {
 
 function bindRouteInteractions(
   map: MapInstance,
+  maplibregl: MapLibreModule,
   onTravelerSelectRef: { current: ((participantId: string | null) => void) | undefined },
   boundRef: { current: boolean },
 ) {
@@ -912,6 +929,7 @@ function bindRouteInteractions(
   boundRef.current = true;
 
   const onClick = (event: {
+    lngLat?: { lng: number; lat: number };
     features?: Array<{ properties?: Record<string, unknown> | null }>;
   }) => {
     const props = event.features?.[0]?.properties;
@@ -921,6 +939,17 @@ function bindRouteInteractions(
       null;
     if (participantId) {
       onTravelerSelectRef.current?.(participantId);
+    }
+    if (props && props.style === 'transit' && event.lngLat) {
+      new maplibregl.Popup({
+        offset: 8,
+        closeButton: true,
+        maxWidth: '280px',
+        className: 'railmeet-map-popup',
+      })
+        .setLngLat([event.lngLat.lng, event.lngLat.lat])
+        .setHTML(routeSegmentPopupHtml(props))
+        .addTo(map);
     }
   };
   const onEnter = () => {
@@ -934,6 +963,74 @@ function bindRouteInteractions(
     map.on('click', layerId, onClick as never);
     map.on('mouseenter', layerId, onEnter);
     map.on('mouseleave', layerId, onLeave);
+  }
+}
+
+/**
+ * Permanent names for origin stations, transfers, and the meeting point.
+ * Intermediate stop names fade in only when the traveler zooms in, so a busy
+ * metro line does not bury the map in labels.
+ */
+function routeStopLabelTextOpacity(): MapLibreExpression {
+  // MapLibre requires `zoom` only as input to a top-level step/interpolate.
+  // Labelled stops stay opaque; intermediate names fade in with zoom.
+  return [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    11.5,
+    ['case', ['get', 'labelled'], 1, 0],
+    13,
+    1,
+  ];
+}
+
+function ensureRouteStopLayers(map: MapInstance) {
+  if (!map.getSource(ROUTE_STOP_SOURCE_ID)) {
+    map.addSource(ROUTE_STOP_SOURCE_ID, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+  }
+  if (map.getLayer(ROUTE_STOP_LABEL_LAYER_ID)) {
+    try {
+      map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-opacity', routeStopLabelTextOpacity());
+    } catch {
+      // Keep existing paint if the style rejects the update.
+    }
+    return;
+  }
+  try {
+    map.addLayer({
+      id: ROUTE_STOP_LABEL_LAYER_ID,
+      type: 'symbol',
+      source: ROUTE_STOP_SOURCE_ID,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-size': ['case', ['get', 'labelled'], 11, 10],
+        'text-font': ['Noto Sans Regular'],
+        'text-offset': [0, 1.1],
+        'text-anchor': 'top',
+        'text-optional': true,
+      },
+      paint: {
+        'text-color': '#1e293b',
+        'text-halo-color': '#ffffff',
+        'text-halo-width': 1.3,
+        'text-opacity': routeStopLabelTextOpacity(),
+      },
+    });
+  } catch {
+    // Optional labels — HTML marker tooltips remain available.
+  }
+}
+
+function removeRouteStopLayers(map: MapInstance) {
+  if (map.getLayer(ROUTE_STOP_LABEL_LAYER_ID)) {
+    map.removeLayer(ROUTE_STOP_LABEL_LAYER_ID);
+  }
+  if (map.getSource(ROUTE_STOP_SOURCE_ID)) {
+    map.removeSource(ROUTE_STOP_SOURCE_ID);
   }
 }
 
@@ -993,6 +1090,13 @@ function applyScene(options: {
     originSource.setData(originsToGeoJson(scene));
   }
 
+  const routeStopSource = map.getSource(ROUTE_STOP_SOURCE_ID) as
+    | { setData: (data: ReturnType<typeof routeStopsToGeoJson>) => void }
+    | undefined;
+  if (routeStopSource) {
+    routeStopSource.setData(routeStopsToGeoJson(scene));
+  }
+
   const appliedOrigins = scene.markers.filter((marker) => marker.kind === 'origin');
   const host = map.getContainer().parentElement;
   if (host) {
@@ -1016,11 +1120,26 @@ function applyScene(options: {
         properties: {
           id: segment.id,
           participantId: segment.participantId,
+          // Transitous routeColor (or MOTIS mode default) — never the traveler color.
           color: segment.color,
+          textColor: segment.textColor,
+          colorSource: segment.colorSource,
           style: segment.style,
           emphasized: segment.emphasized,
           letter: segment.letter,
           mode: segment.mode,
+          motisMode: segment.motisMode,
+          serviceLabel: segment.serviceLabel,
+          displayName: segment.displayName ?? '',
+          routeShortName: segment.routeShortName ?? '',
+          tripShortName: segment.tripShortName ?? '',
+          agencyName: segment.agencyName ?? '',
+          headsign: segment.headsign ?? '',
+          fromName: segment.fromName ?? '',
+          toName: segment.toName ?? '',
+          departureAt: segment.departureAt,
+          arrivalAt: segment.arrivalAt,
+          intermediateStopCount: segment.intermediateStopCount,
         },
         geometry: {
           type: 'LineString',
@@ -1040,8 +1159,16 @@ function applyScene(options: {
     el.type = 'button';
     el.className = 'railmeet-map-marker';
     el.setAttribute('aria-label', markerAriaLabel(item));
+    // Intermediate stop names surface on hover only; permanent labels stay for
+    // origin stations, transfers, and the meeting point.
+    el.title = item.kind === 'stop' ? stopTitle(item) : markerAriaLabel(item);
     el.style.cssText = markerStyle(item);
-    el.textContent = item.kind === 'transfer' ? '↔' : String(item.rank);
+    el.textContent = item.kind === 'stop' ? stopGlyph(item) : String(item.rank);
+    if (item.kind === 'stop') {
+      el.dataset.stopRole = item.role;
+      el.dataset.stopName = item.name;
+      el.dataset.stopLabelled = item.labelled ? '1' : '0';
+    }
 
     if (item.kind === 'candidate') {
       el.addEventListener('click', () => {
@@ -1137,10 +1264,104 @@ function popupHtml(item: MapScene['markers'][number]): string {
   if (item.kind === 'origin') {
     return travelerPopupHtml(item);
   }
-  if (item.kind === 'transfer') {
-    return escapeHtml(`Traveler ${item.letter} transfer`);
+  if (item.kind === 'stop') {
+    return stopPopupHtml(item);
   }
   return meetingPopupHtml(item);
+}
+
+const STOP_ROLE_LABELS: Record<MapStopMarker['role'], string> = {
+  'origin-station': 'Departure station',
+  intermediate: 'Intermediate stop',
+  transfer: 'Transfer',
+  meeting: 'Meeting point',
+};
+
+function stopGlyph(item: MapStopMarker): string {
+  if (item.role === 'transfer') {
+    return '↔';
+  }
+  return item.role === 'intermediate' ? '' : '●';
+}
+
+function stopTitle(item: MapStopMarker): string {
+  return `${item.name} · ${STOP_ROLE_LABELS[item.role]}`;
+}
+
+function stopPopupHtml(item: MapStopMarker): string {
+  const rows = [
+    `<strong>${escapeHtml(item.name)}</strong>`,
+    `<div>${escapeHtml(STOP_ROLE_LABELS[item.role])} · Traveler ${escapeHtml(item.letter)}</div>`,
+  ];
+  if (item.arrivalAt) {
+    rows.push(`<div>Arrives ${escapeHtml(formatPopupTime(item.arrivalAt))}</div>`);
+  }
+  if (item.departureAt) {
+    rows.push(`<div>Departs ${escapeHtml(formatPopupTime(item.departureAt))}</div>`);
+  }
+  if (item.track) {
+    rows.push(`<div>Track ${escapeHtml(item.track)}</div>`);
+  }
+  if (item.role === 'transfer') {
+    if (item.arrivingService) {
+      rows.push(`<div>Arriving service ${escapeHtml(item.arrivingService)}</div>`);
+    }
+    if (item.departingService) {
+      rows.push(`<div>Departing service ${escapeHtml(item.departingService)}</div>`);
+    }
+  }
+  return rows.join('');
+}
+
+function routeSegmentPopupHtml(properties: Record<string, unknown>): string {
+  const text = (key: string): string => {
+    const value = properties[key];
+    return typeof value === 'string' ? value.trim() : '';
+  };
+  const rows = [`<strong>${escapeHtml(text('serviceLabel') || text('mode'))}</strong>`];
+  const modeLabel = motisPlanModeLabel(text('motisMode') || text('mode'));
+  rows.push(`<div>${escapeHtml(modeLabel)}</div>`);
+  const displayName = text('displayName');
+  if (displayName && displayName !== text('serviceLabel')) {
+    rows.push(`<div>${escapeHtml(displayName)}</div>`);
+  }
+  const routeShortName = text('routeShortName');
+  if (routeShortName) {
+    rows.push(`<div>Line ${escapeHtml(routeShortName)}</div>`);
+  }
+  const tripShortName = text('tripShortName');
+  if (tripShortName) {
+    rows.push(`<div>Trip ${escapeHtml(tripShortName)}</div>`);
+  }
+  const agencyName = text('agencyName');
+  if (agencyName) {
+    rows.push(`<div>${escapeHtml(agencyName)}</div>`);
+  }
+  const headsign = text('headsign');
+  if (headsign) {
+    rows.push(`<div>Toward ${escapeHtml(headsign)}</div>`);
+  }
+  const fromName = text('fromName');
+  if (fromName) {
+    rows.push(`<div>Board ${escapeHtml(fromName)}</div>`);
+  }
+  const toName = text('toName');
+  if (toName) {
+    rows.push(`<div>Alight ${escapeHtml(toName)}</div>`);
+  }
+  const departureAt = text('departureAt');
+  if (departureAt) {
+    rows.push(`<div>Departs ${escapeHtml(formatPopupTime(departureAt))}</div>`);
+  }
+  const arrivalAt = text('arrivalAt');
+  if (arrivalAt) {
+    rows.push(`<div>Arrives ${escapeHtml(formatPopupTime(arrivalAt))}</div>`);
+  }
+  const stops = properties.intermediateStopCount;
+  if (typeof stops === 'number' && Number.isFinite(stops)) {
+    rows.push(`<div>${stops} intermediate ${stops === 1 ? 'stop' : 'stops'}</div>`);
+  }
+  return rows.join('');
 }
 
 function travelerPopupHtml(item: MapOriginMarker): string {
@@ -1210,8 +1431,8 @@ function markerAriaLabel(item: MapScene['markers'][number]): string {
   if (item.kind === 'origin') {
     return `Traveler ${item.letter}: ${item.label}`;
   }
-  if (item.kind === 'transfer') {
-    return `Traveler ${item.letter} transfer`;
+  if (item.kind === 'stop') {
+    return `Traveler ${item.letter} ${STOP_ROLE_LABELS[item.role].toLowerCase()}: ${item.name}`;
   }
   return item.selected
     ? `Selected meeting point rank ${item.rank}: ${item.label}`
@@ -1219,10 +1440,12 @@ function markerAriaLabel(item: MapScene['markers'][number]): string {
 }
 
 function markerStyle(item: MapScene['markers'][number]): string {
-  if (item.kind === 'transfer') {
+  if (item.kind === 'stop') {
+    // Intermediate stops are deliberately smaller so transfers stay readable.
+    const size = item.role === 'intermediate' ? 8 : 14;
     return [
-      'width:14px;height:14px;border-radius:999px;border:2px solid #fff;z-index:2;',
-      `background:${item.color};color:#fff;font:700 8px/1 ui-sans-serif,system-ui;`,
+      `width:${size}px;height:${size}px;border-radius:999px;border:2px solid #fff;z-index:2;`,
+      `background:${item.color};color:${item.textColor};font:700 8px/1 ui-sans-serif,system-ui;`,
       'display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.2);',
     ].join('');
   }
@@ -1237,6 +1460,8 @@ function markerStyle(item: MapScene['markers'][number]): string {
 
 export const SEARCH_MAP_ROUTE_LAYER_IDS = ROUTE_LAYER_IDS;
 export const SEARCH_MAP_ROUTE_SOURCE_ID = ROUTE_SOURCE_ID;
+export const SEARCH_MAP_ROUTE_STOP_SOURCE_ID = ROUTE_STOP_SOURCE_ID;
+export const SEARCH_MAP_ROUTE_STOP_LABEL_LAYER_ID = ROUTE_STOP_LABEL_LAYER_ID;
 export const SEARCH_MAP_ORIGIN_SOURCE_ID = ORIGIN_SOURCE_ID;
 export const SEARCH_MAP_ORIGIN_LAYER_IDS = [ORIGIN_CIRCLE_LAYER_ID, ORIGIN_LABEL_LAYER_ID] as const;
 export const SEARCH_MAP_STATION_SOURCE_ID = STATION_SOURCE_ID;

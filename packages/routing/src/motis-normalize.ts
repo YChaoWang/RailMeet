@@ -6,6 +6,7 @@ import {
   ENCODED_POLYLINE_PRECISION_MIN,
   MOTIS_PLAN_ITINERARY_FORMAT,
   pickJourneyLegIdentity,
+  type JourneyLegIntermediateStop,
   type JourneyLegStopView,
   type MotisItineraryJson,
 } from '@railmeet/shared';
@@ -60,6 +61,26 @@ const motisPlaceSchema = z
     name: z.string().optional(),
     track: z.string().optional().nullable(),
     scheduledTrack: z.string().optional().nullable(),
+    lat: z.number().optional().nullable(),
+    lon: z.number().optional().nullable(),
+  })
+  .passthrough();
+
+/**
+ * MOTIS `intermediateStops[]`. Kept permissive (passthrough) so the provider
+ * document stays lossless; only the fields RailMeet renders are validated.
+ */
+const motisIntermediateStopSchema = z
+  .object({
+    name: z.string().optional(),
+    track: z.string().optional().nullable(),
+    scheduledTrack: z.string().optional().nullable(),
+    lat: z.number().optional().nullable(),
+    lon: z.number().optional().nullable(),
+    arrival: z.string().optional().nullable(),
+    departure: z.string().optional().nullable(),
+    scheduledArrival: z.string().optional().nullable(),
+    scheduledDeparture: z.string().optional().nullable(),
   })
   .passthrough();
 
@@ -84,6 +105,8 @@ const motisLegSchema = z
     distance: z.number().finite().nonnegative().optional(),
     from: motisPlaceSchema.optional(),
     to: motisPlaceSchema.optional(),
+    // Elements stay `unknown` so a single malformed stop cannot drop the whole
+    // itinerary; each entry is parsed defensively in `normalizeIntermediateStops`.
     intermediateStops: z.array(z.unknown()).nullable().optional(),
     // Validated in normalizeLegGeometry — empty points must not fail the whole plan.
     legGeometry: z.unknown().optional(),
@@ -135,6 +158,10 @@ function optionalUrl(value: string | null | undefined): string | undefined {
   return undefined;
 }
 
+function optionalCoordinate(value: number | null | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 function normalizeStop(
   place: z.infer<typeof motisPlaceSchema> | undefined,
 ): JourneyLegStopView | undefined {
@@ -147,7 +174,58 @@ function normalizeStop(
   }
   const track =
     optionalText(place.track ?? undefined) ?? optionalText(place.scheduledTrack ?? undefined);
-  return track ? { name, track } : { name };
+  const latitude = optionalCoordinate(place.lat);
+  const longitude = optionalCoordinate(place.lon);
+  return {
+    name,
+    ...(track ? { track } : {}),
+    ...(latitude !== undefined ? { latitude } : {}),
+    ...(longitude !== undefined ? { longitude } : {}),
+  };
+}
+
+/**
+ * Map MOTIS `intermediateStops[]` onto the ranking identity. Stops without a
+ * name are dropped; coordinates and times are included only when usable, so the
+ * map never fabricates a marker position.
+ */
+function normalizeIntermediateStops(
+  raw: readonly unknown[] | null | undefined,
+): readonly JourneyLegIntermediateStop[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const stops: JourneyLegIntermediateStop[] = [];
+  for (const entry of raw) {
+    const parsed = motisIntermediateStopSchema.safeParse(entry);
+    if (!parsed.success) {
+      continue;
+    }
+    const name = optionalText(parsed.data.name);
+    if (!name) {
+      continue;
+    }
+    const latitude = optionalCoordinate(parsed.data.lat);
+    const longitude = optionalCoordinate(parsed.data.lon);
+    const track =
+      optionalText(parsed.data.track ?? undefined) ??
+      optionalText(parsed.data.scheduledTrack ?? undefined);
+    const arrivalAt = optionalText(parsed.data.arrival ?? undefined);
+    const departureAt = optionalText(parsed.data.departure ?? undefined);
+    const scheduledArrivalAt = optionalText(parsed.data.scheduledArrival ?? undefined);
+    const scheduledDepartureAt = optionalText(parsed.data.scheduledDeparture ?? undefined);
+    stops.push({
+      name,
+      ...(latitude !== undefined ? { latitude } : {}),
+      ...(longitude !== undefined ? { longitude } : {}),
+      ...(arrivalAt ? { arrivalAt } : {}),
+      ...(departureAt ? { departureAt } : {}),
+      ...(scheduledArrivalAt ? { scheduledArrivalAt } : {}),
+      ...(scheduledDepartureAt ? { scheduledDepartureAt } : {}),
+      ...(track ? { track } : {}),
+    });
+  }
+  return stops;
 }
 
 function normalizeLegGeometry(raw: unknown): EncodedRouteGeometry | undefined {
@@ -229,6 +307,7 @@ function normalizeOneItinerary(itinerary: z.infer<typeof motisItinerarySchema>):
     }
     const providerReference = optionalText(leg.tripId) ?? optionalText(leg.routeId);
     const geometry = normalizeLegGeometry(leg.legGeometry);
+    const intermediateStops = normalizeIntermediateStops(leg.intermediateStops);
     const identity = pickJourneyLegIdentity({
       motisMode: canonicalMotisLegMode(leg.mode),
       displayName: optionalText(leg.displayName ?? undefined),
@@ -246,6 +325,7 @@ function normalizeOneItinerary(itinerary: z.infer<typeof motisItinerarySchema>):
       ...(Array.isArray(leg.intermediateStops)
         ? { intermediateStopCount: leg.intermediateStops.length }
         : {}),
+      ...(intermediateStops.length > 0 ? { intermediateStops } : {}),
       ...(typeof leg.distance === 'number' ? { distanceMeters: leg.distance } : {}),
     });
     const mapped: JourneyLeg = {
