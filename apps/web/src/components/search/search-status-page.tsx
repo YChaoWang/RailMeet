@@ -184,7 +184,19 @@ function RouteLegend({
   }
   return (
     <div className="space-y-1" data-testid="route-legend">
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-700">Routes</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-700">Routes</p>
+        {emphasizedParticipantId ? (
+          <button
+            type="button"
+            className="inline-flex min-h-9 items-center rounded px-1 text-xs font-medium text-teal-700 underline underline-offset-2 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+            data-testid="route-legend-clear-emphasis"
+            onClick={() => onSelect(null)}
+          >
+            Show all routes
+          </button>
+        ) : null}
+      </div>
       <ul className="flex flex-wrap gap-2">
         {travelers.map((traveler) => {
           const active =

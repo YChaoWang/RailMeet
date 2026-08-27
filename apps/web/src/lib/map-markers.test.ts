@@ -2,10 +2,12 @@ import type { MeetingSearchDetailData, MeetingSearchResultsData } from '@railmee
 import { describe, expect, it } from 'vitest';
 
 import {
+  STOP_LABEL_PRIORITY,
   buildDraftOriginScene,
   buildMapScene,
   candidateSelectionKey,
   collectSceneCoordinates,
+  routeStopsToGeoJson,
 } from './map-markers';
 import { encodeEncodedPolyline } from './polyline';
 import { travelerColorAt, travelerLetterAt } from './traveler-identity';
@@ -506,6 +508,80 @@ const transitResults = {
   ],
 } as MeetingSearchResultsData;
 
+/**
+ * One traveler whose feed names the transfer station differently on each leg
+ * (case and spacing only), and publishes two distinct names for one coordinate.
+ */
+const dedupeResults = {
+  ...results,
+  rankings: [
+    {
+      ...results.rankings[0]!,
+      destination: {
+        placeId: 'place:munich',
+        name: 'Munich',
+        longitude: MUNICH[0],
+        latitude: MUNICH[1],
+      },
+      journeys: [
+        {
+          journeyId: '00000021-aaaa-4aaa-8aaa-000000000021',
+          routeSummary: [],
+          participantId: 'p1',
+          participantDisplayName: 'Alex',
+          participantPosition: 0,
+          origin: {
+            placeId: 'place:berlin',
+            name: 'Berlin',
+            longitude: BERLIN[0],
+            latitude: BERLIN[1],
+          },
+          destination: {
+            placeId: 'place:munich',
+            name: 'Munich',
+            longitude: MUNICH[0],
+            latitude: MUNICH[1],
+          },
+          departureAt: '2026-06-15T08:00:00.000Z',
+          arrivalAt: '2026-06-15T11:00:00.000Z',
+          durationMinutes: 180,
+          transfers: 1,
+          transportModes: ['train'],
+          legs: [
+            {
+              mode: 'train',
+              motisMode: 'HIGHSPEED_RAIL',
+              displayName: 'ICE 1007',
+              routeColor: '#09a4ec',
+              departureAt: '2026-06-15T08:00:00.000Z',
+              arrivalAt: '2026-06-15T10:00:00.000Z',
+              durationMinutes: 120,
+              geometry: geometry([BERLIN, ERFURT, NUREMBERG]),
+              from: { name: 'Berlin Hbf', longitude: BERLIN[0], latitude: BERLIN[1] },
+              to: { name: 'NÜRNBERG  Hbf', longitude: NUREMBERG[0], latitude: NUREMBERG[1] },
+              intermediateStops: [
+                { name: 'Erfurt Hbf', longitude: ERFURT[0], latitude: ERFURT[1] },
+                { name: 'Erfurt Hauptbahnhof', longitude: ERFURT[0], latitude: ERFURT[1] },
+              ],
+            },
+            {
+              mode: 'train',
+              motisMode: 'REGIONAL_RAIL',
+              displayName: 'RE 1',
+              departureAt: '2026-06-15T10:20:00.000Z',
+              arrivalAt: '2026-06-15T11:00:00.000Z',
+              durationMinutes: 40,
+              geometry: geometry([NUREMBERG, MUNICH]),
+              from: { name: 'Nürnberg Hbf', longitude: NUREMBERG[0], latitude: NUREMBERG[1] },
+              to: { name: 'München Hbf', longitude: MUNICH[0], latitude: MUNICH[1] },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+} as MeetingSearchResultsData;
+
 const transitSelectionKey = candidateSelectionKey('fairest', 1, 'place:munich');
 
 describe('buildDraftOriginScene', () => {
@@ -831,12 +907,160 @@ describe('buildMapScene routes', () => {
       'transfer',
       'meeting',
     ]);
-    expect(stops.map((stop) => (stop.kind === 'stop' ? stop.labelled : null))).toEqual([
+    // No emphasis means every journey is active, so intermediates are named too.
+    expect(stops.map((stop) => (stop.kind === 'stop' ? stop.showLabel : null))).toEqual([
       true,
-      false,
+      true,
       true,
       true,
     ]);
+    expect(stops.map((stop) => (stop.kind === 'stop' ? stop.labelPriority : null))).toEqual([
+      STOP_LABEL_PRIORITY['origin-station'],
+      STOP_LABEL_PRIORITY.intermediate,
+      STOP_LABEL_PRIORITY.transfer,
+      STOP_LABEL_PRIORITY.meeting,
+    ]);
+    expect(stops.every((stop) => stop.kind === 'stop' && stop.emphasized)).toBe(true);
+  });
+
+  it('names intermediates only on the emphasized journey once a traveler is focused', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+      emphasizedParticipantId: 'p2',
+    });
+    const alexIntermediate = scene.markers.find(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role === 'intermediate',
+    );
+    expect(alexIntermediate?.kind === 'stop' && alexIntermediate.showLabel).toBe(false);
+    expect(alexIntermediate?.kind === 'stop' && alexIntermediate.emphasized).toBe(false);
+    // Origin stations, transfers, and the meeting point keep their names either way.
+    const alexNamed = scene.markers.filter(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role !== 'intermediate',
+    );
+    expect(alexNamed.every((stop) => stop.kind === 'stop' && stop.showLabel)).toBe(true);
+
+    const focused = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+      emphasizedParticipantId: 'p1',
+    });
+    const focusedIntermediate = focused.markers.find(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role === 'intermediate',
+    );
+    expect(focusedIntermediate?.kind === 'stop' && focusedIntermediate.showLabel).toBe(true);
+    expect(focusedIntermediate?.kind === 'stop' && focusedIntermediate.emphasized).toBe(true);
+  });
+
+  it('paints a transfer with the departing service border and the arriving service ring', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const transfer = scene.markers.find(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role === 'transfer',
+    );
+    expect(transfer?.kind === 'stop' && transfer.borderColor).toBe('#e30613');
+    expect(transfer?.kind === 'stop' && transfer.ringColor).toBe('#09a4ec');
+
+    // A stop only one service calls at gets a border but no ring.
+    const origin = scene.markers.find(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role === 'origin-station',
+    );
+    expect(origin?.kind === 'stop' && origin.borderColor).toBe('#09a4ec');
+    expect(origin?.kind === 'stop' && origin.ringColor).toBeUndefined();
+  });
+
+  it('collapses one station published under differently cased names into a single marker', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: dedupeResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const transfers = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.role === 'transfer',
+    );
+    expect(transfers).toHaveLength(1);
+    expect(transfers[0]?.kind === 'stop' && transfers[0].arrivingService).toBe('ICE 1007');
+    expect(transfers[0]?.kind === 'stop' && transfers[0].departingService).toBe('RE 1');
+  });
+
+  it('keeps two differently named stops sharing one coordinate as separate markers', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: dedupeResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const erfurt = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.name.startsWith('Erfurt'),
+    );
+    expect(erfurt.map((stop) => (stop.kind === 'stop' ? stop.name : ''))).toEqual([
+      'Erfurt Hbf',
+      'Erfurt Hauptbahnhof',
+    ]);
+  });
+
+  it('gives every stop marker a unique id', () => {
+    for (const payload of [transitResults, dedupeResults]) {
+      const scene = buildMapScene({
+        summary: transitSummary,
+        results: payload,
+        rankingMode: 'fairest',
+        selectedKey: transitSelectionKey,
+      });
+      const ids = scene.markers.map((marker) => marker.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+  });
+
+  it('exposes circle, ring, and label properties for every stop with coordinates', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const collection = routeStopsToGeoJson(scene);
+    expect(collection.features).toHaveLength(
+      scene.markers.filter((marker) => marker.kind === 'stop').length,
+    );
+    // Provider intermediates with coordinates reach the layer; nameless ones do not.
+    expect(collection.features.map((feature) => feature.properties.name)).toContain('Erfurt Hbf');
+    expect(collection.features.map((feature) => feature.properties.name)).not.toContain('Bamberg');
+
+    const transfer = collection.features.find(
+      (feature) =>
+        feature.properties.role === 'transfer' && feature.properties.participantId === 'p1',
+    );
+    expect(transfer?.properties).toMatchObject({
+      borderColor: '#e30613',
+      ringColor: '#09a4ec',
+      showLabel: true,
+      emphasized: true,
+      labelPriority: STOP_LABEL_PRIORITY.transfer,
+      roleRank: STOP_LABEL_PRIORITY.transfer,
+    });
+
+    // Absent optional values are encoded as '' so MapLibre expressions can test them.
+    const intermediate = collection.features.find(
+      (feature) => feature.properties.role === 'intermediate',
+    );
+    expect(intermediate?.properties.ringColor).toBe('');
+    expect(intermediate?.properties.borderColor).toBe('#09a4ec');
+    expect(intermediate?.properties.labelPriority).toBe(STOP_LABEL_PRIORITY.intermediate);
   });
 
   it('records both services at a train-to-metro transfer', () => {

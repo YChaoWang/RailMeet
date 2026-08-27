@@ -494,7 +494,7 @@ describe('SearchMap route layers', () => {
       SEARCH_MAP_ROUTE_LAYER_IDS.length +
         SEARCH_MAP_ORIGIN_LAYER_IDS.length +
         SEARCH_MAP_STATION_LAYER_IDS.length +
-        1 + // route stop labels
+        1 + // route stop label
         1, // hillshade
     );
     expect(sources.size).toBe(5); // routes, route stops, origins, stations, terrain dem
