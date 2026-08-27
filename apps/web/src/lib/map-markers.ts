@@ -38,6 +38,17 @@ export type MapCandidateMarker = {
 export type MapStopRole = 'origin-station' | 'intermediate' | 'transfer' | 'meeting';
 
 /**
+ * Collision ranking for the stop label symbol layer. MapLibre uses a lower
+ * `symbol-sort-key` for higher-priority labels when placements collide.
+ */
+export const STOP_LABEL_PRIORITY: Record<MapStopRole, number> = {
+  meeting: 400,
+  transfer: 300,
+  'origin-station': 200,
+  intermediate: 100,
+};
+
+/**
  * A real transit stop from the provider itinerary (leg.from / intermediateStops / leg.to).
  * Only emitted when MOTIS supplied finite coordinates — positions are never fabricated.
  */
@@ -50,6 +61,10 @@ export type MapStopMarker = {
   readonly name: string;
   /** Route color of the service calling here, so the marker matches its polyline. */
   readonly color: string;
+  /** Primary stroke: the departing service, falling back to the calling service. */
+  readonly borderColor: string;
+  /** Outer ring drawn at a transfer, painted in the arriving service's color. */
+  readonly ringColor?: string;
   readonly textColor: string;
   readonly longitude: number;
   readonly latitude: number;
@@ -59,8 +74,11 @@ export type MapStopMarker = {
   /** Service arriving at / departing from this stop. Both are set at a transfer. */
   readonly arrivingService?: string;
   readonly departingService?: string;
-  /** Origin stations, transfers, and the meeting point carry a permanent label. */
-  readonly labelled: boolean;
+  /** False when another traveler's journey is focused. */
+  readonly emphasized: boolean;
+  /** Whether the symbol layer should try to keep a permanent name here. */
+  readonly showLabel: boolean;
+  readonly labelPriority: number;
 };
 
 export type MapMarker = MapOriginMarker | MapCandidateMarker | MapStopMarker;
@@ -205,14 +223,27 @@ export function originsToGeoJson(scene: MapScene): {
   };
 }
 
-/** GeoJSON properties for the route-stop label layer. */
+/** GeoJSON properties for the route-stop circle, ring, and label layers. */
 export type RouteStopProperties = {
   readonly stopId: string;
   readonly name: string;
   readonly role: MapStopRole;
-  readonly labelled: boolean;
   readonly color: string;
+  readonly borderColor: string;
+  /** Empty string when this stop has no arriving service to ring. */
+  readonly ringColor: string;
+  readonly textColor: string;
+  readonly emphasized: boolean;
+  readonly showLabel: boolean;
+  readonly labelPriority: number;
+  readonly roleRank: number;
   readonly participantId: string;
+  readonly letter: string;
+  readonly arrivalAt: string;
+  readonly departureAt: string;
+  readonly arrivingService: string;
+  readonly departingService: string;
+  readonly track: string;
 };
 
 export function routeStopsToGeoJson(scene: MapScene): {
@@ -235,9 +266,21 @@ export function routeStopsToGeoJson(scene: MapScene): {
           stopId: marker.id,
           name: marker.name,
           role: marker.role,
-          labelled: marker.labelled,
           color: marker.color,
+          borderColor: marker.borderColor,
+          ringColor: marker.ringColor ?? '',
+          textColor: marker.textColor,
+          emphasized: marker.emphasized,
+          showLabel: marker.showLabel,
+          labelPriority: marker.labelPriority,
+          roleRank: marker.labelPriority,
           participantId: marker.participantId,
+          letter: marker.letter,
+          arrivalAt: marker.arrivalAt ?? '',
+          departureAt: marker.departureAt ?? '',
+          arrivingService: marker.arrivingService ?? '',
+          departingService: marker.departingService ?? '',
+          track: marker.track ?? '',
         },
         geometry: {
           type: 'Point' as const,
@@ -334,6 +377,8 @@ type StopDraft = {
   textColor: string;
   /** Set once by a transit leg so a walking leg cannot overwrite the route color. */
   colored: boolean;
+  arrivingColor: string | undefined;
+  departingColor: string | undefined;
   arrivalAt: string | undefined;
   departureAt: string | undefined;
   track: string | undefined;
@@ -341,9 +386,30 @@ type StopDraft = {
   departingService: string | undefined;
 };
 
-/** 5 decimals ≈ 1 m — enough to collapse the two sides of one transfer station. */
-function stopKey(longitude: number, latitude: number): string {
-  return `${longitude.toFixed(5)},${latitude.toFixed(5)}`;
+/** Which side of a leg called at this stop, so transfer paint can be split. */
+type StopCallDirection = 'arriving' | 'departing' | 'calling';
+
+function normalizeStopName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Stable dedupe key when provider stop IDs are unavailable. Five decimals ≈ 1 m.
+ * The normalized name keeps distinct platforms/stations separate at one coordinate.
+ */
+function stopKey(longitude: number, latitude: number, name: string): string {
+  return `geo:${longitude.toFixed(5)},${latitude.toFixed(5)}|${normalizeStopName(name)}`;
+}
+
+function coordsMatchStop(
+  longitude: number,
+  latitude: number,
+  destination: { readonly longitude: number; readonly latitude: number },
+): boolean {
+  return (
+    longitude.toFixed(5) === destination.longitude.toFixed(5) &&
+    latitude.toFixed(5) === destination.latitude.toFixed(5)
+  );
 }
 
 /**
@@ -360,6 +426,7 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
     role: MapStopRole,
     paint: LegPaint,
     isTransit: boolean,
+    direction: StopCallDirection,
     detail: {
       readonly arrivalAt?: string | undefined;
       readonly departureAt?: string | undefined;
@@ -377,7 +444,10 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
     ) {
       return;
     }
-    const key = stopKey(longitude, latitude);
+    const arrivingColor = isTransit && direction === 'arriving' ? paint.color : undefined;
+    const departingColor =
+      isTransit && (direction === 'departing' || direction === 'calling') ? paint.color : undefined;
+    const key = stopKey(longitude, latitude, stop.name);
     const existing = drafts.get(key);
     if (!existing) {
       drafts.set(key, {
@@ -389,6 +459,8 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
         color: paint.color,
         textColor: paint.textColor,
         colored: isTransit,
+        arrivingColor,
+        departingColor,
         arrivalAt: detail.arrivalAt,
         departureAt: detail.departureAt,
         track: stop.track,
@@ -405,6 +477,12 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
       existing.color = paint.color;
       existing.textColor = paint.textColor;
       existing.colored = true;
+    }
+    if (arrivingColor) {
+      existing.arrivingColor = arrivingColor;
+    }
+    if (departingColor) {
+      existing.departingColor = departingColor;
     }
     existing.arrivalAt ??= detail.arrivalAt;
     existing.departureAt ??= detail.departureAt;
@@ -431,13 +509,13 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
     if (leg.from) {
       const role: MapStopRole =
         legIndex === 0 || legIndex === firstTransitIndex ? 'origin-station' : 'transfer';
-      upsert(leg.from, role, paint, isTransit, {
+      upsert(leg.from, role, paint, isTransit, 'departing', {
         departureAt: leg.departureAt,
         departingService: service,
       });
     }
     for (const stop of leg.intermediateStops ?? []) {
-      upsert(stop, 'intermediate', paint, isTransit, {
+      upsert(stop, 'intermediate', paint, isTransit, 'calling', {
         arrivalAt: stop.arrivalAt ?? stop.scheduledArrivalAt,
         departureAt: stop.departureAt ?? stop.scheduledDepartureAt,
       });
@@ -445,7 +523,7 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
     if (leg.to) {
       const role: MapStopRole =
         legIndex === lastLegIndex || legIndex === lastTransitIndex ? 'meeting' : 'transfer';
-      upsert(leg.to, role, paint, isTransit, {
+      upsert(leg.to, role, paint, isTransit, 'arriving', {
         arrivalAt: leg.arrivalAt,
         arrivingService: service,
       });
@@ -697,6 +775,18 @@ export function buildMapScene(input: {
       }
 
       for (const stop of collectJourneyStops(journey)) {
+        // The selected candidate marker is the visible meeting affordance at the destination.
+        if (
+          stop.role === 'meeting' &&
+          hasCoords(selected.destination) &&
+          coordsMatchStop(stop.longitude, stop.latitude, selected.destination)
+        ) {
+          continue;
+        }
+        const showLabel = stop.role !== 'intermediate' ? true : emphasized;
+        const borderColor = stop.departingColor ?? stop.arrivingColor ?? stop.color;
+        const ringColor =
+          stop.arrivingColor && stop.departingColor ? stop.arrivingColor : undefined;
         markers.push({
           kind: 'stop',
           id: `stop:${selected.destination.placeId}:${journey.participantId}:${stop.key}`,
@@ -705,6 +795,8 @@ export function buildMapScene(input: {
           role: stop.role,
           name: stop.name,
           color: stop.color,
+          borderColor,
+          ...(ringColor ? { ringColor } : {}),
           textColor: stop.textColor,
           longitude: stop.longitude,
           latitude: stop.latitude,
@@ -713,7 +805,9 @@ export function buildMapScene(input: {
           ...(stop.track ? { track: stop.track } : {}),
           ...(stop.arrivingService ? { arrivingService: stop.arrivingService } : {}),
           ...(stop.departingService ? { departingService: stop.departingService } : {}),
-          labelled: stop.role !== 'intermediate',
+          emphasized,
+          showLabel,
+          labelPriority: STOP_LABEL_PRIORITY[stop.role],
         });
       }
     }

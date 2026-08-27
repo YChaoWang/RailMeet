@@ -899,17 +899,14 @@ describe('buildMapScene routes', () => {
       'Berlin Hbf',
       'Erfurt Hbf',
       'Nürnberg Hbf',
-      'München Hbf',
     ]);
     expect(stops.map((stop) => (stop.kind === 'stop' ? stop.role : ''))).toEqual([
       'origin-station',
       'intermediate',
       'transfer',
-      'meeting',
     ]);
     // No emphasis means every journey is active, so intermediates are named too.
     expect(stops.map((stop) => (stop.kind === 'stop' ? stop.showLabel : null))).toEqual([
-      true,
       true,
       true,
       true,
@@ -918,7 +915,6 @@ describe('buildMapScene routes', () => {
       STOP_LABEL_PRIORITY['origin-station'],
       STOP_LABEL_PRIORITY.intermediate,
       STOP_LABEL_PRIORITY.transfer,
-      STOP_LABEL_PRIORITY.meeting,
     ]);
     expect(stops.every((stop) => stop.kind === 'stop' && stop.emphasized)).toBe(true);
   });
@@ -1061,6 +1057,27 @@ describe('buildMapScene routes', () => {
     expect(intermediate?.properties.ringColor).toBe('');
     expect(intermediate?.properties.borderColor).toBe('#09a4ec');
     expect(intermediate?.properties.labelPriority).toBe(STOP_LABEL_PRIORITY.intermediate);
+  });
+
+  it('omits per-traveler meeting stops at the selected destination candidate', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const meetingStops = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.role === 'meeting',
+    );
+    expect(meetingStops).toHaveLength(0);
+    const selectedCandidate = scene.markers.find(
+      (marker) => marker.kind === 'candidate' && marker.selected,
+    );
+    expect(selectedCandidate?.kind === 'candidate' && selectedCandidate.label).toBe('Munich');
+    const munichStops = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.name === 'München Hbf',
+    );
+    expect(munichStops).toHaveLength(0);
   });
 
   it('records both services at a train-to-metro transfer', () => {

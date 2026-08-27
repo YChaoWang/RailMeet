@@ -8,7 +8,7 @@ import {
   SEARCH_MAP_ORIGIN_SOURCE_ID,
   SEARCH_MAP_ROUTE_LAYER_IDS,
   SEARCH_MAP_ROUTE_SOURCE_ID,
-  SEARCH_MAP_ROUTE_STOP_LABEL_LAYER_ID,
+  SEARCH_MAP_ROUTE_STOP_LAYER_IDS,
   SEARCH_MAP_ROUTE_STOP_SOURCE_ID,
   SEARCH_MAP_STATION_LAYER_IDS,
   SEARCH_MAP_STATION_SOURCE_ID,
@@ -489,12 +489,12 @@ describe('SearchMap route layers', () => {
     expect(SEARCH_MAP_ROUTE_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
     expect(SEARCH_MAP_ORIGIN_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
     expect(SEARCH_MAP_STATION_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
-    expect(layers.has(SEARCH_MAP_ROUTE_STOP_LABEL_LAYER_ID)).toBe(true);
+    expect(SEARCH_MAP_ROUTE_STOP_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
     expect(layers.size).toBe(
       SEARCH_MAP_ROUTE_LAYER_IDS.length +
         SEARCH_MAP_ORIGIN_LAYER_IDS.length +
         SEARCH_MAP_STATION_LAYER_IDS.length +
-        1 + // route stop label
+        SEARCH_MAP_ROUTE_STOP_LAYER_IDS.length +
         1, // hillshade
     );
     expect(sources.size).toBe(5); // routes, route stops, origins, stations, terrain dem

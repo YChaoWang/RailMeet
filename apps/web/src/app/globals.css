@@ -25,7 +25,7 @@ body {
   }
 }
 
-/* Only meeting-point candidates and traveler origins are still HTML buttons. */
+/* HTML map markers: traveler origins and meeting candidates only. Route stops use MapLibre layers (not keyboard-focusable). */
 .railmeet-map-marker:focus-visible {
   outline: 2px solid #0f766e;
   outline-offset: 2px;
