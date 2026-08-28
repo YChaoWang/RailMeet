@@ -60,7 +60,7 @@ const ROUTE_LAYER_IDS = [
   ROUTE_WALK_LAYER_ID,
 ] as const;
 
-/** Bottom to top: invisible hit target, transfer ring, stop circle, station name. */
+/** Bottom to top: hit target, transfer ring, stop circle, station name. */
 const ROUTE_STOP_LAYER_IDS = [
   ROUTE_STOP_HIT_LAYER_ID,
   ROUTE_STOP_RING_LAYER_ID,
@@ -1048,6 +1048,90 @@ function routeStopLabelTextOpacity(): MapLibreExpression {
   ];
 }
 
+function routeStopLabelHaloWidth(): MapLibreExpression {
+  return ['interpolate', ['linear'], ['zoom'], 11, 2.4, 13, 3, 16, 3.4];
+}
+
+function routeStopLabelLayout(): Record<string, unknown> {
+  return {
+    'text-field': ['get', 'name'],
+    'text-size': ['match', ['get', 'role'], 'meeting', 12, 'intermediate', 11, 11.5],
+    'text-line-height': 1.1,
+    'text-font': ['Noto Sans Bold'],
+    'text-variable-anchor': [
+      'top',
+      'bottom',
+      'left',
+      'right',
+      'top-left',
+      'top-right',
+      'bottom-left',
+      'bottom-right',
+    ],
+    'text-radial-offset': 1.05,
+    'text-justify': 'center',
+    'text-allow-overlap': true,
+    'text-ignore-placement': true,
+    'symbol-sort-key': ['*', ['get', 'labelPriority'], -1],
+  };
+}
+
+function applyRouteStopLabelStyle(map: MapInstance) {
+  if (!map.getLayer(ROUTE_STOP_LABEL_LAYER_ID)) {
+    return;
+  }
+  try {
+    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-field', ['get', 'name']);
+    map.setLayoutProperty(
+      ROUTE_STOP_LABEL_LAYER_ID,
+      'text-size',
+      ['match', ['get', 'role'], 'meeting', 12, 'intermediate', 11, 11.5],
+    );
+    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-line-height', 1.1);
+    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-font', ['Noto Sans Bold']);
+    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-variable-anchor', [
+      'top',
+      'bottom',
+      'left',
+      'right',
+      'top-left',
+      'top-right',
+      'bottom-left',
+      'bottom-right',
+    ]);
+    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-radial-offset', 1.05);
+    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-justify', 'center');
+    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-allow-overlap', true);
+    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-ignore-placement', true);
+    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'symbol-sort-key', [
+      '*',
+      ['get', 'labelPriority'],
+      -1,
+    ]);
+    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-color', ['get', 'textColor']);
+    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-halo-color', ['get', 'labelBackgroundColor']);
+    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-halo-width', routeStopLabelHaloWidth());
+    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-halo-blur', 0);
+    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-opacity', routeStopLabelTextOpacity());
+  } catch {
+    // Keep existing style if the runtime rejects the update.
+  }
+}
+
+function routeStopLabelPaint(): Record<string, unknown> {
+  return {
+    'text-color': ['get', 'textColor'],
+    'text-halo-color': ['get', 'labelBackgroundColor'],
+    'text-halo-width': routeStopLabelHaloWidth(),
+    'text-halo-blur': 0,
+    'text-opacity': routeStopLabelTextOpacity(),
+  };
+}
+
+function applyRouteStopLabelPaint(map: MapInstance) {
+  applyRouteStopLabelStyle(map);
+}
+
 function ensureRouteStopLayers(map: MapInstance) {
   if (!map.getSource(ROUTE_STOP_SOURCE_ID)) {
     map.addSource(ROUTE_STOP_SOURCE_ID, {
@@ -1132,44 +1216,15 @@ function ensureRouteStopLayers(map: MapInstance) {
         type: 'symbol',
         source: ROUTE_STOP_SOURCE_ID,
         filter: ['==', ['get', 'showLabel'], true],
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-size': ['match', ['get', 'role'], 'meeting', 12, 'intermediate', 11, 11.5],
-          'text-font': ['Noto Sans Regular'],
-          'text-variable-anchor': [
-            'top',
-            'bottom',
-            'left',
-            'right',
-            'top-left',
-            'top-right',
-            'bottom-left',
-            'bottom-right',
-          ],
-          'text-radial-offset': 0.9,
-          'text-justify': 'auto',
-          'text-optional': true,
-          'text-padding': 2,
-          // Lower sort keys win collisions — negate so meeting (400) beats intermediate (100).
-          'symbol-sort-key': ['*', ['get', 'labelPriority'], -1],
-        },
-        paint: {
-          'text-color': '#1e293b',
-          'text-halo-color': '#ffffff',
-          'text-halo-width': 1.5,
-          'text-opacity': routeStopLabelTextOpacity(),
-        },
+        layout: routeStopLabelLayout(),
+        paint: routeStopLabelPaint(),
       });
     } catch {
       // Optional labels — circles and click popups still work without glyphs.
     }
     return;
   }
-  try {
-    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-opacity', routeStopLabelTextOpacity());
-  } catch {
-    // Keep existing paint if the style rejects the update.
-  }
+  applyRouteStopLabelPaint(map);
 }
 
 function bindRouteStopInteractions(
@@ -1348,10 +1403,12 @@ function applyScene(options: {
     }
     const el = document.createElement('button');
     el.type = 'button';
-    el.className = 'railmeet-map-marker';
+    el.className = item.selected
+      ? 'railmeet-map-marker railmeet-map-marker-meeting'
+      : 'railmeet-map-marker railmeet-map-marker-candidate';
     el.setAttribute('aria-label', markerAriaLabel(item));
     el.style.cssText = markerStyle(item);
-    el.textContent = String(item.rank);
+    el.textContent = item.selected ? '' : String(item.rank);
 
     el.addEventListener('click', () => {
       onCandidateSelectRef.current?.(item.id.replace(/^candidate:/, ''));
@@ -1607,14 +1664,34 @@ function markerAriaLabel(item: MapOriginMarker | MapCandidateMarker): string {
     : `Meeting point rank ${item.rank}: ${item.label}`;
 }
 
-function markerStyle(item: MapCandidateMarker): string {
-  const size = item.selected ? 34 : 28;
-  const bg = item.selected ? '#0f766e' : '#152033';
+/** Teal meeting-point fill — matches the MapLibre `meeting` stop circle. */
+export const SEARCH_MAP_MEETING_MARKER_COLOR = '#0f766e';
+
+/**
+ * Inline styles for meeting-point candidate HTML markers.
+ * Selected: largest teal circle with white stroke (stop-marker hierarchy).
+ * Non-selected: compact square rank pins.
+ */
+export function candidateMarkerStyle(item: MapCandidateMarker): string {
+  if (item.selected) {
+    const size = 40;
+    return [
+      `width:${size}px;height:${size}px;border-radius:999px;border:3px solid #ffffff;z-index:4;`,
+      `background:${SEARCH_MAP_MEETING_MARKER_COLOR};color:#ffffff;`,
+      'display:grid;place-items:center;cursor:pointer;',
+      'box-shadow:0 2px 6px rgba(15,118,110,0.35);padding:0;',
+    ].join('');
+  }
+  const size = 28;
   return [
     `width:${size}px;height:${size}px;border-radius:8px;border:2px solid #fff;z-index:3;`,
-    `background:${bg};color:#fff;font:700 12px/1 ui-sans-serif,system-ui;`,
+    'background:#152033;color:#fff;font:700 12px/1 ui-sans-serif,system-ui;',
     'display:grid;place-items:center;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.25);',
   ].join('');
+}
+
+function markerStyle(item: MapCandidateMarker): string {
+  return candidateMarkerStyle(item);
 }
 
 export const SEARCH_MAP_ROUTE_LAYER_IDS = ROUTE_LAYER_IDS;

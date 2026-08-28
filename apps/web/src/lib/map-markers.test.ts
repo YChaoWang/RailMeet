@@ -8,6 +8,7 @@ import {
   candidateSelectionKey,
   collectSceneCoordinates,
   routeStopsToGeoJson,
+  shadeRouteLabelBackground,
 } from './map-markers';
 import { encodeEncodedPolyline } from './polyline';
 import { travelerColorAt, travelerLetterAt } from './traveler-identity';
@@ -584,6 +585,13 @@ const dedupeResults = {
 
 const transitSelectionKey = candidateSelectionKey('fairest', 1, 'place:munich');
 
+describe('shadeRouteLabelBackground', () => {
+  it('darkens provider route hex colors for station name halos', () => {
+    expect(shadeRouteLabelBackground('#09a4ec')).toBe('#0786c2');
+    expect(shadeRouteLabelBackground('#e30613')).toBe('#ba0510');
+  });
+});
+
 describe('buildDraftOriginScene', () => {
   it('adds one origin marker per selected draft place and never invents routes', () => {
     const scene = buildDraftOriginScene([
@@ -1044,6 +1052,7 @@ describe('buildMapScene routes', () => {
     expect(transfer?.properties).toMatchObject({
       borderColor: '#e30613',
       ringColor: '#09a4ec',
+      labelBackgroundColor: shadeRouteLabelBackground('#e30613'),
       showLabel: true,
       emphasized: true,
       labelPriority: STOP_LABEL_PRIORITY.transfer,
@@ -1113,7 +1122,7 @@ describe('buildMapScene routes', () => {
     expect(transfer?.kind === 'stop' && transfer.departingService).toBe('RE 1');
   });
 
-  it('keeps overlapping transfers at one station as distinct per-traveler markers', () => {
+  it('keeps per-traveler stop markers but shows one name label at shared stations', () => {
     const scene = buildMapScene({
       summary: transitSummary,
       results: transitResults,
@@ -1125,10 +1134,32 @@ describe('buildMapScene routes', () => {
     );
     expect(nuremberg).toHaveLength(2);
     expect(new Set(nuremberg.map((marker) => marker.id)).size).toBe(2);
-    // Both sides of each traveler's transfer collapse into a single marker.
     expect(nuremberg.every((marker) => marker.kind === 'stop' && marker.role === 'transfer')).toBe(
       true,
     );
+    expect(
+      scene.markers.filter(
+        (marker) =>
+          marker.kind === 'stop' &&
+          marker.showLabel &&
+          marker.longitude === nuremberg[0]?.longitude &&
+          marker.latitude === nuremberg[0]?.latitude,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('shows one station name label per coordinate when names differ at the same place', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: dedupeResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const erfurt = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.name.startsWith('Erfurt'),
+    );
+    expect(erfurt).toHaveLength(2);
+    expect(erfurt.filter((marker) => marker.kind === 'stop' && marker.showLabel)).toHaveLength(1);
   });
 
   it('skips intermediate stops the provider gave no coordinates for', () => {

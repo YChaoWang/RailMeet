@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MapScene } from '@/lib/map-markers';
 import {
+  SEARCH_MAP_MEETING_MARKER_COLOR,
   SEARCH_MAP_ORIGIN_LAYER_IDS,
   SEARCH_MAP_ORIGIN_SOURCE_ID,
   SEARCH_MAP_ROUTE_LAYER_IDS,
@@ -13,13 +14,20 @@ import {
   SEARCH_MAP_STATION_LAYER_IDS,
   SEARCH_MAP_STATION_SOURCE_ID,
   SearchMap,
+  candidateMarkerStyle,
 } from './search-map';
 
-type LayerSpec = { id: string; type: string; filter?: unknown; paint?: Record<string, unknown> };
+type LayerSpec = {
+  id: string;
+  type: string;
+  filter?: unknown;
+  paint?: Record<string, unknown>;
+  layout?: Record<string, unknown>;
+};
 
 const layers = new globalThis.Map<string, LayerSpec>();
 const sources = new globalThis.Map<string, { data: unknown }>();
-const markers: Array<{ remove: () => void }> = [];
+const markers: Array<{ remove: () => void; element?: HTMLElement | undefined }> = [];
 const layerHandlers = new globalThis.Map<
   string,
   globalThis.Map<string, Array<(...args: unknown[]) => void>>
@@ -52,6 +60,14 @@ let mapInstance: {
 
 vi.mock('maplibre-gl', () => {
   class Marker {
+    element?: HTMLElement | undefined;
+
+    constructor(options?: { element?: HTMLElement }) {
+      if (options?.element) {
+        this.element = options.element;
+      }
+    }
+
     setLngLat() {
       return this;
     }
@@ -121,6 +137,8 @@ vi.mock('maplibre-gl', () => {
     getCanvas = () => ({ style: { cursor: '' } });
     getTerrain = () => null;
     moveLayer = vi.fn();
+    hasImage = vi.fn(() => false);
+    addImage = vi.fn();
     getStyle = () => ({
       sources: {},
       layers: [{ id: 'label_city', type: 'symbol' }],
@@ -427,6 +445,64 @@ const switchedScene: MapScene = {
   ],
 };
 
+const dualCandidateScene: MapScene = {
+  ...routeScene,
+  markers: [
+    routeScene.markers[0]!,
+    routeScene.markers[1]!,
+    {
+      kind: 'candidate',
+      id: 'candidate:fairest:2:place:cologne',
+      placeId: 'place:cologne',
+      label: 'Cologne',
+      rank: 2,
+      selected: false,
+      longitude: 6.96,
+      latitude: 50.94,
+      popup: null,
+    },
+  ],
+};
+
+describe('candidateMarkerStyle', () => {
+  it('renders the selected meeting candidate as the largest teal circle with a white border', () => {
+    const style = candidateMarkerStyle({
+      kind: 'candidate',
+      id: 'candidate:fairest:1:place:munich',
+      placeId: 'place:munich',
+      label: 'Munich',
+      rank: 1,
+      selected: true,
+      longitude: 11.58,
+      latitude: 48.13,
+      popup: null,
+    });
+    expect(style).toContain('border-radius:999px');
+    expect(style).toContain(`background:${SEARCH_MAP_MEETING_MARKER_COLOR}`);
+    expect(style).toContain('border:3px solid #ffffff');
+    expect(style).toContain('width:40px');
+    expect(style).not.toContain('border-radius:8px');
+  });
+
+  it('keeps non-selected candidates as compact square rank pins', () => {
+    const style = candidateMarkerStyle({
+      kind: 'candidate',
+      id: 'candidate:fairest:2:place:cologne',
+      placeId: 'place:cologne',
+      label: 'Cologne',
+      rank: 2,
+      selected: false,
+      longitude: 6.96,
+      latitude: 50.94,
+      popup: null,
+    });
+    expect(style).toContain('border-radius:8px');
+    expect(style).toContain('width:28px');
+    expect(style).toContain('background:#152033');
+    expect(style).not.toContain('border-radius:999px');
+  });
+});
+
 describe('SearchMap route layers', () => {
   afterEach(() => {
     layers.clear();
@@ -453,6 +529,12 @@ describe('SearchMap route layers', () => {
     expect(transit?.paint?.['line-color']).toEqual(['get', 'color']);
     expect(transit?.paint?.['line-dasharray']).toBeUndefined();
 
+    const stopLabels = layers.get('railmeet-route-stops-label');
+    expect(stopLabels?.layout?.['text-allow-overlap']).toBe(true);
+    expect(stopLabels?.paint?.['text-halo-color']).toEqual(['get', 'labelBackgroundColor']);
+    expect(stopLabels?.paint?.['text-color']).toEqual(['get', 'textColor']);
+    expect(stopLabels?.layout?.['icon-image']).toBeUndefined();
+
     await waitFor(() => {
       expect(lastSetData?.id).toBe(SEARCH_MAP_ROUTE_SOURCE_ID);
       expect(lastSetData?.data).toMatchObject({
@@ -471,6 +553,27 @@ describe('SearchMap route layers', () => {
         ],
       });
     });
+  });
+
+  it('renders the selected meeting candidate as a teal circle and others as square rank pins', async () => {
+    render(<SearchMap scene={dualCandidateScene} />);
+    await waitFor(() => {
+      expect(
+        markers.some((marker) => marker.element?.classList.contains('railmeet-map-marker-meeting')),
+      ).toBe(true);
+    });
+    const meetingEl = markers.find((marker) =>
+      marker.element?.classList.contains('railmeet-map-marker-meeting'),
+    )?.element;
+    const rankEl = markers.find((marker) =>
+      marker.element?.classList.contains('railmeet-map-marker-candidate'),
+    )?.element;
+    expect(meetingEl?.style.borderRadius).toBe('999px');
+    expect(meetingEl?.style.background).toBe('rgb(15, 118, 110)');
+    expect(meetingEl?.style.border).toContain('3px solid rgb(255, 255, 255)');
+    expect(meetingEl?.textContent).toBe('');
+    expect(rankEl?.style.borderRadius).toBe('8px');
+    expect(rankEl?.textContent).toBe('2');
   });
 
   it('does not duplicate layers or route click handlers after rerender', async () => {

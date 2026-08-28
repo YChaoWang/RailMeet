@@ -233,6 +233,8 @@ export type RouteStopProperties = {
   /** Empty string when this stop has no arriving service to ring. */
   readonly ringColor: string;
   readonly textColor: string;
+  /** Darkened route tint painted along each station-name glyph outline. */
+  readonly labelBackgroundColor: string;
   readonly emphasized: boolean;
   readonly showLabel: boolean;
   readonly labelPriority: number;
@@ -245,6 +247,19 @@ export type RouteStopProperties = {
   readonly departingService: string;
   readonly track: string;
 };
+
+/** Slightly darken a provider route hex for station name halos. */
+export function shadeRouteLabelBackground(routeColor: string): string {
+  const normalized = routeColor.trim().replace(/^#/, '');
+  if (!/^[\da-f]{6}$/i.test(normalized)) {
+    return routeColor;
+  }
+  const shade = (channel: number) => Math.max(0, Math.round(channel * 0.82));
+  const red = shade(Number.parseInt(normalized.slice(0, 2), 16));
+  const green = shade(Number.parseInt(normalized.slice(2, 4), 16));
+  const blue = shade(Number.parseInt(normalized.slice(4, 6), 16));
+  return `#${red.toString(16).padStart(2, '0')}${green.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
+}
 
 export function routeStopsToGeoJson(scene: MapScene): {
   type: 'FeatureCollection';
@@ -270,6 +285,7 @@ export function routeStopsToGeoJson(scene: MapScene): {
           borderColor: marker.borderColor,
           ringColor: marker.ringColor ?? '',
           textColor: marker.textColor,
+          labelBackgroundColor: shadeRouteLabelBackground(marker.borderColor),
           emphasized: marker.emphasized,
           showLabel: marker.showLabel,
           labelPriority: marker.labelPriority,
@@ -595,6 +611,40 @@ export function collectSceneCoordinates(scene: MapScene): readonly LonLat[] {
   return points;
 }
 
+function coordLabelKey(longitude: number, latitude: number): string {
+  return `${longitude.toFixed(5)},${latitude.toFixed(5)}`;
+}
+
+/** One visible station name per coordinate — highest labelPriority wins; ties keep the first marker. */
+function suppressDuplicateStopLabels(markers: MapMarker[]): void {
+  const winnerByCoord = new Map<string, number>();
+
+  for (let index = 0; index < markers.length; index++) {
+    const marker = markers[index];
+    if (marker?.kind !== 'stop' || !marker.showLabel) {
+      continue;
+    }
+    const stop = marker;
+    const coordKey = coordLabelKey(stop.longitude, stop.latitude);
+    const winnerIndex = winnerByCoord.get(coordKey);
+    if (winnerIndex === undefined) {
+      winnerByCoord.set(coordKey, index);
+      continue;
+    }
+    const winner = markers[winnerIndex];
+    if (winner?.kind !== 'stop') {
+      winnerByCoord.set(coordKey, index);
+      continue;
+    }
+    if (stop.labelPriority > winner.labelPriority) {
+      markers[winnerIndex] = { ...winner, showLabel: false };
+      winnerByCoord.set(coordKey, index);
+      continue;
+    }
+    markers[index] = { ...stop, showLabel: false };
+  }
+}
+
 /**
  * Derive map markers and selected-candidate route segments strictly from API payloads.
  * Never invents coordinates or straight-line fallbacks for missing geometry.
@@ -835,6 +885,8 @@ export function buildMapScene(input: {
       });
     }
   }
+
+  suppressDuplicateStopLabels(markers);
 
   return {
     markers,
