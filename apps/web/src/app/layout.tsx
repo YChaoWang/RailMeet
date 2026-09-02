@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Fraunces, Source_Sans_3 } from 'next/font/google';
 import type { ReactNode } from 'react';
 
@@ -22,10 +22,18 @@ export const metadata: Metadata = {
     'Find the fairest European meeting city for your group using real public-transport journeys.',
 };
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
+
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en" className={`${display.variable} ${sans.variable}`}>
-      <body className="min-h-screen font-sans text-ink-900 antialiased">{children}</body>
+      <body className="min-h-screen overflow-x-hidden font-sans text-ink-900 antialiased">
+        {children}
+      </body>
     </html>
   );
 }

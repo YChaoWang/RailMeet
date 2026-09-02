@@ -48,6 +48,12 @@ const ORIGIN_CIRCLE_LAYER_ID = 'railmeet-traveler-origins-circle';
 const ORIGIN_LABEL_LAYER_ID = 'railmeet-traveler-origins-label';
 const STATION_SOURCE_ID = 'railmeet-viewport-stations';
 const STATION_CLUSTER_LAYER_ID = 'railmeet-viewport-stations-clusters';
+
+/** Mobile-safe popup width — also reinforced in globals.css for MapLibre popups. */
+export const MAP_POPUP_MAX_WIDTH = 'min(280px, calc(100vw - 2rem))';
+
+const MAP_STATUS_TOAST_CLASS =
+  'pointer-events-none absolute left-1/2 z-[5] max-w-[min(90%,28rem)] -translate-x-1/2 rounded-lg bg-white/90 px-3 py-1.5 text-center text-[11px] shadow-sm max-md:top-14 max-md:bottom-auto md:bottom-3 md:left-[calc(50%+200px)] md:top-auto';
 const STATION_CLUSTER_COUNT_LAYER_ID = 'railmeet-viewport-stations-cluster-count';
 const STATION_POINT_LAYER_ID = 'railmeet-viewport-stations-points';
 const STATION_LABEL_LAYER_ID = 'railmeet-viewport-stations-labels';
@@ -409,7 +415,7 @@ export function SearchMap({
                 const name = String(feature.properties?.name ?? 'Station');
                 const kind = String(feature.properties?.kind ?? 'other');
                 const importance = String(feature.properties?.importance ?? 'local');
-                new maplibregl.Popup({ offset: 12, closeButton: true, maxWidth: '240px' })
+                new maplibregl.Popup({ offset: 12, closeButton: true, maxWidth: MAP_POPUP_MAX_WIDTH })
                   .setLngLat(feature.geometry.coordinates as [number, number])
                   .setHTML(
                     `<strong>${escapeHtml(name)}</strong><div>${escapeHtml(kind)} · ${escapeHtml(importance)}</div><div>Data © Transitous</div>`,
@@ -498,7 +504,7 @@ export function SearchMap({
   return (
     <div
       ref={wrapperRef}
-      className={cn('relative h-full w-full bg-[#d9e2ec]', className)}
+      className={cn('relative h-full min-h-[12rem] w-full min-w-0 bg-[#d9e2ec]', className)}
       data-testid="search-map"
       data-marker-count={scene.markers.length}
       data-route-line-count={scene.routeLines.length}
@@ -513,19 +519,19 @@ export function SearchMap({
       {/* Inner node is owned by MapLibre — keep React attributes on the wrapper only. */}
       <div ref={containerRef} className="absolute inset-0 h-full w-full" />
       {stationStatus === 'loading' ? (
-        <p className="pointer-events-none absolute bottom-3 left-1/2 z-[5] max-w-[min(90%,28rem)] -translate-x-1/2 rounded-lg bg-white/90 px-3 py-1.5 text-center text-[11px] text-ink-700 shadow-sm md:left-[calc(50%+200px)]">
+        <p className={cn(MAP_STATUS_TOAST_CLASS, 'text-ink-700')}>
           Loading stations…
         </p>
       ) : null}
       {stationStatus === 'zoom' || stationStatus === 'aggregated' ? (
-        <p className="pointer-events-none absolute bottom-3 left-1/2 z-[5] max-w-[min(90%,28rem)] -translate-x-1/2 rounded-lg bg-white/90 px-3 py-1.5 text-center text-[11px] text-ink-700 shadow-sm md:left-[calc(50%+200px)]">
+        <p className={cn(MAP_STATUS_TOAST_CLASS, 'text-ink-700')}>
           {stationStatus === 'aggregated'
             ? 'Zoom in to view individual stations'
             : 'Zoom in to view stations in this area'}
         </p>
       ) : null}
       {stationStatus === 'error' ? (
-        <p className="pointer-events-none absolute bottom-3 left-1/2 z-[5] max-w-[min(90%,28rem)] -translate-x-1/2 rounded-lg bg-white/90 px-3 py-1.5 text-center text-[11px] text-amber-800 shadow-sm md:left-[calc(50%+200px)]">
+        <p className={cn(MAP_STATUS_TOAST_CLASS, 'text-amber-800')}>
           Stations could not be refreshed. Traveler planning still works.
         </p>
       ) : null}
@@ -959,7 +965,7 @@ function bindRouteInteractions(
       new maplibregl.Popup({
         offset: 8,
         closeButton: true,
-        maxWidth: '280px',
+        maxWidth: MAP_POPUP_MAX_WIDTH,
         className: 'railmeet-map-popup',
       })
         .setLngLat([event.lngLat.lng, event.lngLat.lat])
@@ -1250,7 +1256,7 @@ function bindRouteStopInteractions(
     new maplibregl.Popup({
       offset: 14,
       closeButton: true,
-      maxWidth: '260px',
+      maxWidth: MAP_POPUP_MAX_WIDTH,
       className: 'railmeet-map-popup',
     })
       .setLngLat([event.lngLat.lng, event.lngLat.lat])
@@ -1417,7 +1423,7 @@ function applyScene(options: {
     const popup = new maplibregl.Popup({
       offset: 14,
       closeButton: true,
-      maxWidth: '260px',
+      maxWidth: MAP_POPUP_MAX_WIDTH,
       className: 'railmeet-map-popup',
     }).setHTML(meetingPopupHtml(item));
 
@@ -1457,7 +1463,7 @@ function applyScene(options: {
     const popup = new maplibregl.Popup({
       offset: 14,
       closeButton: true,
-      maxWidth: '260px',
+      maxWidth: MAP_POPUP_MAX_WIDTH,
       className: 'railmeet-map-popup',
     }).setHTML(travelerPopupHtml(item));
     const marker = new maplibregl.Marker({ element: el, anchor: 'center' })

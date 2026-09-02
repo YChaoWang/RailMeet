@@ -655,4 +655,9 @@ describe('SearchMap route layers', () => {
     }
     expect(mapInstance?.remove).toHaveBeenCalled();
   });
+
+  it('uses a responsive map container height on the wrapper', async () => {
+    const view = render(<SearchMap scene={emptyScene} />);
+    expect(view.getByTestId('search-map')).toHaveClass('min-h-[12rem]', 'min-w-0');
+  });
 });

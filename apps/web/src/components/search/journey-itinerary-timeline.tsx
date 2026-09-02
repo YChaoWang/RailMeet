@@ -120,7 +120,7 @@ function StopRow({
   readonly emphasize: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-x-2 gap-y-0.5 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
+    <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-x-2 gap-y-0.5 max-sm:grid-cols-1 sm:grid-cols-[3.5rem_minmax(0,1fr)]" data-testid="journey-stop-row">
       <div className="tabular-nums">
         <span
           className={cn('text-sm', emphasize ? 'font-semibold text-ink-950' : 'text-ink-900')}
@@ -155,7 +155,7 @@ function StopRow({
       <div className="min-w-0">
         <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
           <span
-            className={cn('min-w-0 text-sm', emphasize ? 'font-semibold text-ink-950' : 'text-ink-900')}
+            className={cn('min-w-0 break-words text-sm', emphasize ? 'font-semibold text-ink-950' : 'text-ink-900')}
             data-testid="leg-stop-name"
           >
             {presentation.stopName}
@@ -502,8 +502,8 @@ function TransitSection({
   });
 
   return (
-    <article className="space-y-1" data-testid="journey-leg" data-motis-mode={leg.mode}>
-      <div className="flex items-center gap-2">
+    <article className="min-w-0 space-y-1" data-testid="journey-leg" data-motis-mode={leg.mode}>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <RoutePill leg={leg} />
         <span className="sr-only" data-testid="journey-leg-mode">
           {motisServiceLabel(leg)}
@@ -585,7 +585,7 @@ function JourneyOverview({
       {overview.participantDisplayName ? (
         <p className="text-xs font-medium text-teal-800">{overview.participantDisplayName}&apos;s journey</p>
       ) : null}
-      <p className="text-base font-semibold text-ink-950">
+      <p className="break-words text-base font-semibold text-ink-950">
         {overview.origin} → {overview.destination}
       </p>
       <p className="text-xs text-ink-700">{overview.dateRange}</p>
@@ -665,7 +665,7 @@ export function JourneyItineraryTimeline({
   }
 
   return (
-    <div className="space-y-3 text-ink-800" data-testid="journey-itinerary">
+    <div className="min-w-0 space-y-3 text-ink-800" data-testid="journey-itinerary">
       <JourneyOverview itinerary={itinerary} context={context} />
       <div className="space-y-3">{items.map((item) => renderTimelineItem(item, itinerary.startTime))}</div>
       {lastArrival ? (
@@ -730,7 +730,7 @@ export function RankingJourneyLegs({
     legs: legs.map(rankingLegToMotis),
   };
   return (
-    <div data-testid="ranking-journey-legs">
+    <div className="min-w-0" data-testid="ranking-journey-legs">
       <JourneyItineraryTimeline itinerary={itinerary} context={context ?? {}} />
     </div>
   );

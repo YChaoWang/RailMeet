@@ -183,13 +183,16 @@ function RouteLegend({
     return null;
   }
   return (
-    <div className="space-y-1" data-testid="route-legend">
-      <div className="flex items-center justify-between gap-2">
+    <div
+      className="min-w-0 space-y-1 max-md:max-h-44 max-md:overflow-y-auto max-md:overflow-x-hidden"
+      data-testid="route-legend"
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-ink-700">Routes</p>
         {emphasizedParticipantId ? (
           <button
             type="button"
-            className="inline-flex min-h-9 items-center rounded px-1 text-xs font-medium text-teal-700 underline underline-offset-2 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+            className="inline-flex min-h-11 shrink-0 items-center rounded px-2 text-xs font-medium text-teal-700 underline underline-offset-2 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
             data-testid="route-legend-clear-emphasis"
             onClick={() => onSelect(null)}
           >
@@ -197,15 +200,15 @@ function RouteLegend({
           </button>
         ) : null}
       </div>
-      <ul className="flex flex-wrap gap-2">
+      <ul className="flex min-w-0 flex-col gap-2 md:flex-row md:flex-wrap">
         {travelers.map((traveler) => {
           const active =
             !emphasizedParticipantId || emphasizedParticipantId === traveler.participantId;
           return (
-            <li key={traveler.participantId}>
+            <li key={traveler.participantId} className="min-w-0">
               <button
                 type="button"
-                className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-ink-700/10 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                className="inline-flex min-h-11 w-full max-w-full items-start gap-2 rounded-lg border border-ink-700/10 px-2 py-1.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 md:w-auto md:items-center"
                 style={{ opacity: active ? 1 : 0.45 }}
                 aria-pressed={emphasizedParticipantId === traveler.participantId}
                 onClick={() =>
@@ -217,21 +220,24 @@ function RouteLegend({
                 }
               >
                 <span
-                  className="grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold text-white"
+                  className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white md:mt-0"
                   style={{ backgroundColor: traveler.color }}
                   aria-hidden
                 >
                   {traveler.letter}
                 </span>
-                <span>
+                <span className="min-w-0 break-words">
                   {traveler.letter} · {traveler.displayName}
                 </span>
                 {traveler.services.length > 0 ? (
-                  <span className="flex flex-wrap items-center gap-1" data-testid="route-services">
+                  <span
+                    className="flex min-w-0 flex-wrap items-center gap-1"
+                    data-testid="route-services"
+                  >
                     {traveler.services.map((service) => (
                       <span
                         key={`${service.mode}:${service.displayName}:${service.color}`}
-                        className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                        className="max-w-full truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
                         style={{
                           backgroundColor: service.color,
                           color: service.textColor,
@@ -406,13 +412,8 @@ function renderPanelBody({
         );
       }
       return (
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4" data-testid="search-completed-panel">
           <SearchSummaryCompact summary={state.summary} />
-          <RouteLegend
-            scene={scene}
-            emphasizedParticipantId={emphasizedParticipantId}
-            onSelect={setEmphasizedParticipantId}
-          />
           <SearchResultsView
             results={state.results}
             rankingMode={rankingMode}
@@ -423,6 +424,11 @@ function renderPanelBody({
             onEmphasizeParticipant={setEmphasizedParticipantId}
             missingGeometry={scene.missingGeometry}
             embedded
+          />
+          <RouteLegend
+            scene={scene}
+            emphasizedParticipantId={emphasizedParticipantId}
+            onSelect={setEmphasizedParticipantId}
           />
         </div>
       );
@@ -435,13 +441,16 @@ function renderPanelBody({
 
 function SearchSummaryCompact({ summary }: { readonly summary: MeetingSearchDetailData }) {
   return (
-    <div className="rounded-xl border border-ink-700/10 bg-mist-50 px-3 py-2 text-xs text-ink-700">
+    <div
+      className="min-w-0 break-words rounded-xl border border-ink-700/10 bg-mist-50 px-3 py-2 text-xs text-ink-700"
+      data-testid="search-summary-compact"
+    >
       <p className="font-medium text-ink-950">
         {summary.participants.length} travelers · {summary.travelDate} · {summary.rankingMode}
       </p>
       <p className="mt-1 flex flex-wrap gap-2">
         {summary.participants.map((participant, index) => (
-          <span key={participant.id} className="inline-flex items-center gap-1">
+          <span key={participant.id} className="inline-flex min-w-0 max-w-full items-center gap-1 break-words">
             <span
               className="grid h-4 w-4 place-items-center rounded-full text-[9px] font-bold text-white"
               style={{ backgroundColor: travelerColorAt(index) }}

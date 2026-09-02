@@ -207,8 +207,8 @@ export function PlaceCombobox({
   };
 
   return (
-    <div className="relative space-y-1.5">
-      <div className="relative">
+    <div className="relative min-w-0 space-y-1.5">
+      <div className="relative min-w-0">
         {SelectedTypeIcon ? (
           <SelectedTypeIcon
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-teal-800"
@@ -259,7 +259,7 @@ export function PlaceCombobox({
             type="button"
             aria-label="Clear selected place"
             disabled={disabled}
-            className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-950 disabled:pointer-events-none disabled:opacity-50"
+            className="absolute right-1 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-950 disabled:pointer-events-none disabled:opacity-50"
             onMouseDown={(event) => event.preventDefault()}
             onClick={clearSelection}
           >

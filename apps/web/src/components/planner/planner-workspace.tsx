@@ -144,7 +144,7 @@ export function PlannerWorkspace({
         />
       </div>
 
-      <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-xl border border-ink-700/10 bg-white px-3 py-2 shadow-sm md:hidden">
+      <div className="pointer-events-none absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] z-20 rounded-xl border border-ink-700/10 bg-white px-3 py-2 shadow-sm md:hidden">
         <Link
           href="/search"
           className="pointer-events-auto font-display text-lg text-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
@@ -174,18 +174,20 @@ export function PlannerWorkspace({
         data-fit-left={fitPadding.left}
         aria-label={panelTitle}
       >
-        <div className="flex items-center justify-center border-b border-ink-700/10 px-4 py-2 md:hidden">
+        <div className="flex items-center justify-center border-b border-ink-700/10 px-4 py-1 md:hidden">
           <button
             type="button"
-            className="h-1.5 w-10 touch-none rounded-full bg-ink-700/25"
+            className="flex min-h-11 w-full touch-none items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
             aria-label={sheetExpanded ? 'Collapse search panel' : 'Expand search panel'}
             aria-expanded={sheetExpanded}
             onClick={() => setSheetExpanded(!sheetExpanded)}
             onPointerDown={onHandlePointerDown}
-          />
+          >
+            <span className="h-1.5 w-10 rounded-full bg-ink-700/25" aria-hidden />
+          </button>
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-b border-ink-700/10 px-4 py-3">
+        <div className="flex items-center justify-between gap-2 border-b border-ink-700/10 px-4 py-3 md:px-6">
           <div className="min-w-0">
             <Link
               href="/search"
@@ -215,9 +217,14 @@ export function PlannerWorkspace({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
+        <div
+          className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-4 md:px-6"
+          data-testid="planner-panel-scroll"
+        >
+          {children}
+        </div>
         <p
-          className="border-t border-ink-700/10 px-4 py-2 text-[10px] leading-snug text-ink-700"
+          className="border-t border-ink-700/10 px-4 py-2 text-[10px] leading-snug text-ink-700 md:px-6"
           data-testid="panel-attribution"
         >
           Map © OpenStreetMap · Journey data © Transitous

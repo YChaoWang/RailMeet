@@ -49,6 +49,8 @@ describe('PlannerWorkspace', () => {
     expect(screen.getByTestId('planner-workspace')).toBeInTheDocument();
     expect(screen.getByTestId('planner-map-region')).toBeInTheDocument();
     expect(screen.getByTestId('planner-panel')).toHaveAttribute('data-sheet-state', 'collapsed');
+    expect(screen.getByTestId('planner-panel-scroll')).toBeInTheDocument();
+    expect(screen.getByTestId('planner-panel-scroll')).toHaveClass('overflow-x-hidden');
     expect(screen.getByText('Panel body')).toBeInTheDocument();
     expect(screen.getByTestId('panel-attribution')).toBeInTheDocument();
 

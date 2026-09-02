@@ -229,11 +229,12 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
     <form
       id={formId}
       onSubmit={onSubmit}
-      className="space-y-5"
+      className="min-w-0 space-y-5"
       noValidate
       aria-label="Meeting search"
+      data-testid="search-form"
     >
-      <section className="space-y-3">
+      <section className="min-w-0 space-y-3" data-testid="search-form-travelers">
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="text-sm font-semibold text-ink-950">Travelers</h2>
           <p className="text-xs text-ink-700">
@@ -243,7 +244,8 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
         {participants.map((participant, index) => (
           <div
             key={participant.key}
-            className="grid gap-2 border-b border-ink-700/10 pb-3 last:border-b-0"
+            className="grid min-w-0 gap-2 border-b border-ink-700/10 pb-3 last:border-b-0"
+            data-testid="search-form-traveler-row"
           >
             <div className="flex items-center gap-2">
               <span
@@ -306,11 +308,12 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
           </div>
         ))}
         {errors.participants ? <p className="text-sm text-red-700">{errors.participants}</p> : null}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" data-testid="search-form-traveler-actions">
           <Button
             type="button"
             variant="secondary"
             size="sm"
+            className="min-h-11"
             disabled={participants.length >= PARTICIPANT_COUNT_MAX || pending}
             onClick={() => onParticipantsChange((previous) => [...previous, newParticipant()])}
           >
@@ -320,6 +323,7 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             type="button"
             variant="outline"
             size="sm"
+            className="min-h-11"
             disabled={participants.length <= PARTICIPANT_COUNT_MIN || pending}
             onClick={() => onParticipantsChange((previous) => previous.slice(0, -1))}
           >
@@ -328,8 +332,11 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5 sm:col-span-2">
+      <section
+        className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2"
+        data-testid="search-form-schedule"
+      >
+        <div className="space-y-1.5 md:col-span-2">
           <h2 className="text-sm font-semibold text-ink-950">When & preference</h2>
         </div>
         <div className="space-y-1.5">
