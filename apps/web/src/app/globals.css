@@ -9,9 +9,14 @@
   --teal: #0f766e;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   background: #d9e2ec;
   color: var(--ink);
+  min-width: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -25,9 +30,22 @@ body {
   }
 }
 
+/* HTML map markers: traveler origins and meeting candidates only. Route stops use MapLibre layers (not keyboard-focusable). */
+.railmeet-map-marker:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}
+
+.railmeet-map-popup.maplibregl-popup {
+  max-width: min(calc(100vw - 2rem), 280px);
+}
+
 .railmeet-map-popup .maplibregl-popup-content {
   border-radius: 10px;
   padding: 10px 12px;
+  max-width: min(calc(100vw - 2rem), 280px);
+  overflow-wrap: anywhere;
+  word-break: break-word;
   font:
     12px/1.4 ui-sans-serif,
     system-ui,
@@ -37,6 +55,15 @@ body {
 }
 
 .railmeet-map-popup .maplibregl-popup-close-button {
-  font-size: 16px;
-  padding: 4px 8px;
+  font-size: 18px;
+  line-height: 1;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.5rem;
+}
+
+/* Keep zoom controls clear of notches and the mobile sheet header. */
+.maplibregl-ctrl-top-right {
+  top: max(0.5rem, env(safe-area-inset-top));
+  right: max(0.5rem, env(safe-area-inset-right));
 }

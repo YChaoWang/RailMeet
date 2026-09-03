@@ -58,6 +58,8 @@ export {
   meetingSearchJourneyIdParamsSchema,
   meetingSearchJourneyDetailDataSchema,
   meetingSearchJourneyDetailEnvelopeSchema,
+  meetingSearchJourneyIntermediateStopSchema,
+  meetingSearchJourneyLegStopSchema,
   meetingSearchParticipantViewSchema,
   meetingSearchPlaceViewSchema,
   meetingSearchProviderItinerarySchema,

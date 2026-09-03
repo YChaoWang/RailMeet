@@ -2,10 +2,13 @@ import type { MeetingSearchDetailData, MeetingSearchResultsData } from '@railmee
 import { describe, expect, it } from 'vitest';
 
 import {
+  STOP_LABEL_PRIORITY,
   buildDraftOriginScene,
   buildMapScene,
   candidateSelectionKey,
   collectSceneCoordinates,
+  routeStopsToGeoJson,
+  shadeRouteLabelBackground,
 } from './map-markers';
 import { encodeEncodedPolyline } from './polyline';
 import { travelerColorAt, travelerLetterAt } from './traveler-identity';
@@ -323,6 +326,272 @@ const multiResults = {
   ],
 } as MeetingSearchResultsData;
 
+const BERLIN: [number, number] = [13.369548, 52.525589];
+const ERFURT: [number, number] = [11.038, 50.972];
+const NUREMBERG: [number, number] = [11.082, 49.446];
+const MUNICH: [number, number] = [11.5583, 48.1402];
+const HAMBURG: [number, number] = [10.0068, 53.5528];
+
+function geometry(points: readonly [number, number][]) {
+  return { points: encodeEncodedPolyline(points, 6), precision: 6, length: points.length };
+}
+
+const transitSummary = {
+  ...summary,
+  participants: [
+    {
+      id: 'p1',
+      displayName: 'Alex',
+      origin: { placeId: 'place:berlin', name: 'Berlin', longitude: BERLIN[0], latitude: BERLIN[1] },
+    },
+    {
+      id: 'p2',
+      displayName: 'Blake',
+      origin: {
+        placeId: 'place:hamburg',
+        name: 'Hamburg',
+        longitude: HAMBURG[0],
+        latitude: HAMBURG[1],
+      },
+    },
+  ],
+} as MeetingSearchDetailData;
+
+/**
+ * Two travelers meeting in Munich. Alex walks, rides a colored ICE with a named
+ * and an unnamed-coordinate intermediate stop, then a colored metro. Blake rides
+ * a colored ICE and then a regional train the feed publishes no color for, and
+ * transfers at the same station as Alex.
+ */
+const transitResults = {
+  ...results,
+  rankings: [
+    {
+      ...results.rankings[0]!,
+      destination: {
+        placeId: 'place:munich',
+        name: 'Munich',
+        longitude: MUNICH[0],
+        latitude: MUNICH[1],
+      },
+      journeys: [
+        {
+          journeyId: '00000011-aaaa-4aaa-8aaa-000000000011',
+          routeSummary: [],
+          participantId: 'p1',
+          participantDisplayName: 'Alex',
+          participantPosition: 0,
+          origin: {
+            placeId: 'place:berlin',
+            name: 'Berlin',
+            longitude: BERLIN[0],
+            latitude: BERLIN[1],
+          },
+          destination: {
+            placeId: 'place:munich',
+            name: 'Munich',
+            longitude: MUNICH[0],
+            latitude: MUNICH[1],
+          },
+          departureAt: '2026-06-15T07:50:00.000Z',
+          arrivalAt: '2026-06-15T10:40:00.000Z',
+          durationMinutes: 170,
+          transfers: 1,
+          transportModes: ['walk', 'train', 'metro'],
+          legs: [
+            {
+              mode: 'walk',
+              motisMode: 'WALK',
+              departureAt: '2026-06-15T07:50:00.000Z',
+              arrivalAt: '2026-06-15T08:00:00.000Z',
+              durationMinutes: 10,
+              geometry: geometry([
+                [13.37, 52.526],
+                BERLIN,
+              ]),
+              from: { name: 'START', longitude: 13.37, latitude: 52.526 },
+              to: { name: 'Berlin Hbf', longitude: BERLIN[0], latitude: BERLIN[1] },
+            },
+            {
+              mode: 'train',
+              motisMode: 'HIGHSPEED_RAIL',
+              displayName: 'ICE 1007',
+              tripShortName: 'ICE 1007',
+              agencyName: 'DB Fernverkehr AG',
+              headsign: 'München Hbf',
+              routeColor: '#09a4ec',
+              departureAt: '2026-06-15T08:00:00.000Z',
+              arrivalAt: '2026-06-15T10:00:00.000Z',
+              durationMinutes: 120,
+              geometry: geometry([BERLIN, ERFURT, NUREMBERG]),
+              from: { name: 'Berlin Hbf', longitude: BERLIN[0], latitude: BERLIN[1] },
+              to: { name: 'Nürnberg Hbf', track: '7', longitude: NUREMBERG[0], latitude: NUREMBERG[1] },
+              intermediateStopCount: 2,
+              intermediateStops: [
+                {
+                  name: 'Erfurt Hbf',
+                  longitude: ERFURT[0],
+                  latitude: ERFURT[1],
+                  arrivalAt: '2026-06-15T09:00:00.000Z',
+                  departureAt: '2026-06-15T09:02:00.000Z',
+                },
+                { name: 'Bamberg' },
+              ],
+            },
+            {
+              mode: 'metro',
+              motisMode: 'SUBWAY',
+              displayName: 'U2',
+              agencyName: 'VAG',
+              routeColor: 'e30613',
+              departureAt: '2026-06-15T10:10:00.000Z',
+              arrivalAt: '2026-06-15T10:40:00.000Z',
+              durationMinutes: 30,
+              geometry: geometry([NUREMBERG, MUNICH]),
+              from: { name: 'Nürnberg Hbf', longitude: NUREMBERG[0], latitude: NUREMBERG[1] },
+              to: { name: 'München Hbf', longitude: MUNICH[0], latitude: MUNICH[1] },
+            },
+          ],
+        },
+        {
+          journeyId: '00000012-aaaa-4aaa-8aaa-000000000012',
+          routeSummary: [],
+          participantId: 'p2',
+          participantDisplayName: 'Blake',
+          participantPosition: 1,
+          origin: {
+            placeId: 'place:hamburg',
+            name: 'Hamburg',
+            longitude: HAMBURG[0],
+            latitude: HAMBURG[1],
+          },
+          destination: {
+            placeId: 'place:munich',
+            name: 'Munich',
+            longitude: MUNICH[0],
+            latitude: MUNICH[1],
+          },
+          departureAt: '2026-06-15T07:00:00.000Z',
+          arrivalAt: '2026-06-15T10:35:00.000Z',
+          durationMinutes: 215,
+          transfers: 1,
+          transportModes: ['train'],
+          legs: [
+            {
+              mode: 'train',
+              motisMode: 'HIGHSPEED_RAIL',
+              displayName: 'ICE 599',
+              agencyName: 'DB Fernverkehr AG',
+              routeColor: '#09a4ec',
+              departureAt: '2026-06-15T07:00:00.000Z',
+              arrivalAt: '2026-06-15T09:50:00.000Z',
+              durationMinutes: 170,
+              geometry: geometry([HAMBURG, NUREMBERG]),
+              from: { name: 'Hamburg Hbf', longitude: HAMBURG[0], latitude: HAMBURG[1] },
+              to: { name: 'Nürnberg Hbf', longitude: NUREMBERG[0], latitude: NUREMBERG[1] },
+            },
+            {
+              mode: 'train',
+              motisMode: 'REGIONAL_RAIL',
+              displayName: 'RE 1',
+              agencyName: 'DB Regio',
+              departureAt: '2026-06-15T10:05:00.000Z',
+              arrivalAt: '2026-06-15T10:35:00.000Z',
+              durationMinutes: 30,
+              geometry: geometry([NUREMBERG, MUNICH]),
+              from: { name: 'Nürnberg Hbf', longitude: NUREMBERG[0], latitude: NUREMBERG[1] },
+              to: { name: 'München Hbf', longitude: MUNICH[0], latitude: MUNICH[1] },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+} as MeetingSearchResultsData;
+
+/**
+ * One traveler whose feed names the transfer station differently on each leg
+ * (case and spacing only), and publishes two distinct names for one coordinate.
+ */
+const dedupeResults = {
+  ...results,
+  rankings: [
+    {
+      ...results.rankings[0]!,
+      destination: {
+        placeId: 'place:munich',
+        name: 'Munich',
+        longitude: MUNICH[0],
+        latitude: MUNICH[1],
+      },
+      journeys: [
+        {
+          journeyId: '00000021-aaaa-4aaa-8aaa-000000000021',
+          routeSummary: [],
+          participantId: 'p1',
+          participantDisplayName: 'Alex',
+          participantPosition: 0,
+          origin: {
+            placeId: 'place:berlin',
+            name: 'Berlin',
+            longitude: BERLIN[0],
+            latitude: BERLIN[1],
+          },
+          destination: {
+            placeId: 'place:munich',
+            name: 'Munich',
+            longitude: MUNICH[0],
+            latitude: MUNICH[1],
+          },
+          departureAt: '2026-06-15T08:00:00.000Z',
+          arrivalAt: '2026-06-15T11:00:00.000Z',
+          durationMinutes: 180,
+          transfers: 1,
+          transportModes: ['train'],
+          legs: [
+            {
+              mode: 'train',
+              motisMode: 'HIGHSPEED_RAIL',
+              displayName: 'ICE 1007',
+              routeColor: '#09a4ec',
+              departureAt: '2026-06-15T08:00:00.000Z',
+              arrivalAt: '2026-06-15T10:00:00.000Z',
+              durationMinutes: 120,
+              geometry: geometry([BERLIN, ERFURT, NUREMBERG]),
+              from: { name: 'Berlin Hbf', longitude: BERLIN[0], latitude: BERLIN[1] },
+              to: { name: 'NÜRNBERG  Hbf', longitude: NUREMBERG[0], latitude: NUREMBERG[1] },
+              intermediateStops: [
+                { name: 'Erfurt Hbf', longitude: ERFURT[0], latitude: ERFURT[1] },
+                { name: 'Erfurt Hauptbahnhof', longitude: ERFURT[0], latitude: ERFURT[1] },
+              ],
+            },
+            {
+              mode: 'train',
+              motisMode: 'REGIONAL_RAIL',
+              displayName: 'RE 1',
+              departureAt: '2026-06-15T10:20:00.000Z',
+              arrivalAt: '2026-06-15T11:00:00.000Z',
+              durationMinutes: 40,
+              geometry: geometry([NUREMBERG, MUNICH]),
+              from: { name: 'Nürnberg Hbf', longitude: NUREMBERG[0], latitude: NUREMBERG[1] },
+              to: { name: 'München Hbf', longitude: MUNICH[0], latitude: MUNICH[1] },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+} as MeetingSearchResultsData;
+
+const transitSelectionKey = candidateSelectionKey('fairest', 1, 'place:munich');
+
+describe('shadeRouteLabelBackground', () => {
+  it('darkens provider route hex colors for station name halos', () => {
+    expect(shadeRouteLabelBackground('#09a4ec')).toBe('#0786c2');
+    expect(shadeRouteLabelBackground('#e30613')).toBe('#ba0510');
+  });
+});
+
 describe('buildDraftOriginScene', () => {
   it('adds one origin marker per selected draft place and never invents routes', () => {
     const scene = buildDraftOriginScene([
@@ -574,6 +843,399 @@ describe('buildMapScene routes', () => {
     expect(points.some(([lon, lat]) => lon === 4.9 && lat === 52.37)).toBe(true);
     expect(points.some(([lon, lat]) => lon === 11.58 && lat === 48.13)).toBe(true);
     expect(points.length).toBeGreaterThan(scene.markers.length);
+  });
+
+  it('paints transit legs with the Transitous route color, never the traveler color', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const p1 = scene.routeLines.filter((line) => line.participantId === 'p1');
+    expect(p1.map((line) => line.color)).toEqual(['#6b7280', '#09a4ec', '#e30613']);
+    expect(p1.map((line) => line.colorSource)).toEqual([
+      'mode-fallback',
+      'provider',
+      'provider',
+    ]);
+    expect(p1.map((line) => line.serviceLabel)).toEqual(['Walk', 'ICE 1007', 'U2']);
+    for (const line of scene.routeLines) {
+      expect(line.color).not.toBe(travelerColorAt(line.participantPosition));
+    }
+  });
+
+  it('falls back to the MOTIS mode color and flags it when the feed publishes none', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const uncolored = scene.routeLines.find(
+      (line) => line.participantId === 'p2' && line.motisMode === 'REGIONAL_RAIL',
+    );
+    expect(uncolored?.color).toBe('#f44336');
+    expect(uncolored?.colorSource).toBe('mode-fallback');
+  });
+
+  it('draws walking legs in neutral gray with the walk style', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const walks = scene.routeLines.filter((line) => line.style === 'walk');
+    expect(walks.length).toBeGreaterThan(0);
+    for (const walk of walks) {
+      expect(walk.color).toBe('#6b7280');
+    }
+  });
+
+  it('builds origin-station, intermediate, transfer, and meeting stop markers from provider coords', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const stops = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.participantId === 'p1',
+    );
+    expect(stops.map((stop) => (stop.kind === 'stop' ? stop.name : ''))).toEqual([
+      'Berlin Hbf',
+      'Erfurt Hbf',
+      'Nürnberg Hbf',
+    ]);
+    expect(stops.map((stop) => (stop.kind === 'stop' ? stop.role : ''))).toEqual([
+      'origin-station',
+      'intermediate',
+      'transfer',
+    ]);
+    // No emphasis means every journey is active, so intermediates are named too.
+    expect(stops.map((stop) => (stop.kind === 'stop' ? stop.showLabel : null))).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(stops.map((stop) => (stop.kind === 'stop' ? stop.labelPriority : null))).toEqual([
+      STOP_LABEL_PRIORITY['origin-station'],
+      STOP_LABEL_PRIORITY.intermediate,
+      STOP_LABEL_PRIORITY.transfer,
+    ]);
+    expect(stops.every((stop) => stop.kind === 'stop' && stop.emphasized)).toBe(true);
+  });
+
+  it('names intermediates only on the emphasized journey once a traveler is focused', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+      emphasizedParticipantId: 'p2',
+    });
+    const alexIntermediate = scene.markers.find(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role === 'intermediate',
+    );
+    expect(alexIntermediate?.kind === 'stop' && alexIntermediate.showLabel).toBe(false);
+    expect(alexIntermediate?.kind === 'stop' && alexIntermediate.emphasized).toBe(false);
+    // Origin stations, transfers, and the meeting point keep their names either way.
+    const alexNamed = scene.markers.filter(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role !== 'intermediate',
+    );
+    expect(alexNamed.every((stop) => stop.kind === 'stop' && stop.showLabel)).toBe(true);
+
+    const focused = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+      emphasizedParticipantId: 'p1',
+    });
+    const focusedIntermediate = focused.markers.find(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role === 'intermediate',
+    );
+    expect(focusedIntermediate?.kind === 'stop' && focusedIntermediate.showLabel).toBe(true);
+    expect(focusedIntermediate?.kind === 'stop' && focusedIntermediate.emphasized).toBe(true);
+  });
+
+  it('paints a transfer with the departing service border and the arriving service ring', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const transfer = scene.markers.find(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role === 'transfer',
+    );
+    expect(transfer?.kind === 'stop' && transfer.borderColor).toBe('#e30613');
+    expect(transfer?.kind === 'stop' && transfer.ringColor).toBe('#09a4ec');
+
+    // A stop only one service calls at gets a border but no ring.
+    const origin = scene.markers.find(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role === 'origin-station',
+    );
+    expect(origin?.kind === 'stop' && origin.borderColor).toBe('#09a4ec');
+    expect(origin?.kind === 'stop' && origin.ringColor).toBeUndefined();
+  });
+
+  it('collapses one station published under differently cased names into a single marker', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: dedupeResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const transfers = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.role === 'transfer',
+    );
+    expect(transfers).toHaveLength(1);
+    expect(transfers[0]?.kind === 'stop' && transfers[0].arrivingService).toBe('ICE 1007');
+    expect(transfers[0]?.kind === 'stop' && transfers[0].departingService).toBe('RE 1');
+  });
+
+  it('keeps two differently named stops sharing one coordinate as separate markers', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: dedupeResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const erfurt = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.name.startsWith('Erfurt'),
+    );
+    expect(erfurt.map((stop) => (stop.kind === 'stop' ? stop.name : ''))).toEqual([
+      'Erfurt Hbf',
+      'Erfurt Hauptbahnhof',
+    ]);
+  });
+
+  it('gives every stop marker a unique id', () => {
+    for (const payload of [transitResults, dedupeResults]) {
+      const scene = buildMapScene({
+        summary: transitSummary,
+        results: payload,
+        rankingMode: 'fairest',
+        selectedKey: transitSelectionKey,
+      });
+      const ids = scene.markers.map((marker) => marker.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+  });
+
+  it('exposes circle, ring, and label properties for every stop with coordinates', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const collection = routeStopsToGeoJson(scene);
+    expect(collection.features).toHaveLength(
+      scene.markers.filter((marker) => marker.kind === 'stop').length,
+    );
+    // Provider intermediates with coordinates reach the layer; nameless ones do not.
+    expect(collection.features.map((feature) => feature.properties.name)).toContain('Erfurt Hbf');
+    expect(collection.features.map((feature) => feature.properties.name)).not.toContain('Bamberg');
+
+    const transfer = collection.features.find(
+      (feature) =>
+        feature.properties.role === 'transfer' && feature.properties.participantId === 'p1',
+    );
+    expect(transfer?.properties).toMatchObject({
+      borderColor: '#e30613',
+      ringColor: '#09a4ec',
+      labelBackgroundColor: shadeRouteLabelBackground('#e30613'),
+      showLabel: true,
+      emphasized: true,
+      labelPriority: STOP_LABEL_PRIORITY.transfer,
+      roleRank: STOP_LABEL_PRIORITY.transfer,
+    });
+
+    // Absent optional values are encoded as '' so MapLibre expressions can test them.
+    const intermediate = collection.features.find(
+      (feature) => feature.properties.role === 'intermediate',
+    );
+    expect(intermediate?.properties.ringColor).toBe('');
+    expect(intermediate?.properties.borderColor).toBe('#09a4ec');
+    expect(intermediate?.properties.labelPriority).toBe(STOP_LABEL_PRIORITY.intermediate);
+  });
+
+  it('omits per-traveler meeting stops at the selected destination candidate', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const meetingStops = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.role === 'meeting',
+    );
+    expect(meetingStops).toHaveLength(0);
+    const selectedCandidate = scene.markers.find(
+      (marker) => marker.kind === 'candidate' && marker.selected,
+    );
+    expect(selectedCandidate?.kind === 'candidate' && selectedCandidate.label).toBe('Munich');
+    const munichStops = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.name === 'München Hbf',
+    );
+    expect(munichStops).toHaveLength(0);
+  });
+
+  it('records both services at a train-to-metro transfer', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const transfer = scene.markers.find(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p1' && marker.role === 'transfer',
+    );
+    expect(transfer?.kind === 'stop' && transfer.arrivingService).toBe('ICE 1007');
+    expect(transfer?.kind === 'stop' && transfer.departingService).toBe('U2');
+    expect(transfer?.kind === 'stop' && transfer.arrivalAt).toBe('2026-06-15T10:00:00.000Z');
+    expect(transfer?.kind === 'stop' && transfer.departureAt).toBe('2026-06-15T10:10:00.000Z');
+  });
+
+  it('records both services at a train-to-train transfer', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const transfer = scene.markers.find(
+      (marker) =>
+        marker.kind === 'stop' && marker.participantId === 'p2' && marker.role === 'transfer',
+    );
+    expect(transfer?.kind === 'stop' && transfer.name).toBe('Nürnberg Hbf');
+    expect(transfer?.kind === 'stop' && transfer.arrivingService).toBe('ICE 599');
+    expect(transfer?.kind === 'stop' && transfer.departingService).toBe('RE 1');
+  });
+
+  it('keeps per-traveler stop markers but shows one name label at shared stations', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const nuremberg = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.name === 'Nürnberg Hbf',
+    );
+    expect(nuremberg).toHaveLength(2);
+    expect(new Set(nuremberg.map((marker) => marker.id)).size).toBe(2);
+    expect(nuremberg.every((marker) => marker.kind === 'stop' && marker.role === 'transfer')).toBe(
+      true,
+    );
+    expect(
+      scene.markers.filter(
+        (marker) =>
+          marker.kind === 'stop' &&
+          marker.showLabel &&
+          marker.longitude === nuremberg[0]?.longitude &&
+          marker.latitude === nuremberg[0]?.latitude,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('shows one station name label per coordinate when names differ at the same place', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: dedupeResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const erfurt = scene.markers.filter(
+      (marker) => marker.kind === 'stop' && marker.name.startsWith('Erfurt'),
+    );
+    expect(erfurt).toHaveLength(2);
+    expect(erfurt.filter((marker) => marker.kind === 'stop' && marker.showLabel)).toHaveLength(1);
+  });
+
+  it('skips intermediate stops the provider gave no coordinates for', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const names = scene.markers
+      .filter((marker) => marker.kind === 'stop')
+      .map((marker) => (marker.kind === 'stop' ? marker.name : ''));
+    expect(names).toContain('Erfurt Hbf');
+    expect(names).not.toContain('Bamberg');
+    // The count from the provider is still reported on the segment.
+    const ice = scene.routeLines.find((line) => line.serviceLabel === 'ICE 1007');
+    expect(ice?.intermediateStopCount).toBe(2);
+  });
+
+  it('never emits a color the browser would reject', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const hex = /^#[0-9a-f]{6}$/;
+    for (const line of scene.routeLines) {
+      expect(line.color).toMatch(hex);
+      expect(line.textColor).toMatch(hex);
+    }
+    for (const marker of scene.markers) {
+      if (marker.kind === 'stop') {
+        expect(marker.color).toMatch(hex);
+        expect(marker.textColor).toMatch(hex);
+      }
+    }
+    for (const entry of scene.legend) {
+      for (const service of entry.services) {
+        expect(service.color).toMatch(hex);
+        expect(service.textColor).toMatch(hex);
+      }
+    }
+  });
+
+  it('groups one legend chip per distinct transit service under each traveler', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const alex = scene.legend.find((entry) => entry.participantId === 'p1');
+    expect(alex?.services.map((service) => service.displayName)).toEqual(['ICE 1007', 'U2']);
+    expect(alex?.services.map((service) => service.color)).toEqual(['#09a4ec', '#e30613']);
+    expect(alex?.services.map((service) => service.mode)).toEqual(['HIGHSPEED_RAIL', 'SUBWAY']);
+    const blake = scene.legend.find((entry) => entry.participantId === 'p2');
+    expect(blake?.services.map((service) => service.colorSource)).toEqual([
+      'provider',
+      'mode-fallback',
+    ]);
+  });
+
+  it('preserves decoded polyline precision for provider geometry', () => {
+    const scene = buildMapScene({
+      summary: transitSummary,
+      results: transitResults,
+      rankingMode: 'fairest',
+      selectedKey: transitSelectionKey,
+    });
+    const ice = scene.routeLines.find((line) => line.serviceLabel === 'ICE 1007');
+    expect(ice?.coordinates).toEqual([
+      [13.369548, 52.525589],
+      [11.038, 50.972],
+      [11.082, 49.446],
+    ]);
   });
 
   it('attaches traveler and meeting popups for the selected candidate', () => {

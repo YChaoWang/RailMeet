@@ -53,6 +53,8 @@ export function createTransitousJourneyPlanner(options: TransitousClientOptions)
         placeParam(input.destination.latitude, input.destination.longitude),
       );
       url.searchParams.set('time', input.departureAt.toISOString());
+      // Required for intermediateStops on transit legs (map stop markers).
+      url.searchParams.set('detailedLegs', 'true');
       if (input.arriveBy !== undefined) {
         url.searchParams.set('arriveBy', String(input.arriveBy));
       }

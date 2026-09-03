@@ -102,7 +102,7 @@ export function SearchResultsView({
               role="tab"
               aria-selected={rankingMode === value}
               className={cn(
-                'shrink-0 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600',
+                'min-h-11 shrink-0 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600',
                 rankingMode === value
                   ? 'bg-teal-600 text-white'
                   : 'bg-mist-100 text-ink-900 hover:bg-mist-100/80',
@@ -116,7 +116,7 @@ export function SearchResultsView({
         <p className="text-xs text-ink-700">{RANKING_MODE_LABELS[rankingMode].description}</p>
       </div>
 
-      <ul className="space-y-2">
+      <ul className="grid min-w-0 grid-cols-1 gap-2">
         {candidates.map((candidate) => {
           const key = candidateSelectionKey(
             candidate.rankingMode,
@@ -125,32 +125,43 @@ export function SearchResultsView({
           );
           const selected = selectedKey === key;
           return (
-            <li key={key}>
+            <li key={key} className="min-w-0">
               <button
                 type="button"
                 className={cn(
-                  'w-full rounded-xl border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600',
+                  'w-full min-w-0 rounded-xl border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600',
                   selected
-                    ? 'border-teal-600 bg-teal-50/50'
+                    ? 'border-teal-600 bg-teal-50/50 ring-1 ring-teal-600/30'
                     : 'border-ink-700/10 hover:border-ink-700/25',
                 )}
                 aria-pressed={selected}
+                data-testid="candidate-card"
                 onClick={() => onSelectCandidate(key)}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <div className="min-w-0">
                     <p className="text-xs text-ink-700">Rank {candidate.rank}</p>
-                    <p className="text-base font-semibold text-ink-950">
+                    <p className="break-words text-base font-semibold text-ink-950">
                       {placeLabel(candidate.destination)}
                     </p>
                   </div>
-                  {candidate.recommended ? <Badge variant="success">Recommended</Badge> : null}
+                  {candidate.recommended ? (
+                    <Badge variant="success" className="shrink-0">
+                      Recommended
+                    </Badge>
+                  ) : null}
                 </div>
-                <p className="mt-2 text-xs text-ink-700">
-                  Spread {formatArrivalSpreadMs(candidate.arrivalSpreadMs)} ·{' '}
-                  {formatDurationMinutes(candidate.totalDurationMinutes)} combined ·{' '}
-                  {candidate.totalTransfers} transfers
-                </p>
+                <ul
+                  className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-700"
+                  data-testid="candidate-metrics"
+                  aria-label="Journey summary"
+                >
+                  <li>Spread {formatArrivalSpreadMs(candidate.arrivalSpreadMs)}</li>
+                  <li>{formatDurationMinutes(candidate.totalDurationMinutes)} combined</li>
+                  <li>
+                    {candidate.totalTransfers} transfer{candidate.totalTransfers === 1 ? '' : 's'}
+                  </li>
+                </ul>
                 {candidate.journeys.map((journey) =>
                   journey.routeSummary.length > 0 ? (
                     <JourneyRouteSummary
@@ -159,7 +170,7 @@ export function SearchResultsView({
                     />
                   ) : null,
                 )}
-                <p className="mt-1 text-xs text-ink-700">
+                <p className="mt-1 break-words text-xs text-ink-700">
                   {candidate.journeys
                     .map(
                       (journey) =>

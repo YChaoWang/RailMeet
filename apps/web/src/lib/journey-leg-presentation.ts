@@ -44,10 +44,17 @@ const RANKING_MODE_TO_MOTIS: Record<string, string> = {
   other: 'OTHER',
 };
 
+/** Exact MOTIS token for a ranking leg, preferring the persisted provider token. */
+export function rankingLegMotisMode(leg: {
+  readonly mode: string;
+  readonly motisMode?: string | undefined;
+}): string {
+  return leg.motisMode ?? RANKING_MODE_TO_MOTIS[leg.mode] ?? canonicalMotisModeToken(leg.mode);
+}
+
 /** Legacy ranking-leg fallback only. Does not invent stop names or provider fields. */
 export function rankingLegToMotis(leg: RankingLeg): MotisLegJson {
-  const motisMode =
-    leg.motisMode ?? RANKING_MODE_TO_MOTIS[leg.mode] ?? canonicalMotisModeToken(leg.mode);
+  const motisMode = rankingLegMotisMode(leg);
   let mapped: MotisLegJson = {
     mode: motisMode,
     startTime: leg.departureAt,

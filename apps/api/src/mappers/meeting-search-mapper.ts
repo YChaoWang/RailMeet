@@ -180,7 +180,12 @@ function mapRankingLeg(leg: RankedJourneyLegRecord) {
   const identity = pickJourneyLegIdentity(leg);
   const routeColor = sanitizeMotisHexColor(identity.routeColor);
   const routeTextColor = sanitizeMotisHexColor(identity.routeTextColor);
-  const { routeColor: _rc, routeTextColor: _rtc, ...restIdentity } = identity;
+  const {
+    routeColor: _rc,
+    routeTextColor: _rtc,
+    intermediateStops,
+    ...restIdentity
+  } = identity;
   return {
     mode: leg.mode,
     departureAt: leg.departureAt.toISOString(),
@@ -194,6 +199,8 @@ function mapRankingLeg(leg: RankedJourneyLegRecord) {
         }
       : null,
     ...restIdentity,
+    // Response schemas expect a mutable array; identity keeps a readonly view.
+    ...(intermediateStops ? { intermediateStops: intermediateStops.map((stop) => ({ ...stop })) } : {}),
     ...(routeColor ? { routeColor } : {}),
     ...(routeTextColor ? { routeTextColor } : {}),
   };

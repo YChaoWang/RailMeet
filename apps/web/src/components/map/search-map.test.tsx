@@ -4,20 +4,30 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MapScene } from '@/lib/map-markers';
 import {
+  SEARCH_MAP_MEETING_MARKER_COLOR,
   SEARCH_MAP_ORIGIN_LAYER_IDS,
   SEARCH_MAP_ORIGIN_SOURCE_ID,
   SEARCH_MAP_ROUTE_LAYER_IDS,
   SEARCH_MAP_ROUTE_SOURCE_ID,
+  SEARCH_MAP_ROUTE_STOP_LAYER_IDS,
+  SEARCH_MAP_ROUTE_STOP_SOURCE_ID,
   SEARCH_MAP_STATION_LAYER_IDS,
   SEARCH_MAP_STATION_SOURCE_ID,
   SearchMap,
+  candidateMarkerStyle,
 } from './search-map';
 
-type LayerSpec = { id: string; type: string; filter?: unknown; paint?: Record<string, unknown> };
+type LayerSpec = {
+  id: string;
+  type: string;
+  filter?: unknown;
+  paint?: Record<string, unknown>;
+  layout?: Record<string, unknown>;
+};
 
 const layers = new globalThis.Map<string, LayerSpec>();
 const sources = new globalThis.Map<string, { data: unknown }>();
-const markers: Array<{ remove: () => void }> = [];
+const markers: Array<{ remove: () => void; element?: HTMLElement | undefined }> = [];
 const layerHandlers = new globalThis.Map<
   string,
   globalThis.Map<string, Array<(...args: unknown[]) => void>>
@@ -50,6 +60,14 @@ let mapInstance: {
 
 vi.mock('maplibre-gl', () => {
   class Marker {
+    element?: HTMLElement | undefined;
+
+    constructor(options?: { element?: HTMLElement }) {
+      if (options?.element) {
+        this.element = options.element;
+      }
+    }
+
     setLngLat() {
       return this;
     }
@@ -119,6 +137,8 @@ vi.mock('maplibre-gl', () => {
     getCanvas = () => ({ style: { cursor: '' } });
     getTerrain = () => null;
     moveLayer = vi.fn();
+    hasImage = vi.fn(() => false);
+    addImage = vi.fn();
     getStyle = () => ({
       sources: {},
       layers: [{ id: 'label_city', type: 'symbol' }],
@@ -310,11 +330,18 @@ const routeScene: MapScene = {
       participantId: 'p1',
       participantPosition: 0,
       letter: 'A',
-      color: '#0f766e',
+      color: '#09a4ec',
+      textColor: '#000000',
+      colorSource: 'provider',
       emphasized: true,
       legIndex: 0,
       mode: 'train',
+      motisMode: 'HIGHSPEED_RAIL',
       style: 'transit',
+      serviceLabel: 'ICE 1007',
+      departureAt: '2026-06-15T08:00:00.000Z',
+      arrivalAt: '2026-06-15T10:00:00.000Z',
+      intermediateStopCount: 0,
       coordinates: [
         [13.4, 52.52],
         [11.58, 48.13],
@@ -336,11 +363,18 @@ const routeScene: MapScene = {
       participantId: 'p1',
       participantPosition: 0,
       letter: 'A',
-      color: '#0f766e',
+      color: '#6b7280',
+      textColor: '#ffffff',
+      colorSource: 'mode-fallback',
       emphasized: true,
       legIndex: 1,
       mode: 'walk',
+      motisMode: 'WALK',
       style: 'walk',
+      serviceLabel: 'Walk',
+      departureAt: '2026-06-15T10:00:00.000Z',
+      arrivalAt: '2026-06-15T10:05:00.000Z',
+      intermediateStopCount: 0,
       coordinates: [
         [11.58, 48.13],
         [11.581, 48.131],
@@ -359,7 +393,23 @@ const routeScene: MapScene = {
     },
   ],
   missingGeometry: [],
-  legend: [{ participantId: 'p1', displayName: 'Alex', letter: 'A', color: '#0f766e' }],
+  legend: [
+    {
+      participantId: 'p1',
+      displayName: 'Alex',
+      letter: 'A',
+      color: '#0f766e',
+      services: [
+        {
+          color: '#09a4ec',
+          textColor: '#000000',
+          mode: 'HIGHSPEED_RAIL',
+          displayName: 'ICE 1007',
+          colorSource: 'provider',
+        },
+      ],
+    },
+  ],
   cameraKey: 'route-scene-v1',
 };
 
@@ -395,6 +445,64 @@ const switchedScene: MapScene = {
   ],
 };
 
+const dualCandidateScene: MapScene = {
+  ...routeScene,
+  markers: [
+    routeScene.markers[0]!,
+    routeScene.markers[1]!,
+    {
+      kind: 'candidate',
+      id: 'candidate:fairest:2:place:cologne',
+      placeId: 'place:cologne',
+      label: 'Cologne',
+      rank: 2,
+      selected: false,
+      longitude: 6.96,
+      latitude: 50.94,
+      popup: null,
+    },
+  ],
+};
+
+describe('candidateMarkerStyle', () => {
+  it('renders the selected meeting candidate as the largest teal circle with a white border', () => {
+    const style = candidateMarkerStyle({
+      kind: 'candidate',
+      id: 'candidate:fairest:1:place:munich',
+      placeId: 'place:munich',
+      label: 'Munich',
+      rank: 1,
+      selected: true,
+      longitude: 11.58,
+      latitude: 48.13,
+      popup: null,
+    });
+    expect(style).toContain('border-radius:999px');
+    expect(style).toContain(`background:${SEARCH_MAP_MEETING_MARKER_COLOR}`);
+    expect(style).toContain('border:3px solid #ffffff');
+    expect(style).toContain('width:40px');
+    expect(style).not.toContain('border-radius:8px');
+  });
+
+  it('keeps non-selected candidates as compact square rank pins', () => {
+    const style = candidateMarkerStyle({
+      kind: 'candidate',
+      id: 'candidate:fairest:2:place:cologne',
+      placeId: 'place:cologne',
+      label: 'Cologne',
+      rank: 2,
+      selected: false,
+      longitude: 6.96,
+      latitude: 50.94,
+      popup: null,
+    });
+    expect(style).toContain('border-radius:8px');
+    expect(style).toContain('width:28px');
+    expect(style).toContain('background:#152033');
+    expect(style).not.toContain('border-radius:999px');
+  });
+});
+
 describe('SearchMap route layers', () => {
   afterEach(() => {
     layers.clear();
@@ -416,18 +524,56 @@ describe('SearchMap route layers', () => {
     const walk = layers.get('railmeet-selected-routes-walk');
     const transit = layers.get('railmeet-selected-routes-transit');
     expect(walk?.paint?.['line-dasharray']).toEqual([1.2, 1.6]);
+    // Walking never takes a per-feature color; transit reads the Transitous route color.
+    expect(walk?.paint?.['line-color']).toBe('#6b7280');
+    expect(transit?.paint?.['line-color']).toEqual(['get', 'color']);
     expect(transit?.paint?.['line-dasharray']).toBeUndefined();
+
+    const stopLabels = layers.get('railmeet-route-stops-label');
+    expect(stopLabels?.layout?.['text-allow-overlap']).toBe(true);
+    expect(stopLabels?.paint?.['text-halo-color']).toEqual(['get', 'labelBackgroundColor']);
+    expect(stopLabels?.paint?.['text-color']).toEqual(['get', 'textColor']);
+    expect(stopLabels?.layout?.['icon-image']).toBeUndefined();
 
     await waitFor(() => {
       expect(lastSetData?.id).toBe(SEARCH_MAP_ROUTE_SOURCE_ID);
       expect(lastSetData?.data).toMatchObject({
         type: 'FeatureCollection',
         features: [
-          { id: 'route:place:munich:p1:0', properties: { style: 'transit' } },
-          { id: 'route:place:munich:p1:1', properties: { style: 'walk' } },
+          {
+            id: 'route:place:munich:p1:0',
+            properties: {
+              style: 'transit',
+              color: '#09a4ec',
+              colorSource: 'provider',
+              serviceLabel: 'ICE 1007',
+            },
+          },
+          { id: 'route:place:munich:p1:1', properties: { style: 'walk', color: '#6b7280' } },
         ],
       });
     });
+  });
+
+  it('renders the selected meeting candidate as a teal circle and others as square rank pins', async () => {
+    render(<SearchMap scene={dualCandidateScene} />);
+    await waitFor(() => {
+      expect(
+        markers.some((marker) => marker.element?.classList.contains('railmeet-map-marker-meeting')),
+      ).toBe(true);
+    });
+    const meetingEl = markers.find((marker) =>
+      marker.element?.classList.contains('railmeet-map-marker-meeting'),
+    )?.element;
+    const rankEl = markers.find((marker) =>
+      marker.element?.classList.contains('railmeet-map-marker-candidate'),
+    )?.element;
+    expect(meetingEl?.style.borderRadius).toBe('999px');
+    expect(meetingEl?.style.background).toBe('rgb(15, 118, 110)');
+    expect(meetingEl?.style.border).toContain('3px solid rgb(255, 255, 255)');
+    expect(meetingEl?.textContent).toBe('');
+    expect(rankEl?.style.borderRadius).toBe('8px');
+    expect(rankEl?.textContent).toBe('2');
   });
 
   it('does not duplicate layers or route click handlers after rerender', async () => {
@@ -446,15 +592,18 @@ describe('SearchMap route layers', () => {
     expect(SEARCH_MAP_ROUTE_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
     expect(SEARCH_MAP_ORIGIN_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
     expect(SEARCH_MAP_STATION_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
+    expect(SEARCH_MAP_ROUTE_STOP_LAYER_IDS.every((id) => layers.has(id))).toBe(true);
     expect(layers.size).toBe(
       SEARCH_MAP_ROUTE_LAYER_IDS.length +
         SEARCH_MAP_ORIGIN_LAYER_IDS.length +
         SEARCH_MAP_STATION_LAYER_IDS.length +
+        SEARCH_MAP_ROUTE_STOP_LAYER_IDS.length +
         1, // hillshade
     );
-    expect(sources.size).toBe(4); // routes, origins, stations, terrain dem
+    expect(sources.size).toBe(5); // routes, route stops, origins, stations, terrain dem
     expect(sources.has(SEARCH_MAP_ORIGIN_SOURCE_ID)).toBe(true);
     expect(sources.has(SEARCH_MAP_STATION_SOURCE_ID)).toBe(true);
+    expect(sources.has(SEARCH_MAP_ROUTE_STOP_SOURCE_ID)).toBe(true);
     const clickHandlersAfter =
       layerHandlers.get('railmeet-selected-routes-transit')?.get('click')?.length ?? 0;
     expect(clickHandlersAfter).toBe(clickHandlersBefore);
@@ -505,5 +654,10 @@ describe('SearchMap route layers', () => {
       expect(layers.has(layerId)).toBe(false);
     }
     expect(mapInstance?.remove).toHaveBeenCalled();
+  });
+
+  it('uses a responsive map container height on the wrapper', async () => {
+    const view = render(<SearchMap scene={emptyScene} />);
+    expect(view.getByTestId('search-map')).toHaveClass('min-h-[12rem]', 'min-w-0');
   });
 });

@@ -129,7 +129,38 @@ export function sanitizeMotisHexColor(value: string | undefined): string | undef
   return `#${match[1]!.toLowerCase()}`;
 }
 
-/** Transitous `getColor`: prefer valid provider routeColor / routeTextColor. */
+/** Neutral slate used when a mode default is not a literal hex color. */
+const MODE_FALLBACK_COLOR = '#607d8b';
+
+function channelLuminance(component: number): number {
+  const channel = component / 255;
+  return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+/**
+ * WCAG relative luminance split for readable text over an arbitrary provider color.
+ * Only `#rrggbb` (already sanitized) is accepted; anything else defaults to white.
+ */
+export function contrastTextForBackground(background: string): string {
+  const sanitized = sanitizeMotisHexColor(background);
+  if (!sanitized) {
+    return '#ffffff';
+  }
+  const red = Number.parseInt(sanitized.slice(1, 3), 16);
+  const green = Number.parseInt(sanitized.slice(3, 5), 16);
+  const blue = Number.parseInt(sanitized.slice(5, 7), 16);
+  const luminance =
+    0.2126 * channelLuminance(red) +
+    0.7152 * channelLuminance(green) +
+    0.0722 * channelLuminance(blue);
+  return luminance > 0.179 ? '#000000' : '#ffffff';
+}
+
+/**
+ * Transitous `getColor`: prefer valid provider routeColor / routeTextColor.
+ * When the provider gives a color but no usable text color, contrast against
+ * that color instead of the mode default (which may be unreadable on it).
+ */
 export function getMotisRouteColors(leg: MotisColorable): readonly [string, string] {
   const [, defaultColor, defaultTextColor] = getMotisModeStyle(leg);
   const routeColor = sanitizeMotisHexColor(leg.routeColor);
@@ -137,5 +168,44 @@ export function getMotisRouteColors(leg: MotisColorable): readonly [string, stri
     return [defaultColor, defaultTextColor];
   }
   const text = sanitizeMotisHexColor(leg.routeTextColor);
-  return [routeColor, text ?? defaultTextColor];
+  return [routeColor, text ?? contrastTextForBackground(routeColor)];
+}
+
+function hexFromModeTextColor(value: string): string | undefined {
+  if (value === 'white') {
+    return '#ffffff';
+  }
+  if (value === 'black') {
+    return '#000000';
+  }
+  return sanitizeMotisHexColor(value);
+}
+
+export type MotisRoutePaint = {
+  readonly color: string;
+  readonly textColor: string;
+  readonly colorSource: 'provider' | 'mode-fallback';
+};
+
+/**
+ * Map-safe paint for one leg. `mode-fallback` marks legs where the provider
+ * published no usable routeColor, so the UI can flag it instead of implying
+ * the color is official.
+ */
+export function resolveMapRoutePaint(leg: MotisColorable): MotisRoutePaint {
+  const [color, textColor] = getMotisRouteColors(leg);
+  const providerColor = sanitizeMotisHexColor(leg.routeColor);
+  if (!providerColor) {
+    const [, fallbackColor, fallbackTextColor] = getMotisModeStyle(leg);
+    // Mode defaults may be CSS custom properties (walk/bike) or the literals
+    // "white"/"black"; resolve to hex so MapLibre paint never receives
+    // `hsl(var(--…))` while keeping the Transitous palette pairing intact.
+    const safeColor = sanitizeMotisHexColor(fallbackColor) ?? MODE_FALLBACK_COLOR;
+    return {
+      color: safeColor,
+      textColor: hexFromModeTextColor(fallbackTextColor) ?? contrastTextForBackground(safeColor),
+      colorSource: 'mode-fallback',
+    };
+  }
+  return { color, textColor, colorSource: 'provider' };
 }

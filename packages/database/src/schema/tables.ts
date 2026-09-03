@@ -681,10 +681,30 @@ export type NormalizedJourneyLegJson = {
   readonly agencyUrl?: string;
   readonly routeColor?: string;
   readonly routeTextColor?: string;
-  readonly from?: { readonly name: string; readonly track?: string };
-  readonly to?: { readonly name: string; readonly track?: string };
+  readonly from?: NormalizedJourneyLegStopJson;
+  readonly to?: NormalizedJourneyLegStopJson;
   readonly intermediateStopCount?: number;
+  readonly intermediateStops?: readonly NormalizedJourneyLegIntermediateStopJson[];
   readonly distanceMeters?: number;
+};
+
+export type NormalizedJourneyLegStopJson = {
+  readonly name: string;
+  readonly track?: string;
+  readonly latitude?: number;
+  readonly longitude?: number;
+};
+
+/** Times are ISO-8601 strings — this shape is persisted verbatim into JSONB. */
+export type NormalizedJourneyLegIntermediateStopJson = {
+  readonly name: string;
+  readonly latitude?: number;
+  readonly longitude?: number;
+  readonly arrivalAt?: string;
+  readonly departureAt?: string;
+  readonly scheduledArrivalAt?: string;
+  readonly scheduledDepartureAt?: string;
+  readonly track?: string;
 };
 
 /**
