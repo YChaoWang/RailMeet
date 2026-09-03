@@ -25,6 +25,7 @@ import { createTransitousJourneyPlanner } from '@railmeet/routing';
 import { CATALOG_MIN_ACTIVE_CITIES } from '@railmeet/shared';
 import { sql } from 'drizzle-orm';
 
+import { assertNormalizedJourneyPersistence } from './assert-normalized-journey-persistence.js';
 import { createCandidateGenerationProcessor } from './candidate-generation.js';
 import { createRoutingWorkProcessor } from './routing-work.js';
 
@@ -91,9 +92,20 @@ const sampleItinerary = {
       endTime: '2026-06-15T10:00:00Z',
       duration: 7200,
       tripId: 'trip:1',
-      from: { name: 'Berlin', track: '1' },
-      to: { name: 'Munich', track: '12' },
-      intermediateStops: [{ name: 'Erfurt', track: '3' }],
+      from: { name: 'Berlin', track: '1', lat: 52.525, lon: 13.369 },
+      to: { name: 'Munich', track: '12', lat: 48.140, lon: 11.558 },
+      intermediateStops: [
+        {
+          name: 'Erfurt Hbf',
+          lat: 50.9725,
+          lon: 11.0385,
+          arrival: '2026-06-15T09:00:00Z',
+          departure: '2026-06-15T09:02:00Z',
+          scheduledArrival: '2026-06-15T09:00:00Z',
+          scheduledDeparture: '2026-06-15T09:02:00Z',
+          track: '3',
+        },
+      ],
       realtime: false,
       agencyId: 'db',
       routeId: 'ice',
@@ -101,97 +113,6 @@ const sampleItinerary = {
     },
   ],
 };
-
-const RANKING_LEG_KEYS = new Set([
-  'mode',
-  'departureAt',
-  'arrivalAt',
-  'durationMinutes',
-  'providerReference',
-  'geometry',
-  'motisMode',
-  'displayName',
-  'routeShortName',
-  'routeLongName',
-  'tripShortName',
-  'headsign',
-  'agencyName',
-  'agencyId',
-  'agencyUrl',
-  'routeColor',
-  'routeTextColor',
-  'from',
-  'to',
-  'intermediateStopCount',
-  'distanceMeters',
-]);
-
-function assertRankingLegShape(leg: Record<string, unknown>, path: string): void {
-  for (const key of Object.keys(leg)) {
-    if (!RANKING_LEG_KEYS.has(key)) {
-      throw new Error(`Unexpected ranking leg field "${key}" at ${path}`);
-    }
-  }
-}
-
-function assertNormalizedJourneyPersistence(value: unknown, path = 'root'): void {
-  if (value === null || value === undefined) {
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const [index, entry] of value.entries()) {
-      if (
-        entry &&
-        typeof entry === 'object' &&
-        typeof (entry as { mode?: unknown }).mode === 'string' &&
-        ((entry as { departureAt?: unknown }).departureAt instanceof Date ||
-          typeof (entry as { departureAt?: unknown }).departureAt === 'string') &&
-        typeof (entry as { durationMinutes?: unknown }).durationMinutes === 'number'
-      ) {
-        assertRankingLegShape(entry as Record<string, unknown>, `${path}[${index}]`);
-        continue;
-      }
-      assertNormalizedJourneyPersistence(entry, `${path}[${index}]`);
-    }
-    return;
-  }
-  if (typeof value !== 'object') {
-    return;
-  }
-
-  const record = value as Record<string, unknown>;
-  if (Object.prototype.hasOwnProperty.call(record, 'itineraries')) {
-    throw new Error(`Persisted journey graph must not embed raw Transitous response at ${path}`);
-  }
-
-  // Versioned MOTIS document in legs jsonb, or providerItinerary payload on the record.
-  if (record.format === 'motis-plan-itinerary-v1') {
-    if (Array.isArray(record.rankingLegs)) {
-      assertNormalizedJourneyPersistence(record.rankingLegs, `${path}.rankingLegs`);
-      if (!record.itinerary || typeof record.itinerary !== 'object') {
-        throw new Error(`motis-plan-itinerary-v1 missing itinerary at ${path}`);
-      }
-      return;
-    }
-    if (record.itinerary && typeof record.itinerary === 'object') {
-      return;
-    }
-    throw new Error(`motis-plan-itinerary-v1 missing itinerary at ${path}`);
-  }
-
-  if (
-    typeof record.mode === 'string' &&
-    (record.departureAt instanceof Date || typeof record.departureAt === 'string') &&
-    typeof record.durationMinutes === 'number'
-  ) {
-    assertRankingLegShape(record, path);
-    return;
-  }
-
-  for (const [key, child] of Object.entries(record)) {
-    assertNormalizedJourneyPersistence(child, `${path}.${key}`);
-  }
-}
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -605,6 +526,19 @@ describe('Phase 7 recovery integration (real candidate/routing processors)', () 
     expect(journeysAfterFirst[0]?.providerItinerary?.format).toBe('motis-plan-itinerary-v1');
     expect(journeysAfterFirst[0]?.providerItinerary?.itinerary.legs[0]?.displayName).toBe('ICE 100');
     expect(journeysAfterFirst[0]?.legs[0]?.motisMode).toBe('HIGHSPEED_RAIL');
+    expect(journeysAfterFirst[0]?.legs[0]?.intermediateStopCount).toBe(1);
+    expect(journeysAfterFirst[0]?.legs[0]?.intermediateStops).toEqual([
+      {
+        name: 'Erfurt Hbf',
+        latitude: 50.9725,
+        longitude: 11.0385,
+        arrivalAt: '2026-06-15T09:00:00Z',
+        departureAt: '2026-06-15T09:02:00Z',
+        scheduledArrivalAt: '2026-06-15T09:00:00Z',
+        scheduledDepartureAt: '2026-06-15T09:02:00Z',
+        track: '3',
+      },
+    ]);
     expect(planCalls).toBe(1);
 
     const second = await queue.add(
