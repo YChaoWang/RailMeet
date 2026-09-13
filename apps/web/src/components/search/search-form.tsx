@@ -12,15 +12,39 @@ import {
   type PlaceSuggestionView,
   type SelectedPlaceOrigin,
 } from '@railmeet/validation';
+import { format, parse } from 'date-fns';
+import {
+  Bus,
+  CableCar,
+  CalendarClock,
+  Calendar as CalendarIcon,
+  Check,
+  Loader2,
+  MapPin,
+  MapPinned,
+  Pencil,
+  Plus,
+  Ship,
+  TrainFront,
+  Trash2,
+  Undo2,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { PlaceCombobox } from '@/components/search/place-combobox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Avatar, AvatarFallback, AvatarGroup } from '@/components/ui/avatar';
+import { ChatAssistant, ChatWaterfallItem } from '@/components/ui/chat';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Timeline } from '@/components/ui/timeline';
 import {
   Select,
   SelectContent,
@@ -75,7 +99,33 @@ export type ParticipantsUpdater =
 export type SearchFormProps = {
   readonly participants: ParticipantDraft[];
   readonly onParticipantsChange: (next: ParticipantsUpdater) => void;
+  /** Offset so the form turns continue a parent chat waterfall. */
+  readonly waterfallStart?: number;
 };
+
+function travelerWaterfallOffset(letter: string): number {
+  const code = letter.toUpperCase().charCodeAt(0);
+  return Number.isFinite(code) ? Math.max(0, code - 65) : 0;
+}
+
+function formWaterfallSteps(start: number) {
+  const afterTravelers = start + 1 + PARTICIPANT_COUNT_MAX;
+  return {
+    travelersHeader: start,
+    traveler: (letter: string) => start + 1 + travelerWaterfallOffset(letter),
+    whenHeading: afterTravelers,
+    travelDate: afterTravelers + 1,
+    leaveAfter: afterTravelers + 2,
+    arriveBy: afterTravelers + 3,
+    ranking: afterTravelers + 4,
+    maxJourney: afterTravelers + 5,
+    maxTransfers: afterTravelers + 6,
+    minTransfer: afterTravelers + 7,
+    modesHeading: afterTravelers + 8,
+    mode: (modeIndex: number) => afterTravelers + 9 + modeIndex,
+    submit: afterTravelers + 9 + TRANSPORT_MODES.length,
+  };
+}
 
 function toSelectedOrigin(suggestion: PlaceSuggestionView): SelectedPlaceOrigin {
   return {
@@ -91,6 +141,34 @@ function toSelectedOrigin(suggestion: PlaceSuggestionView): SelectedPlaceOrigin 
   };
 }
 
+const TRANSPORT_MODE_ICONS: Record<TransportMode, LucideIcon> = {
+  train: TrainFront,
+  bus: Bus,
+  tram: CableCar,
+  metro: TrainFront,
+  ferry: Ship,
+};
+
+function SectionHeading({
+  icon: Icon,
+  children,
+}: {
+  readonly icon: LucideIcon;
+  readonly children: ReactNode;
+}) {
+  return (
+    <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-950">
+      <Icon className="size-4 shrink-0 text-teal-600" aria-hidden />
+      {children}
+    </h2>
+  );
+}
+
+function parseTravelDate(value: string): Date | undefined {
+  const parsed = parse(value, 'yyyy-MM-dd', new Date());
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
 const RANKING_OPTIONS: { value: RankingMode; label: string }[] = [
   { value: 'fairest', label: 'Fairest' },
   { value: 'fastest-overall', label: 'Fastest overall' },
@@ -98,11 +176,174 @@ const RANKING_OPTIONS: { value: RankingMode; label: string }[] = [
   { value: 'arrive-together', label: 'Arrive together' },
 ];
 
-export function SearchForm({ participants, onParticipantsChange }: SearchFormProps) {
+function TravelerAvatar({
+  letter,
+  color,
+  className,
+}: {
+  readonly letter: string;
+  readonly color: string;
+  readonly className?: string;
+}) {
+  return (
+    <Avatar className={className} aria-hidden>
+      <AvatarFallback style={{ backgroundColor: color }}>{letter}</AvatarFallback>
+    </Avatar>
+  );
+}
+
+function TravelerNameControl({
+  participant,
+  index,
+  error,
+  disabled,
+  onChange,
+}: {
+  readonly participant: ParticipantDraft;
+  readonly index: number;
+  readonly error?: string | undefined;
+  readonly disabled: boolean;
+  readonly onChange: (displayName: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const snapshotRef = useRef(participant.displayName);
+  const named = Boolean(participant.displayName.trim());
+  const [editing, setEditing] = useState(() => Boolean(error));
+  const [draft, setDraft] = useState(participant.displayName);
+  const label = named ? participant.displayName.trim() : `Traveler ${participant.letter}`;
+
+  const openEditor = () => {
+    snapshotRef.current = participant.displayName;
+    setDraft(participant.displayName);
+    setEditing(true);
+  };
+
+  const confirmEdit = () => {
+    onChange(draft);
+    setEditing(false);
+  };
+
+  const discardEdit = () => {
+    onChange(snapshotRef.current);
+    setDraft(snapshotRef.current);
+    setEditing(false);
+  };
+
+  useEffect(() => {
+    if (error) {
+      setEditing(true);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+    const input = inputRef.current;
+    if (!input) {
+      return;
+    }
+    input.focus();
+    if (input.value) {
+      input.select();
+    }
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="inline-flex min-h-11 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-1 text-left text-sm font-semibold text-ink-950 hover:bg-mist-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        disabled={disabled}
+        aria-label={
+          named
+            ? `Edit name for traveler ${participant.letter}, ${label}`
+            : `Add a name for traveler ${participant.letter}`
+        }
+        onClick={openEditor}
+      >
+        <span className="truncate">{label}</span>
+        <Pencil className="size-3.5 shrink-0 text-ink-700" aria-hidden />
+      </button>
+    );
+  }
+
+  return (
+    <div className="min-w-0 flex-1 space-y-1.5">
+      <div className="flex min-w-0 items-center gap-1">
+        <Label htmlFor={`${participant.key}-name`} className="sr-only">
+          Traveler {participant.letter} name
+        </Label>
+        <Input
+          ref={inputRef}
+          id={`${participant.key}-name`}
+          data-field={`participants.${index}.displayName`}
+          value={draft}
+          placeholder="Name (optional)"
+          disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${participant.key}-name-error` : undefined}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            onChange(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              confirmEdit();
+              return;
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              discardEdit();
+            }
+          }}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 px-2 text-teal-700 hover:text-teal-800"
+          aria-label={`Save name for traveler ${participant.letter}`}
+          disabled={disabled}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={confirmEdit}
+        >
+          <Check className="size-4" aria-hidden />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 px-2 text-ink-700"
+          aria-label={`Undo name for traveler ${participant.letter}`}
+          disabled={disabled}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={discardEdit}
+        >
+          <Undo2 className="size-4" aria-hidden />
+        </Button>
+      </div>
+      {error ? (
+        <p id={`${participant.key}-name-error`} className="text-sm text-red-700">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function SearchForm({
+  participants,
+  onParticipantsChange,
+  waterfallStart = 0,
+}: SearchFormProps) {
   const router = useRouter();
   const formId = useId();
   const submittingRef = useRef(false);
   const [travelDate, setTravelDate] = useState('2026-09-15');
+  const [travelDateOpen, setTravelDateOpen] = useState(false);
+  const selectedTravelDate = parseTravelDate(travelDate);
   const [earliestDepartureTime, setEarliestDepartureTime] = useState('08:00');
   const [latestArrivalTime, setLatestArrivalTime] = useState('22:00');
   const [arrivalDayOffset, setArrivalDayOffset] = useState<'0' | '1'>('0');
@@ -138,6 +379,21 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
   const updateParticipant = (key: string, patch: Partial<ParticipantDraft>) => {
     onParticipantsChange((previous) =>
       previous.map((row) => (row.key === key ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const addTraveler = () => {
+    const added = newParticipant();
+    onParticipantsChange((previous) =>
+      previous.length >= PARTICIPANT_COUNT_MAX ? previous : [...previous, added],
+    );
+  };
+
+  const removeTraveler = (key: string) => {
+    onParticipantsChange((previous) =>
+      previous.length <= PARTICIPANT_COUNT_MIN
+        ? previous
+        : previous.filter((row) => row.key !== key),
     );
   };
 
@@ -225,64 +481,87 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
     }
   };
 
+  const steps = formWaterfallSteps(waterfallStart);
+
   return (
     <form
       id={formId}
       onSubmit={onSubmit}
-      className="min-w-0 space-y-5"
+      className="flex min-w-0 flex-col gap-4"
       noValidate
       aria-label="Meeting search"
       data-testid="search-form"
     >
+      <ChatAssistant>
       <section className="min-w-0 space-y-3" data-testid="search-form-travelers">
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold text-ink-950">Travelers</h2>
-          <p className="text-xs text-ink-700">
-            {PARTICIPANT_COUNT_MIN}–{PARTICIPANT_COUNT_MAX}
-          </p>
-        </div>
+        <ChatWaterfallItem index={steps.travelersHeader} className="space-y-2" data-testid="search-form-waterfall-item">
+          <div className="flex items-center justify-between gap-2">
+            <SectionHeading icon={Users}>Travelers</SectionHeading>
+            <p className="text-xs text-ink-700" data-testid="search-form-traveler-count">
+              {participants.length} of {PARTICIPANT_COUNT_MAX}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <AvatarGroup role="group" aria-label={`${participants.length} travelers`} className="min-h-8">
+              {participants.map((participant) => (
+                <TravelerAvatar
+                  key={participant.key}
+                  letter={participant.letter}
+                  color={participant.color}
+                  className="ring-2 ring-white"
+                />
+              ))}
+            </AvatarGroup>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="min-h-11"
+              disabled={participants.length >= PARTICIPANT_COUNT_MAX || pending}
+              onClick={addTraveler}
+            >
+              <Plus className="size-4 shrink-0" aria-hidden />
+              Add traveler
+            </Button>
+          </div>
+        </ChatWaterfallItem>
         {participants.map((participant, index) => (
-          <div
+          <ChatWaterfallItem
             key={participant.key}
-            className="grid min-w-0 gap-2 border-b border-ink-700/10 pb-3 last:border-b-0"
+            index={steps.traveler(participant.letter)}
+            className="grid min-w-0 gap-2 rounded-2xl border border-ink-700/10 bg-white px-3 py-3"
             data-testid="search-form-traveler-row"
           >
             <div className="flex items-center gap-2">
-              <span
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
-                style={{ backgroundColor: participant.color }}
-                aria-hidden
+              <TravelerAvatar
+                letter={participant.letter}
+                color={participant.color}
+                className="size-7"
+              />
+              <TravelerNameControl
+                participant={participant}
+                index={index}
+                error={errors[`participants.${index}.displayName`]}
+                disabled={pending}
+                onChange={(displayName) => updateParticipant(participant.key, { displayName })}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0 px-2 text-ink-700 hover:text-red-700"
+                aria-label={`Remove traveler ${participant.letter}`}
+                disabled={participants.length <= PARTICIPANT_COUNT_MIN || pending}
+                onClick={() => removeTraveler(participant.key)}
               >
-                {participant.letter}
-              </span>
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <Label htmlFor={`${participant.key}-name`} className="sr-only">
-                  Traveler {participant.letter} name
-                </Label>
-                <Input
-                  id={`${participant.key}-name`}
-                  data-field={`participants.${index}.displayName`}
-                  value={participant.displayName}
-                  placeholder={`Name (optional — defaults to Traveler ${participant.letter})`}
-                  aria-invalid={Boolean(errors[`participants.${index}.displayName`])}
-                  aria-describedby={
-                    errors[`participants.${index}.displayName`]
-                      ? `${participant.key}-name-error`
-                      : undefined
-                  }
-                  onChange={(event) => {
-                    updateParticipant(participant.key, { displayName: event.target.value });
-                  }}
-                />
-                {errors[`participants.${index}.displayName`] ? (
-                  <p id={`${participant.key}-name-error`} className="text-sm text-red-700">
-                    {errors[`participants.${index}.displayName`]}
-                  </p>
-                ) : null}
-              </div>
+                <Trash2 className="size-4" aria-hidden />
+              </Button>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`${participant.key}-origin`}>Starting place</Label>
+              <Label htmlFor={`${participant.key}-origin`} className="inline-flex items-center gap-1.5">
+                <MapPin className="size-3.5 shrink-0 text-teal-600" aria-hidden />
+                Starting place
+              </Label>
               <PlaceCombobox
                 id={`${participant.key}-origin`}
                 fieldPath={`participants.${index}.origin`}
@@ -305,51 +584,123 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
                 <p className="text-sm text-red-700">{errors[`participants.${index}.origin`]}</p>
               ) : null}
             </div>
-          </div>
+          </ChatWaterfallItem>
         ))}
         {errors.participants ? <p className="text-sm text-red-700">{errors.participants}</p> : null}
-        <div className="flex flex-wrap gap-2" data-testid="search-form-traveler-actions">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="min-h-11"
-            disabled={participants.length >= PARTICIPANT_COUNT_MAX || pending}
-            onClick={() => onParticipantsChange((previous) => [...previous, newParticipant()])}
-          >
-            Add traveler
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="min-h-11"
-            disabled={participants.length <= PARTICIPANT_COUNT_MIN || pending}
-            onClick={() => onParticipantsChange((previous) => previous.slice(0, -1))}
-          >
-            Remove last
-          </Button>
-        </div>
       </section>
+      </ChatAssistant>
 
+      <ChatAssistant>
       <section
         className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2"
         data-testid="search-form-schedule"
       >
-        <div className="space-y-1.5 md:col-span-2">
-          <h2 className="text-sm font-semibold text-ink-950">When & preference</h2>
-        </div>
-        <div className="space-y-1.5">
+        <ChatWaterfallItem index={steps.whenHeading} className="space-y-1.5 md:col-span-2" data-testid="search-form-waterfall-item">
+          <SectionHeading icon={CalendarClock}>When & preference</SectionHeading>
+        </ChatWaterfallItem>
+        <ChatWaterfallItem index={steps.travelDate} className="space-y-1.5 md:col-span-2" data-testid="search-form-waterfall-item">
           <Label htmlFor="travelDate">Travel date</Label>
-          <Input
-            id="travelDate"
-            data-field="travelDate"
-            type="date"
-            value={travelDate}
-            onChange={(event) => setTravelDate(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
+          <Popover open={travelDateOpen} onOpenChange={setTravelDateOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                id="travelDate"
+                data-field="travelDate"
+                className="w-full justify-start font-normal"
+                aria-label={
+                  selectedTravelDate
+                    ? `Travel date, ${format(selectedTravelDate, 'PPP')}`
+                    : 'Travel date'
+                }
+                aria-invalid={Boolean(errors.travelDate)}
+              >
+                <CalendarIcon className="size-4 shrink-0 text-teal-600" aria-hidden />
+                {selectedTravelDate ? format(selectedTravelDate, 'PPP') : <span>Pick a date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                required
+                selected={selectedTravelDate}
+                {...(selectedTravelDate ? { defaultMonth: selectedTravelDate } : {})}
+                onSelect={(date) => {
+                  setTravelDate(format(date, 'yyyy-MM-dd'));
+                  setTravelDateOpen(false);
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+          {errors.travelDate ? <p className="text-sm text-red-700">{errors.travelDate}</p> : null}
+        </ChatWaterfallItem>
+        <Timeline
+          aria-label="Leave after and arrive by"
+          data-testid="search-form-travel-window"
+          className="border-y border-ink-700/15 py-3 md:col-span-2"
+        >
+          <ChatWaterfallItem
+            as="li"
+            index={steps.leaveAfter}
+            className="relative flex list-none gap-2.5"
+            data-testid="search-form-waterfall-item"
+          >
+            <Timeline.Rail>
+              <Timeline.Marker />
+              <Timeline.Connector />
+            </Timeline.Rail>
+            <Timeline.Content className="space-y-1.5">
+              <Label htmlFor="earliestDepartureTime">Leave after</Label>
+              <Input
+                id="earliestDepartureTime"
+                data-field="earliestDepartureTime"
+                type="time"
+                value={earliestDepartureTime}
+                className="tabular-nums"
+                onChange={(event) => setEarliestDepartureTime(event.target.value)}
+              />
+            </Timeline.Content>
+          </ChatWaterfallItem>
+          <ChatWaterfallItem
+            as="li"
+            index={steps.arriveBy}
+            className="relative flex list-none gap-2.5"
+            data-testid="search-form-waterfall-item"
+          >
+            <Timeline.Rail>
+              <Timeline.Marker />
+            </Timeline.Rail>
+            <Timeline.Content className="space-y-3 pb-0">
+              <div className="space-y-1.5">
+                <Label htmlFor="latestArrivalTime">Arrive by</Label>
+                <Input
+                  id="latestArrivalTime"
+                  data-field="latestArrivalTime"
+                  type="time"
+                  value={latestArrivalTime}
+                  className="tabular-nums"
+                  onChange={(event) => setLatestArrivalTime(event.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="arrivalDayOffset">Arrival day</Label>
+                <Select
+                  value={arrivalDayOffset}
+                  onValueChange={(value) => setArrivalDayOffset(value as '0' | '1')}
+                >
+                  <SelectTrigger id="arrivalDayOffset">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Same day</SelectItem>
+                    <SelectItem value="1">Next day</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </Timeline.Content>
+          </ChatWaterfallItem>
+        </Timeline>
+        <ChatWaterfallItem index={steps.ranking} className="space-y-1.5 md:col-span-2" data-testid="search-form-waterfall-item">
           <Label htmlFor="rankingMode">Ranking preference</Label>
           <Select
             value={rankingMode}
@@ -366,43 +717,8 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="earliestDepartureTime">Earliest departure</Label>
-          <Input
-            id="earliestDepartureTime"
-            data-field="earliestDepartureTime"
-            type="time"
-            value={earliestDepartureTime}
-            onChange={(event) => setEarliestDepartureTime(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="latestArrivalTime">Latest arrival</Label>
-          <Input
-            id="latestArrivalTime"
-            data-field="latestArrivalTime"
-            type="time"
-            value={latestArrivalTime}
-            onChange={(event) => setLatestArrivalTime(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="arrivalDayOffset">Arrival day</Label>
-          <Select
-            value={arrivalDayOffset}
-            onValueChange={(value) => setArrivalDayOffset(value as '0' | '1')}
-          >
-            <SelectTrigger id="arrivalDayOffset">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="0">Same day</SelectItem>
-              <SelectItem value="1">Next day</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
+        </ChatWaterfallItem>
+        <ChatWaterfallItem index={steps.maxJourney} className="space-y-1.5" data-testid="search-form-waterfall-item">
           <Label htmlFor="maxJourneyDurationMinutes">Max journey minutes</Label>
           <Input
             id="maxJourneyDurationMinutes"
@@ -411,8 +727,8 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             value={maxJourneyDurationMinutes}
             onChange={(event) => setMaxJourneyDurationMinutes(event.target.value)}
           />
-        </div>
-        <div className="space-y-1.5">
+        </ChatWaterfallItem>
+        <ChatWaterfallItem index={steps.maxTransfers} className="space-y-1.5" data-testid="search-form-waterfall-item">
           <Label htmlFor="maxTransfers">Max transfers</Label>
           <Input
             id="maxTransfers"
@@ -421,8 +737,8 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             value={maxTransfers}
             onChange={(event) => setMaxTransfers(event.target.value)}
           />
-        </div>
-        <div className="space-y-1.5">
+        </ChatWaterfallItem>
+        <ChatWaterfallItem index={steps.minTransfer} className="space-y-1.5" data-testid="search-form-waterfall-item">
           <Label htmlFor="minTransferDurationMinutes">Min transfer minutes</Label>
           <Input
             id="minTransferDurationMinutes"
@@ -431,28 +747,45 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             value={minTransferDurationMinutes}
             onChange={(event) => setMinTransferDurationMinutes(event.target.value)}
           />
-        </div>
+        </ChatWaterfallItem>
       </section>
+      </ChatAssistant>
 
+      <ChatAssistant>
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-ink-950">Transport modes</h2>
+        <ChatWaterfallItem index={steps.modesHeading} data-testid="search-form-waterfall-item">
+          <SectionHeading icon={TrainFront}>Transport modes</SectionHeading>
+        </ChatWaterfallItem>
         <div className="flex flex-wrap gap-3">
-          {TRANSPORT_MODES.map((mode) => (
-            <label key={mode} className="flex min-h-11 items-center gap-2 text-sm capitalize">
-              <Checkbox
-                checked={modes.includes(mode)}
-                onCheckedChange={(checked) => toggleMode(mode, checked === true)}
-                data-field="allowedTransportModes"
-              />
-              {mode}
-            </label>
-          ))}
+          {TRANSPORT_MODES.map((mode, modeIndex) => {
+            const ModeIcon = TRANSPORT_MODE_ICONS[mode];
+            return (
+              <ChatWaterfallItem
+                key={mode}
+                index={steps.mode(modeIndex)}
+                data-testid="search-form-waterfall-item"
+              >
+                <label className="flex min-h-11 items-center gap-2 text-sm capitalize">
+                  <Checkbox
+                    checked={modes.includes(mode)}
+                    onCheckedChange={(checked) => toggleMode(mode, checked === true)}
+                    data-field="allowedTransportModes"
+                  />
+                  <ModeIcon className="size-3.5 shrink-0 text-ink-700" aria-hidden />
+                  {mode}
+                </label>
+              </ChatWaterfallItem>
+            );
+          })}
         </div>
         {errors.allowedTransportModes ? (
           <p className="text-sm text-red-700">{errors.allowedTransportModes}</p>
         ) : null}
       </section>
+      </ChatAssistant>
 
+      <ChatAssistant>
+      <ChatWaterfallItem index={steps.submit} className="space-y-3" data-testid="search-form-waterfall-item">
       {formError || Object.keys(errors).length > 0 ? (
         <Alert variant="destructive">
           <AlertTitle>Check the form</AlertTitle>
@@ -469,8 +802,15 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
         disabled={pending || !allOriginsSelected}
         aria-busy={pending}
       >
+        {pending ? (
+          <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+        ) : (
+          <MapPinned className="size-4 shrink-0" aria-hidden />
+        )}
         {pending ? 'Starting search…' : 'Find a meeting point'}
       </Button>
+      </ChatWaterfallItem>
+      </ChatAssistant>
     </form>
   );
 }

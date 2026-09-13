@@ -68,11 +68,13 @@ vi.mock('@/components/search/place-combobox', () => ({
 import { createInitialParticipants, SearchForm, type ParticipantDraft } from './search-form';
 
 function Harness({
-  initial = createInitialParticipants(),
+  initial,
 }: {
   readonly initial?: ParticipantDraft[];
 }) {
-  const [participants, setParticipants] = useState(initial);
+  const [participants, setParticipants] = useState(
+    () => initial ?? createInitialParticipants(),
+  );
   return <SearchForm participants={participants} onParticipantsChange={setParticipants} />;
 }
 
@@ -90,9 +92,78 @@ describe('SearchForm place selection', () => {
     const user = userEvent.setup();
     render(<Harness />);
     const form = screen.getByRole('form', { name: 'Meeting search' });
-    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(2);
+    expect(form.querySelectorAll('[data-slot="chat-waterfall-item"]')).toHaveLength(18);
+    expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(2);
+    expect(within(form).queryByRole('textbox', { name: /Traveler [A-Z] name/i })).not.toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Add a name for traveler A' })).toBeInTheDocument();
+    expect(within(form).getByText('2 of 6')).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Add traveler' })).toBeEnabled();
+    expect(within(form).getByRole('button', { name: 'Remove traveler A' })).toBeDisabled();
     await user.click(within(form).getByRole('button', { name: 'Add traveler' }));
-    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(3);
+    expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(3);
+    expect(within(form).getByRole('button', { name: 'Add a name for traveler C' })).toBeInTheDocument();
+    expect(within(form).getByText('3 of 6')).toBeInTheDocument();
+  });
+
+  it('reveals the name field with save and undo, then returns after save', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const form = screen.getByRole('form', { name: 'Meeting search' });
+    await user.click(within(form).getByRole('button', { name: 'Add a name for traveler A' }));
+    expect(within(form).getByRole('textbox', { name: 'Traveler A name' })).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Save name for traveler A' })).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Undo name for traveler A' })).toBeInTheDocument();
+    await user.type(within(form).getByRole('textbox', { name: 'Traveler A name' }), 'Alex');
+    await user.click(within(form).getByRole('button', { name: 'Save name for traveler A' }));
+    expect(within(form).queryByRole('textbox', { name: 'Traveler A name' })).not.toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Edit name for traveler A, Alex' })).toBeInTheDocument();
+  });
+
+  it('discards an in-progress name with undo', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const form = screen.getByRole('form', { name: 'Meeting search' });
+    await user.click(within(form).getByRole('button', { name: 'Add a name for traveler A' }));
+    await user.type(within(form).getByRole('textbox', { name: 'Traveler A name' }), 'Alex');
+    await user.click(within(form).getByRole('button', { name: 'Undo name for traveler A' }));
+    expect(within(form).queryByRole('textbox', { name: 'Traveler A name' })).not.toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Add a name for traveler A' })).toBeInTheDocument();
+  });
+
+  it('adds up to 6 travelers and removes a specific row without going below 2', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const form = screen.getByRole('form', { name: 'Meeting search' });
+    const add = () => within(form).getByRole('button', { name: 'Add traveler' });
+    await user.click(add());
+    await user.click(add());
+    await user.click(add());
+    await user.click(add());
+    expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(6);
+    expect(add()).toBeDisabled();
+    await user.click(within(form).getByRole('button', { name: 'Remove traveler C' }));
+    expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(5);
+    expect(within(form).queryByRole('button', { name: 'Add a name for traveler C' })).not.toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Add a name for traveler A' })).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Add a name for traveler B' })).toBeInTheDocument();
+    await user.click(within(form).getByRole('button', { name: 'Remove traveler D' }));
+    await user.click(within(form).getByRole('button', { name: 'Remove traveler E' }));
+    await user.click(within(form).getByRole('button', { name: 'Remove traveler F' }));
+    expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(2);
+    expect(within(form).getByRole('button', { name: 'Remove traveler A' })).toBeDisabled();
+    expect(within(form).getByRole('button', { name: 'Remove traveler B' })).toBeDisabled();
+  });
+
+  it('picks a travel date from the calendar popover', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const form = screen.getByRole('form', { name: 'Meeting search' });
+    await user.click(within(form).getByRole('button', { name: /Travel date, September 15th, 2026/i }));
+    const calendar = await screen.findByRole('grid');
+    await user.click(within(calendar).getByRole('button', { name: /16/ }));
+    expect(
+      within(form).getByRole('button', { name: /Travel date, September 16th, 2026/i }),
+    ).toBeInTheDocument();
   });
 
   it('cannot submit arbitrary text and submits selected provider identity', async () => {
@@ -115,12 +186,10 @@ describe('SearchForm place selection', () => {
     const form = screen.getByRole('form', { name: 'Meeting search' });
     expect(within(form).getByRole('button', { name: 'Find a meeting point' })).toBeDisabled();
 
-    fireEvent.change(document.querySelector('[data-field="participants.0.displayName"]')!, {
-      target: { value: 'Alex' },
-    });
-    fireEvent.change(document.querySelector('[data-field="participants.1.displayName"]')!, {
-      target: { value: 'Blake' },
-    });
+    await user.click(within(form).getByRole('button', { name: 'Add a name for traveler A' }));
+    await user.type(within(form).getByRole('textbox', { name: 'Traveler A name' }), 'Alex');
+    await user.click(within(form).getByRole('button', { name: 'Add a name for traveler B' }));
+    await user.type(within(form).getByRole('textbox', { name: 'Traveler B name' }), 'Blake');
     fireEvent.change(document.querySelector('[data-field="participants.0.origin"]')!, {
       target: { value: 'Berlin' },
     });

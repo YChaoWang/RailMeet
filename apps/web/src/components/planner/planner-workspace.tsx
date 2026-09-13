@@ -1,5 +1,6 @@
 'use client';
 
+import { MapPinned } from 'lucide-react';
 import Link from 'next/link';
 import {
   useCallback,
@@ -31,7 +32,7 @@ type PlannerWorkspaceProps = {
   readonly onTravelerSelect?: (participantId: string | null) => void;
 };
 
-const DESKTOP_PANEL_WIDTH = 400;
+const DESKTOP_PANEL_WIDTH = 360;
 const MOBILE_COLLAPSED_VH = 0.38;
 const MOBILE_EXPANDED_VH = 0.72;
 
@@ -156,8 +157,8 @@ export function PlannerWorkspace({
       <aside
         className={cn(
           'pointer-events-auto absolute z-10 flex flex-col overflow-hidden border border-ink-700/15 bg-white shadow-lg',
-          'md:bottom-3 md:left-3 md:top-3 md:w-[400px] md:rounded-2xl md:max-h-none',
-          'inset-x-0 bottom-0 rounded-t-2xl md:inset-x-auto',
+          'inset-x-0 bottom-0 rounded-t-2xl',
+          'md:left-3 md:right-auto md:top-3 md:bottom-auto md:w-[360px] md:max-h-[calc(100dvh-1.5rem)] md:rounded-2xl',
           'pb-[max(0.5rem,env(safe-area-inset-bottom))]',
           sheetExpanded
             ? 'max-md:h-[min(72dvh,680px)]'
@@ -187,7 +188,7 @@ export function PlannerWorkspace({
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-b border-ink-700/10 px-4 py-3 md:px-6">
+        <div className="flex items-center justify-between gap-2 border-b border-ink-700/10 px-4 py-3">
           <div className="min-w-0">
             <Link
               href="/search"
@@ -195,11 +196,12 @@ export function PlannerWorkspace({
             >
               RailMeet
             </Link>
-            <p className="truncate text-sm font-semibold text-ink-950 md:mt-0.5 md:text-xs md:font-medium md:text-ink-700">
-              {panelTitle}
+            <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-ink-950 md:mt-0.5 md:text-xs md:font-medium md:text-ink-700">
+              <MapPinned className="size-3.5 shrink-0 text-teal-600" aria-hidden />
+              <span className="truncate">{panelTitle}</span>
             </p>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               className="min-h-11 rounded-lg px-3 text-sm font-medium text-teal-800 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 md:hidden"
@@ -208,23 +210,17 @@ export function PlannerWorkspace({
             >
               {sheetExpanded ? 'Collapse' : 'Expand'}
             </button>
-            <Link
-              href="/search"
-              className="hidden rounded-lg px-2 py-1 text-xs font-medium text-teal-800 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 md:inline"
-            >
-              New search
-            </Link>
           </div>
         </div>
 
         <div
-          className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-4 md:px-6"
+          className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-4"
           data-testid="planner-panel-scroll"
         >
           {children}
         </div>
         <p
-          className="border-t border-ink-700/10 px-4 py-2 text-[10px] leading-snug text-ink-700 md:px-6"
+          className="border-t border-ink-700/10 px-4 py-2 text-[10px] leading-snug text-ink-700"
           data-testid="panel-attribution"
         >
           Map © OpenStreetMap · Journey data © Transitous

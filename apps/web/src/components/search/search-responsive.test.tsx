@@ -37,14 +37,13 @@ vi.mock('@/components/map/search-map', async (importOriginal) => {
 });
 
 vi.mock('@/components/search/place-combobox', () => ({
-  PlaceCombobox: ({
-    fieldPath,
-    valueText,
-  }: {
-    fieldPath: string;
-    valueText: string;
-  }) => (
-    <input data-field={fieldPath} data-testid={`${fieldPath}-combobox`} value={valueText} readOnly />
+  PlaceCombobox: ({ fieldPath, valueText }: { fieldPath: string; valueText: string }) => (
+    <input
+      data-field={fieldPath}
+      data-testid={`${fieldPath}-combobox`}
+      value={valueText}
+      readOnly
+    />
   ),
 }));
 
@@ -214,15 +213,21 @@ describe('responsive layout structure', () => {
     );
     expect(screen.getByTestId('search-form')).toHaveClass('min-w-0');
     expect(screen.getByTestId('search-form-schedule')).toHaveClass('grid-cols-1', 'md:grid-cols-2');
+    const window = screen.getByTestId('search-form-travel-window');
+    expect(window).toHaveAttribute('aria-label', 'Leave after and arrive by');
+    expect(within(window).getByLabelText('Leave after')).toBeInTheDocument();
+    expect(within(window).getByLabelText('Arrive by')).toBeInTheDocument();
+    expect(within(window).getByLabelText('Arrival day')).toBeInTheDocument();
     expect(screen.getAllByTestId('search-form-traveler-row').length).toBe(2);
   });
 
   it('wraps candidate metrics instead of forcing a single row', () => {
     render(<SearchResultsViewStandalone results={rankedResults} />);
     const metrics = screen.getAllByTestId('candidate-metrics')[0]!;
-    expect(metrics.tagName).toBe('UL');
     expect(metrics).toHaveClass('flex', 'flex-wrap');
-    expect(within(metrics).getAllByRole('listitem').length).toBeGreaterThanOrEqual(3);
+    expect(metrics.textContent).toMatch(/apart/);
+    expect(metrics.textContent).toMatch(/combined/);
+    expect(metrics.textContent).toMatch(/change/);
   });
 
   it('stacks journey stop rows on the narrowest breakpoint', () => {
@@ -240,7 +245,11 @@ describe('responsive layout structure', () => {
               endTime: '2026-06-15T09:00:00.000Z',
               duration: 3600,
               from: { name: 'Berlin Hauptbahnhof', lat: 52.52, lon: 13.4 },
-              to: { name: 'Munich Hauptbahnhof with a very long station name', lat: 48.13, lon: 11.58 },
+              to: {
+                name: 'Munich Hauptbahnhof with a very long station name',
+                lat: 48.13,
+                lon: 11.58,
+              },
             },
           ],
         }}
@@ -252,15 +261,20 @@ describe('responsive layout structure', () => {
 
   it('keeps the planner panel scroll region from overflowing horizontally', () => {
     render(
-      <PlannerWorkspace scene={buildDraftOriginScene([])} panelTitle="Plan a meeting point" disableMap>
+      <PlannerWorkspace
+        scene={buildDraftOriginScene([])}
+        panelTitle="Plan a meeting point"
+        disableMap
+      >
         <p>Panel body</p>
       </PlannerWorkspace>,
     );
     const scroll = screen.getByTestId('planner-panel-scroll');
-    expect(scroll).toHaveClass('overflow-x-hidden', 'min-w-0', 'md:px-6');
+    expect(scroll).toHaveClass('overflow-x-hidden', 'min-w-0', 'px-4');
+    expect(scroll).not.toHaveClass('md:px-6');
   });
 
-  it('orders completed results before the route legend and constrains legend height on mobile', () => {
+  it('keeps summary and route legend in the city list column', () => {
     mockedPolling.mockReturnValue({
       state: {
         kind: 'completed',
@@ -276,16 +290,21 @@ describe('responsive layout structure', () => {
       </PlannerMapProvider>,
     );
 
-    const panel = screen.getByTestId('search-completed-panel');
-    const childTestIds = [...panel.children].map((child) => child.getAttribute('data-testid'));
-    expect(childTestIds.indexOf('search-summary-compact')).toBeLessThan(
-      childTestIds.indexOf('results-ranked'),
-    );
-    expect(childTestIds.indexOf('results-ranked')).toBeLessThan(
-      childTestIds.indexOf('route-legend'),
+    const list = screen.getByTestId('results-list');
+    const summary = screen.getByTestId('search-summary-compact');
+    const ranking = screen.getByTestId('ranking-mode-control');
+    const legend = screen.getByTestId('route-legend');
+    expect(list).toContainElement(summary);
+    expect(list).toContainElement(ranking);
+    expect(list).toContainElement(legend);
+    expect(
+      summary.compareDocumentPosition(ranking) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(ranking.compareDocumentPosition(legend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('results-ranked')).toContainElement(
+      screen.getByTestId('results-journeys'),
     );
 
-    const legend = screen.getByTestId('route-legend');
     expect(legend).toHaveClass('max-md:max-h-44', 'max-md:overflow-y-auto');
     expect(within(legend).getByText('Routes')).toBeInTheDocument();
   });

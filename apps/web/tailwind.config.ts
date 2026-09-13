@@ -25,6 +25,7 @@ const config = {
           50: '#f4f7fb',
           100: '#e8eef5',
         },
+        muted: '#3d4f66',
         rail: {
           500: '#0f766e',
           600: '#0d9488',
@@ -35,18 +36,23 @@ const config = {
         sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
       },
       keyframes: {
-        'accordion-down': {
+        'collapsible-down': {
           from: { height: '0' },
-          to: { height: 'var(--radix-accordion-content-height)' },
+          to: { height: 'var(--radix-collapsible-content-height)' },
         },
-        'accordion-up': {
-          from: { height: 'var(--radix-accordion-content-height)' },
+        'collapsible-up': {
+          from: { height: 'var(--radix-collapsible-content-height)' },
           to: { height: '0' },
+        },
+        'cot-in': {
+          from: { opacity: '0', transform: 'translateY(10px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
         },
       },
       animation: {
-        'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out',
+        'collapsible-down': 'collapsible-down 0.2s ease-out',
+        'collapsible-up': 'collapsible-up 0.2s ease-out',
+        'cot-in': 'cot-in 0.45s ease-out both',
       },
     },
   },

@@ -220,7 +220,7 @@ describe('SearchPlannerPage live draft markers', () => {
       expect(screen.getByTestId('search-map')).toHaveAttribute('data-marker-count', '2'),
     );
 
-    await user.click(screen.getByRole('button', { name: 'Remove last' }));
+    await user.click(screen.getByRole('button', { name: 'Remove traveler C' }));
     await waitFor(() =>
       expect(screen.getByTestId('search-map')).toHaveAttribute('data-marker-count', '1'),
     );
@@ -233,6 +233,9 @@ describe('SearchPlannerPage live draft markers', () => {
   it('does not create a marker for an empty added traveler', async () => {
     const user = userEvent.setup();
     renderPlanner();
+    const conversation = screen.getByRole('log', { name: 'Search conversation' });
+    expect(conversation).toHaveTextContent('RailMeet');
+    expect(conversation).toHaveTextContent('I’ll find a meeting city');
     await user.click(screen.getByRole('button', { name: 'Add traveler' }));
     expect(screen.getByTestId('search-map')).toHaveAttribute('data-marker-count', '0');
     expect(createMeetingSearch).not.toHaveBeenCalled();
@@ -242,12 +245,10 @@ describe('SearchPlannerPage live draft markers', () => {
     const user = userEvent.setup();
     renderPlanner();
     await user.click(screen.getByRole('button', { name: 'Add traveler' }));
-    expect(screen.getByPlaceholderText('Name (optional — defaults to Traveler C)')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Remove last' }));
-    expect(
-      screen.queryByPlaceholderText('Name (optional — defaults to Traveler C)'),
-    ).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Name (optional — defaults to Traveler A)')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Name (optional — defaults to Traveler B)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a name for traveler C' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove traveler C' }));
+    expect(screen.queryByRole('button', { name: 'Add a name for traveler C' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a name for traveler A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a name for traveler B' })).toBeInTheDocument();
   });
 });

@@ -308,12 +308,78 @@ describe('SearchResultsView', () => {
     expect(screen.getByRole('tab', { name: 'Arrive together' })).toBeInTheDocument();
 
     const ranked = screen.getByTestId('results-ranked');
-    const candidateButtons = within(ranked).getAllByRole('button', { name: /Rank /i });
-    expect(candidateButtons[0]).toHaveTextContent('Rank 2');
+    const candidateButtons = within(ranked).getAllByTestId('candidate-card');
+    expect(candidateButtons[0]).toHaveAccessibleName(/Rank 2/);
     expect(candidateButtons[0]).toHaveTextContent('Cologne');
-    expect(candidateButtons[1]).toHaveTextContent('Rank 1');
+    expect(candidateButtons[1]).toHaveAccessibleName(/Rank 1/);
     expect(candidateButtons[1]).toHaveTextContent('Munich');
+    expect(candidateButtons[1]).toHaveTextContent('1');
+    expect(screen.queryByText('Best')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('journey-route-summary').length).toBeGreaterThan(0);
+  });
+
+  it('waterfalls ranked list sections from top to bottom', () => {
+    render(<SearchResultsViewStandalone results={rankedResults} />);
+    expect(screen.getByTestId('results-list').querySelectorAll('[data-slot="chat-waterfall-item"]')).toHaveLength(
+      9,
+    );
+    expect(
+      screen.getByTestId('results-journeys').querySelectorAll('[data-slot="chat-waterfall-item"]'),
+    ).toHaveLength(3);
+  });
+
+  it('groups each traveler with their duration and services on the candidate card', () => {
+    render(<SearchResultsViewStandalone results={rankedResults} />);
+    const cologne = screen.getByRole('button', { name: /Rank 2.*Cologne/i });
+    const travelers = within(cologne).getAllByTestId('candidate-traveler');
+    expect(travelers.length).toBeGreaterThanOrEqual(2);
+    expect(travelers.some((row) => row.textContent?.includes('Blake'))).toBe(true);
+    expect(travelers.some((row) => /\d/.test(row.textContent ?? ''))).toBe(true);
+    expect(screen.queryByText('Recommended')).not.toBeInTheDocument();
+  });
+
+  it('keeps ranking modes on one sliding segmented row', () => {
+    render(<SearchResultsViewStandalone results={rankedResults} />);
+    const tablist = screen.getByRole('tablist', { name: 'Ranking modes' });
+    expect(tablist).toHaveClass('grid');
+    expect(tablist).not.toHaveClass('overflow-x-auto', 'grid-cols-2');
+    expect(tablist.style.gridTemplateColumns).toContain('repeat(4');
+    expect(within(tablist).getAllByRole('tab')).toHaveLength(4);
+    expect(tablist.querySelector('[data-slot="segmented-indicator"]')).toHaveClass(
+      'transition-[left,width]',
+    );
+    expect(screen.getByTestId('ranking-mode-control')).toContainElement(tablist);
+    expect(screen.getByTestId('ranking-mode-description')).toHaveTextContent(
+      'Balances travel effort across everyone.',
+    );
+  });
+
+  it('states each journey route once instead of repeating it above the itinerary', async () => {
+    render(<SearchResultsViewStandalone results={rankedResults} />);
+    await waitFor(() =>
+      expect(screen.getAllByTestId('journey-detail-loaded').length).toBeGreaterThan(0),
+    );
+    const cards = screen.getAllByTestId('journey-card');
+    expect(cards).toHaveLength(2);
+
+    const alexCard = cards[0]!;
+    expect(within(alexCard).getAllByText('Berlin → Munich')).toHaveLength(1);
+    // The itinerary overview owns the route line, so the card header must not add
+    // a second "<name>'s journey" heading above it.
+    expect(within(alexCard).queryByText(/Alex.s journey/)).not.toBeInTheDocument();
+  });
+
+  it('keeps a map emphasis toggle on every journey card', async () => {
+    render(<SearchResultsViewStandalone results={rankedResults} />);
+    await waitFor(() =>
+      expect(screen.getAllByTestId('journey-detail-loaded').length).toBeGreaterThan(0),
+    );
+    for (const card of screen.getAllByTestId('journey-card')) {
+      const toggle = within(card).getAllByRole('button')[0]!;
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      // Text, not just color, carries the pressed state.
+      expect(toggle).toHaveTextContent(/Alex|Blake/);
+    }
   });
 
   it('does not invent intermediate stops from compact results and shows empty outcomes', async () => {
@@ -321,7 +387,9 @@ describe('SearchResultsView', () => {
     expect(screen.queryByText(/intermediate stop/i)).not.toBeInTheDocument();
     // Compact chips come from routeSummary — never from embedded providerItinerary.
     expect(JSON.stringify(rankedResults)).not.toContain('providerItinerary');
-    expect(screen.getAllByTestId('journey-route-summary')[0]).toHaveTextContent('ICE');
+    expect(screen.getAllByTestId('journey-route-summary').some((node) => node.textContent?.includes('ICE'))).toBe(
+      true,
+    );
 
     for (const outcome of ['no_candidates', 'no_feasible_candidates'] as const) {
       const { unmount } = render(
@@ -336,6 +404,9 @@ describe('SearchResultsView', () => {
       );
       expect(screen.getByText('We couldn’t find a workable meeting plan.')).toBeInTheDocument();
       expect(screen.queryByText(/couldn’t complete this search/i)).not.toBeInTheDocument();
+      expect(
+        screen.getByTestId('results-empty').querySelectorAll('[data-slot="chat-waterfall-item"]'),
+      ).toHaveLength(4);
       unmount();
     }
   });
@@ -358,13 +429,12 @@ describe('SearchResultsView', () => {
     await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
     const afterInitial = fetchSpy.mock.calls.length;
 
-    await user.click(screen.getByRole('button', { name: /Journey details/i }));
-    await user.click(screen.getByRole('button', { name: /Journey details/i }));
+    expect(screen.getAllByTestId('journey-card').length).toBeGreaterThan(0);
     expect(fetchSpy.mock.calls.length).toBe(afterInitial);
 
     await user.click(screen.getByRole('tab', { name: 'Fastest overall' }));
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Rank 1[\s\S]*Munich/i })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: /Rank 1.*Munich/i })).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
@@ -374,13 +444,37 @@ describe('SearchResultsView', () => {
     expect(fetchSpy.mock.calls.every((call) => !String(call[0]).includes('transitous'))).toBe(true);
   });
 
+  it('swaps the city list for journeys in the same panel', async () => {
+    const user = userEvent.setup();
+    render(<SearchResultsViewStandalone results={rankedResults} />);
+
+    const ranked = screen.getByTestId('results-ranked');
+    expect(ranked).toHaveAttribute('data-layout', 'stack');
+    expect(ranked).not.toHaveClass('xl:grid');
+    expect(screen.getByTestId('results-list')).not.toHaveClass('hidden');
+    expect(screen.getByTestId('results-journeys')).toHaveClass('hidden');
+
+    const munich = screen.getByRole('button', { name: /Rank 1.*Munich/i });
+    expect(munich).toHaveAttribute('aria-expanded', 'false');
+    await user.click(munich);
+    expect(munich).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('results-list')).toHaveClass('hidden');
+    expect(screen.getByTestId('results-journeys')).not.toHaveClass('hidden');
+    expect(screen.getByTestId('journeys-back')).toHaveTextContent('Back');
+
+    await user.click(screen.getByTestId('journeys-back'));
+    expect(munich).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('results-list')).not.toHaveClass('hidden');
+    expect(screen.getByTestId('results-journeys')).toHaveClass('hidden');
+  });
+
   it('selecting another candidate fetches its journeys without creating a search', async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.mocked(globalThis.fetch);
     render(<SearchResultsViewStandalone results={rankedResults} />);
     await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
     const afterInitial = fetchSpy.mock.calls.length;
-    const cologne = screen.getByRole('button', { name: /Rank 2[\s\S]*Cologne/i });
+    const cologne = screen.getByRole('button', { name: /Rank 2.*Cologne/i });
     await user.click(cologne);
     expect(cologne).toHaveAttribute('aria-pressed', 'true');
     // Cologne reuses the same journeyIds as Munich in this fixture — still cached.
