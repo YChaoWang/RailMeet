@@ -220,9 +220,10 @@ describe('responsive layout structure', () => {
   it('wraps candidate metrics instead of forcing a single row', () => {
     render(<SearchResultsViewStandalone results={rankedResults} />);
     const metrics = screen.getAllByTestId('candidate-metrics')[0]!;
-    expect(metrics.tagName).toBe('UL');
     expect(metrics).toHaveClass('flex', 'flex-wrap');
-    expect(within(metrics).getAllByRole('listitem').length).toBeGreaterThanOrEqual(3);
+    expect(metrics.textContent).toMatch(/apart/);
+    expect(metrics.textContent).toMatch(/combined/);
+    expect(metrics.textContent).toMatch(/change/);
   });
 
   it('stacks journey stop rows on the narrowest breakpoint', () => {
@@ -257,10 +258,11 @@ describe('responsive layout structure', () => {
       </PlannerWorkspace>,
     );
     const scroll = screen.getByTestId('planner-panel-scroll');
-    expect(scroll).toHaveClass('overflow-x-hidden', 'min-w-0', 'md:px-6');
+    expect(scroll).toHaveClass('overflow-x-hidden', 'min-w-0', 'px-4');
+    expect(scroll).not.toHaveClass('md:px-6');
   });
 
-  it('orders completed results before the route legend and constrains legend height on mobile', () => {
+  it('keeps summary and route legend in the city list column', () => {
     mockedPolling.mockReturnValue({
       state: {
         kind: 'completed',
@@ -276,13 +278,18 @@ describe('responsive layout structure', () => {
       </PlannerMapProvider>,
     );
 
-    const panel = screen.getByTestId('search-completed-panel');
-    const childTestIds = [...panel.children].map((child) => child.getAttribute('data-testid'));
+    const list = screen.getByTestId('results-list');
+    const childTestIds = [...list.children].map((child) => child.getAttribute('data-testid'));
     expect(childTestIds.indexOf('search-summary-compact')).toBeLessThan(
-      childTestIds.indexOf('results-ranked'),
+      childTestIds.indexOf('ranking-mode-control'),
     );
-    expect(childTestIds.indexOf('results-ranked')).toBeLessThan(
+    expect(childTestIds.indexOf('ranking-mode-control')).toBeLessThan(
       childTestIds.indexOf('route-legend'),
+    );
+    expect(list).toContainElement(screen.getByTestId('search-summary-compact'));
+    expect(list).toContainElement(screen.getByTestId('route-legend'));
+    expect(screen.getByTestId('results-ranked')).toContainElement(
+      screen.getByTestId('results-journeys'),
     );
 
     const legend = screen.getByTestId('route-legend');

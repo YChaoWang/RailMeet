@@ -579,20 +579,24 @@ function JourneyOverview({
   const overview = journeyOverviewHeader(itinerary, context);
   return (
     <header
-      className="sticky top-0 z-[1] -mx-1 border-b border-ink-700/10 bg-white/95 px-1 pb-3 pt-1 backdrop-blur-sm"
+      className="min-w-0 border-b border-ink-700/10 pb-2.5"
       data-testid="journey-overview-header"
     >
       {overview.participantDisplayName ? (
         <p className="text-xs font-medium text-teal-800">{overview.participantDisplayName}&apos;s journey</p>
       ) : null}
-      <p className="break-words text-base font-semibold text-ink-950">
+      <p className="break-words text-sm font-semibold text-ink-950">
         {overview.origin} → {overview.destination}
       </p>
-      <p className="text-xs text-ink-700">{overview.dateRange}</p>
-      <p className="mt-1 text-sm tabular-nums text-ink-950">{overview.timeRange}</p>
-      <p className="text-xs text-ink-700">
-        {overview.durationLabel} · {overview.transfersLabel}
+      <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="text-base font-semibold tabular-nums text-ink-950">
+          {overview.timeRange}
+        </span>
+        <span className="text-xs text-ink-700">
+          {overview.durationLabel} · {overview.transfersLabel}
+        </span>
       </p>
+      <p className="mt-0.5 text-xs text-ink-700">{overview.dateRange}</p>
       <div className="mt-2 flex flex-wrap gap-1" data-testid="journey-route-summary">
         {overview.routePills.map((pill, index) => (
           <span
@@ -680,6 +684,7 @@ export function JourneyItineraryTimeline({
 
 export function JourneyRouteSummary({
   segments,
+  className,
 }: {
   readonly segments: readonly {
     readonly mode: string;
@@ -687,12 +692,17 @@ export function JourneyRouteSummary({
     readonly routeColor?: string | undefined;
     readonly routeTextColor?: string | undefined;
   }[];
+  /** Overrides the default standalone spacing when placed inside a grid row. */
+  readonly className?: string;
 }) {
   if (segments.length === 0) {
     return null;
   }
   return (
-    <p className="mt-2 flex flex-wrap gap-1" data-testid="journey-route-summary">
+    <p
+      className={cn('flex min-w-0 flex-wrap gap-1', className ?? 'mt-2')}
+      data-testid="journey-route-summary"
+    >
       {segments.map((segment, index) => {
         const colors = motisChipColors({
           mode: segment.mode,

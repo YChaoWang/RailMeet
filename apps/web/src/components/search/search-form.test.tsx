@@ -91,8 +91,36 @@ describe('SearchForm place selection', () => {
     render(<Harness />);
     const form = screen.getByRole('form', { name: 'Meeting search' });
     expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(2);
-    await user.click(within(form).getByRole('button', { name: 'Add traveler' }));
+    expect(within(form).getByRole('radio', { name: '2 travelers' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await user.click(within(form).getByRole('radio', { name: '3 travelers' }));
     expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(3);
+  });
+
+  it('jumps traveler count within 2–6 and drops extra rows from the end', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const form = screen.getByRole('form', { name: 'Meeting search' });
+    await user.click(within(form).getByRole('radio', { name: '5 travelers' }));
+    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(5);
+    await user.click(within(form).getByRole('radio', { name: '2 travelers' }));
+    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(2);
+    expect(within(form).queryByRole('radio', { name: '1 travelers' })).not.toBeInTheDocument();
+    expect(within(form).queryByRole('radio', { name: '7 travelers' })).not.toBeInTheDocument();
+  });
+
+  it('picks a travel date from the calendar popover', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const form = screen.getByRole('form', { name: 'Meeting search' });
+    await user.click(within(form).getByRole('button', { name: /Travel date, September 15th, 2026/i }));
+    const calendar = await screen.findByRole('grid');
+    await user.click(within(calendar).getByRole('button', { name: /16/ }));
+    expect(
+      within(form).getByRole('button', { name: /Travel date, September 16th, 2026/i }),
+    ).toBeInTheDocument();
   });
 
   it('cannot submit arbitrary text and submits selected provider identity', async () => {

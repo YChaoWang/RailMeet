@@ -1,14 +1,21 @@
 /** @vitest-environment jsdom */
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { SearchPageViewState } from '@/lib/search-view-model';
 
+const push = vi.fn();
+
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, replace: vi.fn(), prefetch: vi.fn() }),
 }));
 
 vi.mock('@/components/map/search-map', () => ({
@@ -155,5 +162,45 @@ describe('SearchStatusPage map-first surfaces', () => {
       }
       unmount();
     }
+  });
+
+  it('starts a new search inline without navigating away from the current results', async () => {
+    const user = userEvent.setup();
+    renderState({
+      kind: 'completed',
+      summary: {
+        ...summary,
+        status: 'completed',
+        completionOutcome: 'no_candidates',
+        completedAt: '2026-06-01T12:05:00.000Z',
+      },
+      results: {
+        searchId: summary.searchId,
+        status: 'completed',
+        completionOutcome: 'no_candidates',
+        rankingMode: 'fairest',
+        recommendedDestination: null,
+        rankings: [],
+      },
+      resultsLoading: false,
+    });
+
+    const toggle = screen.getByTestId('new-search-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('inline-new-search')).not.toBeInTheDocument();
+
+    await user.click(toggle);
+
+    expect(screen.getByTestId('inline-new-search')).toBeInTheDocument();
+    expect(screen.getByTestId('search-form')).toBeInTheDocument();
+    expect(screen.getByTestId('new-search-toggle')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('new-search-toggle')).toHaveTextContent('Back to results');
+    expect(screen.getByTestId('planner-map-region')).toBeInTheDocument();
+    expect(screen.queryByText(/couldn’t find a workable meeting plan/i)).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId('new-search-toggle'));
+    expect(screen.queryByTestId('inline-new-search')).not.toBeInTheDocument();
+    expect(screen.getByText(/couldn’t find a workable meeting plan/i)).toBeInTheDocument();
   });
 });

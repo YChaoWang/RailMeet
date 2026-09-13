@@ -103,6 +103,24 @@ export function formatArrivalSpreadMs(ms: number): string {
   return `${minutes} min`;
 }
 
+/**
+ * Travel date for display. Locale and time zone are pinned so the server and the
+ * client always render the same string.
+ */
+export function formatTravelDate(isoDate: string): string {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) {
+    return isoDate;
+  }
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
 export function failureMessage(code: string | null | undefined): string {
   switch (code) {
     case 'ROUTING_TECHNICAL_FAILURE':

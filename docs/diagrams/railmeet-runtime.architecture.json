@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "RailMeet runtime architecture",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/YChaoWang/RailMeet",
+      "revision": "c1c6804a23a18c04e11f966c8c87e3323c4a0e5a",
+      "provider": "github"
+    },
+    "views": [
+      {
+        "id": "primary-search",
+        "label": "Primary search path",
+        "focus": ["browser", "web", "api", "postgres", "redis", "kickoff", "candidates", "routing", "transitous", "finalization"],
+        "note": "Create a search, then four BullMQ stages plan journeys and persist rankings."
+      },
+      {
+        "id": "public-edge",
+        "label": "Browser-reachable",
+        "focus": ["browser", "web", "api", "postgres"],
+        "note": "HTTPS into Next.js, /api/v1 into Fastify, one Postgres transaction."
+      },
+      {
+        "id": "private-pipeline",
+        "label": "Four consumers",
+        "focus": ["redis", "kickoff", "candidates", "routing", "transitous", "finalization"],
+        "note": "Kickoff, candidates, routing /plan, then finalization ranking."
+      },
+      {
+        "id": "externals",
+        "label": "External calls",
+        "focus": ["web", "osm", "routing", "transitous"],
+        "note": "Map tiles and MOTIS /plan. Geocode and map stops stay in the cards."
+      }
+    ]
+  },
+  "layout": {
+    "mode": "grid",
+    "cols": 5,
+    "gapX": 56,
+    "gapY": 64,
+    "cellW": 140,
+    "cellH": 64
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "Browser",
+      "sublabel": "Map-first planner",
+      "row": 0,
+      "col": 0
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "apps/web",
+      "sublabel": "Next.js 15 · Vercel",
+      "tag": "same-origin /api/v1",
+      "brand": "next-js",
+      "row": 0,
+      "col": 1,
+      "sources": [
+        {
+          "path": "apps/web/src/lib/api-proxy.ts",
+          "line": 7,
+          "end_line": 19,
+          "label": "API proxy"
+        },
+        {
+          "path": "apps/web/src/app/api/v1/meeting-searches/route.ts",
+          "line": 3,
+          "end_line": 9,
+          "label": "POST search"
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "apps/api",
+      "sublabel": "Fastify · Northflank",
+      "tag": "HTTP boundary",
+      "row": 0,
+      "col": 2,
+      "sources": [
+        {
+          "path": "apps/api/src/index.ts",
+          "line": 9,
+          "end_line": 40,
+          "label": "API bootstrap"
+        }
+      ]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "Neon PostGIS",
+      "sublabel": "search aggregate",
+      "brand": "neon",
+      "row": 0,
+      "col": 3,
+      "sources": [
+        {
+          "path": "docs/outbox-dispatch.md",
+          "line": 1,
+          "end_line": 13,
+          "label": "Outbox commit"
+        }
+      ]
+    },
+    {
+      "id": "osm",
+      "type": "external",
+      "label": "OpenStreetMap",
+      "sublabel": "MapLibre tiles",
+      "row": 1,
+      "col": 0
+    },
+    {
+      "id": "redis",
+      "type": "messagebus",
+      "label": "Redis",
+      "sublabel": "BullMQ + plan cache",
+      "brand": "redis",
+      "row": 1,
+      "col": 1,
+      "sources": [
+        {
+          "path": "apps/worker/src/app.ts",
+          "line": 86,
+          "end_line": 134,
+          "label": "Redis clients"
+        }
+      ]
+    },
+    {
+      "id": "kickoff",
+      "type": "backend",
+      "label": "Kickoff",
+      "sublabel": "meeting-searches",
+      "tag": "status running",
+      "row": 1,
+      "col": 2,
+      "sources": [
+        {
+          "path": "apps/worker/src/app.ts",
+          "line": 158,
+          "end_line": 166,
+          "label": "Kickoff consumer"
+        }
+      ]
+    },
+    {
+      "id": "candidates",
+      "type": "backend",
+      "label": "Candidates",
+      "sublabel": "meeting cities",
+      "row": 1,
+      "col": 3,
+      "sources": [
+        {
+          "path": "apps/worker/src/app.ts",
+          "line": 168,
+          "end_line": 179,
+          "label": "Candidate consumer"
+        }
+      ]
+    },
+    {
+      "id": "routing",
+      "type": "backend",
+      "label": "Routing",
+      "sublabel": "journey plans",
+      "tag": "only /plan caller",
+      "row": 1,
+      "col": 4,
+      "sources": [
+        {
+          "path": "apps/worker/src/app.ts",
+          "line": 181,
+          "end_line": 192,
+          "label": "Routing consumer"
+        }
+      ]
+    },
+    {
+      "id": "finalization",
+      "type": "backend",
+      "label": "Finalization",
+      "sublabel": "rankAllModes",
+      "row": 2,
+      "col": 3,
+      "sources": [
+        {
+          "path": "apps/worker/src/app.ts",
+          "line": 194,
+          "end_line": 201,
+          "label": "Finalization consumer"
+        }
+      ]
+    },
+    {
+      "id": "transitous",
+      "type": "external",
+      "label": "Transitous",
+      "sublabel": "MOTIS v5",
+      "row": 2,
+      "col": 4,
+      "sources": [
+        {
+          "path": "apps/worker/src/app.ts",
+          "line": 141,
+          "end_line": 156,
+          "label": "Journey planner"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "RailMeet production",
+      "wraps": ["web", "api", "postgres", "redis", "kickoff", "candidates", "routing", "finalization"]
+    },
+    {
+      "kind": "security-group",
+      "label": "Browser-reachable",
+      "wraps": ["web", "api"]
+    },
+    {
+      "kind": "security-group",
+      "label": "Private pipeline",
+      "wraps": ["redis", "kickoff", "candidates", "routing", "finalization"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "browser-to-web",
+      "from": "browser",
+      "to": "web",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "web-to-api",
+      "from": "web",
+      "to": "api",
+      "label": "/api/v1 proxy",
+      "variant": "emphasis",
+      "labelDy": -24
+    },
+    {
+      "id": "api-to-postgres",
+      "from": "api",
+      "to": "postgres",
+      "label": "outbox commit",
+      "variant": "emphasis",
+      "labelAt": [590, 76]
+    },
+    {
+      "id": "web-to-osm",
+      "from": "web",
+      "to": "osm",
+      "label": "map tiles",
+      "variant": "dashed"
+    },
+    {
+      "id": "redis-to-kickoff",
+      "from": "redis",
+      "to": "kickoff",
+      "label": "search.requested",
+      "labelDy": -24
+    },
+    {
+      "id": "kickoff-to-candidates",
+      "from": "kickoff",
+      "to": "candidates",
+      "label": "candidates.requested",
+      "labelDy": 54
+    },
+    {
+      "id": "candidates-to-routing",
+      "from": "candidates",
+      "to": "routing",
+      "label": "routing.requested",
+      "labelDy": -17
+    },
+    {
+      "id": "routing-to-transitous",
+      "from": "routing",
+      "to": "transitous",
+      "label": "MOTIS /api/v5/plan",
+      "variant": "emphasis",
+      "labelDy": 24
+    },
+    {
+      "id": "routing-to-finalization",
+      "from": "routing",
+      "to": "finalization",
+      "label": "finalization.requested"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Public HTTP",
+      "items": [
+        "GET /meeting-searches/:id, …/results, …/journeys/:id, /places/search, /map/stops",
+        "Create is 202 after Postgres only; GET results never calls Redis, BullMQ, or /plan"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Outbox and writes",
+      "items": [
+        "Dispatcher claims the outbox, then kickoff → candidates → routing → finalization",
+        "Routing is the only /plan caller; finalization writes rankAllModes; API geocode/stops are off-spine"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust",
+      "items": [
+        "Web and API are public; Redis and the four consumers are not",
+        "apps/api must not import @railmeet/queue or call /plan"
+      ]
+    }
+  ]
+}

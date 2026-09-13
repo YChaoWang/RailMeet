@@ -1,18 +1,34 @@
 'use client';
 
+import { ArrowLeft, Search } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { motisPlanModeLabel, type RankingMode } from '@railmeet/shared';
 import type { MeetingSearchDetailData } from '@railmeet/validation';
 
 import { usePlannerMap } from '@/components/search/planner-map-context';
 import { SearchResultsView } from '@/components/search/search-results-view';
+import {
+  createInitialParticipants,
+  SearchForm,
+  type ParticipantDraft,
+} from '@/components/search/search-form';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSearchPolling } from '@/hooks/use-search-polling';
-import { buildMapScene, candidateSelectionKey, type MapScene } from '@/lib/map-markers';
-import { failureMessage, rankingsForMode, type SearchPageViewState } from '@/lib/search-view-model';
+import {
+  buildDraftOriginScene,
+  buildMapScene,
+  candidateSelectionKey,
+  type MapScene,
+} from '@/lib/map-markers';
+import {
+  failureMessage,
+  formatTravelDate,
+  rankingsForMode,
+  type SearchPageViewState,
+} from '@/lib/search-view-model';
 import { travelerColorAt, travelerLetterAt } from '@/lib/traveler-identity';
 
 function summaryFromState(state: SearchPageViewState): MeetingSearchDetailData | null {
@@ -37,6 +53,7 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     setScene,
     setPanelTitle,
     setSheetExpanded,
+    setHeaderAction,
     setCandidateSelectHandler,
     setTravelerSelectHandler,
   } = usePlannerMap();
@@ -44,6 +61,10 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
   const [rankingMode, setRankingMode] = useState<RankingMode>('fairest');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [emphasizedParticipantId, setEmphasizedParticipantId] = useState<string | null>(null);
+  const [newSearchOpen, setNewSearchOpen] = useState(false);
+  const [draftParticipants, setDraftParticipants] =
+    useState<ParticipantDraft[]>(createInitialParticipants);
+  const newSearchPanelId = useId();
 
   const summary = summaryFromState(state);
   const results = state.kind === 'completed' ? state.results : null;
@@ -83,6 +104,15 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     [summary, results, rankingMode, selectedKey, emphasizedParticipantId],
   );
 
+  const draftScene = useMemo(
+    () => buildDraftOriginScene(draftParticipants),
+    [draftParticipants],
+  );
+
+  // While drafting a replacement search, preview its origins instead of the finished
+  // routes — but only once at least one origin exists, so the map never goes blank.
+  const activeScene = newSearchOpen && draftScene.markers.length > 0 ? draftScene : scene;
+
   useEffect(() => {
     setPanelTitle(panelTitleFor(state.kind));
   }, [state.kind, setPanelTitle]);
@@ -91,13 +121,40 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     // Keep draft traveler markers on the persistent map until the first search summary arrives.
     if (
       (state.kind === 'loading' || state.kind === 'not_found') &&
-      scene.markers.length === 0 &&
-      scene.routeLines.length === 0
+      activeScene.markers.length === 0 &&
+      activeScene.routeLines.length === 0
     ) {
       return;
     }
-    setScene(scene);
-  }, [scene, setScene, state.kind]);
+    setScene(activeScene);
+  }, [activeScene, setScene, state.kind]);
+
+  useEffect(() => {
+    setHeaderAction(
+      <button
+        type="button"
+        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-teal-800 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+        aria-expanded={newSearchOpen}
+        aria-controls={newSearchPanelId}
+        onClick={() => setNewSearchOpen((open) => !open)}
+        data-testid="new-search-toggle"
+      >
+        {newSearchOpen ? (
+          <ArrowLeft className="size-4 shrink-0" aria-hidden />
+        ) : (
+          <Search className="size-4 shrink-0" aria-hidden />
+        )}
+        {newSearchOpen ? 'Back to results' : 'New search'}
+      </button>,
+    );
+    return () => setHeaderAction(null);
+  }, [newSearchOpen, newSearchPanelId, setHeaderAction]);
+
+  useEffect(() => {
+    if (newSearchOpen) {
+      setSheetExpanded(true);
+    }
+  }, [newSearchOpen, setSheetExpanded]);
 
   useEffect(() => {
     if (results?.searchId) {
@@ -118,17 +175,36 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
 
   return (
     <>
-      {renderPanelBody({
-        state,
-        retry,
-        rankingMode,
-        setRankingMode,
-        selectedKey,
-        setSelectedKey,
-        scene,
-        emphasizedParticipantId,
-        setEmphasizedParticipantId,
-      })}
+      {newSearchOpen ? (
+        <section
+          id={newSearchPanelId}
+          className="min-w-0"
+          aria-label="New search"
+          data-testid="inline-new-search"
+        >
+          <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink-950">
+            <Search className="size-4 shrink-0 text-teal-600" aria-hidden />
+            New search
+          </h2>
+          <p className="mb-4 text-sm text-ink-700">
+            Choose each traveler’s starting place. Your last results stay on the map until you
+            search again.
+          </p>
+          <SearchForm participants={draftParticipants} onParticipantsChange={setDraftParticipants} />
+        </section>
+      ) : (
+        renderPanelBody({
+          state,
+          retry,
+          rankingMode,
+          setRankingMode,
+          selectedKey,
+          setSelectedKey,
+          scene,
+          emphasizedParticipantId,
+          setEmphasizedParticipantId,
+        })
+      )}
     </>
   );
 }
@@ -200,7 +276,7 @@ function RouteLegend({
           </button>
         ) : null}
       </div>
-      <ul className="flex min-w-0 flex-col gap-2 md:flex-row md:flex-wrap">
+      <ul className="flex min-w-0 flex-col gap-2">
         {travelers.map((traveler) => {
           const active =
             !emphasizedParticipantId || emphasizedParticipantId === traveler.participantId;
@@ -412,8 +488,7 @@ function renderPanelBody({
         );
       }
       return (
-        <div className="min-w-0 space-y-4" data-testid="search-completed-panel">
-          <SearchSummaryCompact summary={state.summary} />
+        <div className="min-w-0 xl:h-full" data-testid="search-completed-panel">
           <SearchResultsView
             results={state.results}
             rankingMode={rankingMode}
@@ -424,11 +499,14 @@ function renderPanelBody({
             onEmphasizeParticipant={setEmphasizedParticipantId}
             missingGeometry={scene.missingGeometry}
             embedded
-          />
-          <RouteLegend
-            scene={scene}
-            emphasizedParticipantId={emphasizedParticipantId}
-            onSelect={setEmphasizedParticipantId}
+            listHeader={<SearchSummaryCompact summary={state.summary} />}
+            listFooter={
+              <RouteLegend
+                scene={scene}
+                emphasizedParticipantId={emphasizedParticipantId}
+                onSelect={setEmphasizedParticipantId}
+              />
+            }
           />
         </div>
       );
@@ -446,7 +524,7 @@ function SearchSummaryCompact({ summary }: { readonly summary: MeetingSearchDeta
       data-testid="search-summary-compact"
     >
       <p className="font-medium text-ink-950">
-        {summary.participants.length} travelers · {summary.travelDate} · {summary.rankingMode}
+        {formatTravelDate(summary.travelDate)} · {summary.participants.length} travelers
       </p>
       <p className="mt-1 flex flex-wrap gap-2">
         {summary.participants.map((participant, index) => (

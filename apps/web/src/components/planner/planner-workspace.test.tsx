@@ -51,6 +51,12 @@ describe('PlannerWorkspace', () => {
     expect(screen.getByTestId('planner-panel')).toHaveAttribute('data-sheet-state', 'collapsed');
     expect(screen.getByTestId('planner-panel-scroll')).toBeInTheDocument();
     expect(screen.getByTestId('planner-panel-scroll')).toHaveClass('overflow-x-hidden');
+    expect(screen.getByTestId('planner-panel')).toHaveClass(
+      'md:w-[360px]',
+      'md:max-h-[calc(100dvh-1.5rem)]',
+      'md:bottom-auto',
+    );
+    expect(screen.getByTestId('planner-panel')).not.toHaveClass('md:w-[400px]');
     expect(screen.getByText('Panel body')).toBeInTheDocument();
     expect(screen.getByTestId('panel-attribution')).toBeInTheDocument();
 

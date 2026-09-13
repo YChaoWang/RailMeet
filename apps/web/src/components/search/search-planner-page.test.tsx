@@ -214,13 +214,13 @@ describe('SearchPlannerPage live draft markers', () => {
     );
     expect(mapScenes.at(-1)?.markers.every((marker) => marker.latitude !== 48.85)).toBe(true);
 
-    await user.click(screen.getByRole('button', { name: 'Add traveler' }));
+    await user.click(screen.getByRole('radio', { name: '3 travelers' }));
     await user.click(screen.getByTestId('pick-participants.2.origin'));
     await waitFor(() =>
       expect(screen.getByTestId('search-map')).toHaveAttribute('data-marker-count', '2'),
     );
 
-    await user.click(screen.getByRole('button', { name: 'Remove last' }));
+    await user.click(screen.getByRole('radio', { name: '2 travelers' }));
     await waitFor(() =>
       expect(screen.getByTestId('search-map')).toHaveAttribute('data-marker-count', '1'),
     );
@@ -233,7 +233,7 @@ describe('SearchPlannerPage live draft markers', () => {
   it('does not create a marker for an empty added traveler', async () => {
     const user = userEvent.setup();
     renderPlanner();
-    await user.click(screen.getByRole('button', { name: 'Add traveler' }));
+    await user.click(screen.getByRole('radio', { name: '3 travelers' }));
     expect(screen.getByTestId('search-map')).toHaveAttribute('data-marker-count', '0');
     expect(createMeetingSearch).not.toHaveBeenCalled();
   });
@@ -241,9 +241,9 @@ describe('SearchPlannerPage live draft markers', () => {
   it('keeps stable traveler letters when removing another traveler', async () => {
     const user = userEvent.setup();
     renderPlanner();
-    await user.click(screen.getByRole('button', { name: 'Add traveler' }));
+    await user.click(screen.getByRole('radio', { name: '3 travelers' }));
     expect(screen.getByPlaceholderText('Name (optional — defaults to Traveler C)')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Remove last' }));
+    await user.click(screen.getByRole('radio', { name: '2 travelers' }));
     expect(
       screen.queryByPlaceholderText('Name (optional — defaults to Traveler C)'),
     ).not.toBeInTheDocument();

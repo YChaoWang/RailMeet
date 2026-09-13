@@ -4,15 +4,8 @@ import type { MeetingSearchResultsData } from '@railmeet/validation';
 import type { RankingMode } from '@railmeet/shared';
 import { RANKING_MODES } from '@railmeet/shared';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
-import { Badge } from '@/components/ui/badge';
 import {
   formatArrivalSpreadMs,
   formatDurationMinutes,
@@ -23,8 +16,8 @@ import {
 import { candidateSelectionKey, type MapMissingGeometryNote } from '@/lib/map-markers';
 import { travelerColorAt, travelerLetterAt } from '@/lib/traveler-identity';
 import { cn } from '@/lib/utils';
-import { JourneyRouteSummary } from '@/components/search/journey-itinerary-timeline';
 import { JourneyDetailsPanel } from '@/components/search/journey-details-panel';
+import { JourneyRouteSummary } from '@/components/search/journey-itinerary-timeline';
 
 function placeLabel(place: { placeId: string; name?: string | undefined }): string {
   return place.name ?? place.placeId;
@@ -41,6 +34,8 @@ type SearchResultsViewProps = {
   readonly missingGeometry?: readonly MapMissingGeometryNote[];
   /** When true, render inline in the planner panel without a nested sub-panel chrome. */
   readonly embedded?: boolean;
+  readonly listHeader?: ReactNode;
+  readonly listFooter?: ReactNode;
 };
 
 export function SearchResultsView({
@@ -53,7 +48,13 @@ export function SearchResultsView({
   onEmphasizeParticipant,
   missingGeometry = [],
   embedded = false,
+  listHeader,
+  listFooter,
 }: SearchResultsViewProps) {
+  const [journeysOpen, setJourneysOpen] = useState(false);
+  useEffect(() => {
+    setJourneysOpen(false);
+  }, [results.searchId]);
   const availableModes = useMemo(() => {
     const present = new Set(results.rankings.map((row) => row.rankingMode));
     const ordered = RANKING_MODES.filter((mode) => present.has(mode));
@@ -67,10 +68,17 @@ export function SearchResultsView({
   }, [availableModes, rankingMode, onRankingModeChange]);
 
   const candidates = rankingsForMode(results, rankingMode);
+  const selected = candidates.find((candidate) => {
+    return (
+      candidateSelectionKey(candidate.rankingMode, candidate.rank, candidate.destination.placeId) ===
+      selectedKey
+    );
+  });
 
   if (results.completionOutcome !== 'ranked' || candidates.length === 0) {
     return (
       <div className="space-y-3" data-testid="results-empty">
+        {listHeader}
         <h2 className="text-base font-semibold text-ink-950">
           We couldn’t find a workable meeting plan.
         </h2>
@@ -86,169 +94,222 @@ export function SearchResultsView({
   }
 
   return (
-    <div className="space-y-4" data-testid="results-ranked">
+    <div className="min-w-0" data-testid="results-ranked" data-layout="stack">
       <div
-        className={cn(
-          'space-y-2',
-          embedded ? 'border-b border-ink-700/10 pb-3' : 'sticky top-0 z-[1] -mx-4 border-b border-ink-700/10 bg-white px-4 pb-3 pt-1',
-        )}
+        className={cn('min-w-0 space-y-4', journeysOpen && 'hidden')}
+        data-testid="results-list"
       >
-        <p className="text-xs font-medium uppercase tracking-wide text-ink-700">Ranking mode</p>
-        <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Ranking modes">
-          {availableModes.map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={rankingMode === value}
-              className={cn(
-                'min-h-11 shrink-0 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600',
-                rankingMode === value
-                  ? 'bg-teal-600 text-white'
-                  : 'bg-mist-100 text-ink-900 hover:bg-mist-100/80',
-              )}
-              onClick={() => onRankingModeChange(value)}
-            >
-              {RANKING_MODE_LABELS[value].title}
-            </button>
-          ))}
+        {listHeader}
+        <div
+          className={cn(embedded ? undefined : 'sticky top-0 z-[1] -mx-4 bg-white px-4 pb-3 pt-1')}
+          data-testid="ranking-mode-control"
+        >
+          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Ranking modes">
+            {availableModes.map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={rankingMode === value}
+                className={cn(
+                  'min-h-11 rounded-full px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600',
+                  rankingMode === value
+                    ? 'bg-ink-900 text-white'
+                    : 'bg-mist-100 text-ink-900 hover:bg-mist-100/70',
+                )}
+                onClick={() => onRankingModeChange(value)}
+              >
+                {RANKING_MODE_LABELS[value].title}
+              </button>
+            ))}
+          </div>
+          <p
+            className="mt-2 text-xs leading-snug text-ink-700"
+            data-testid="ranking-mode-description"
+          >
+            {RANKING_MODE_LABELS[rankingMode].description}
+          </p>
         </div>
-        <p className="text-xs text-ink-700">{RANKING_MODE_LABELS[rankingMode].description}</p>
+
+        <ol className="min-w-0 divide-y divide-ink-700/10">
+          {candidates.map((candidate) => {
+            const key = candidateSelectionKey(
+              candidate.rankingMode,
+              candidate.rank,
+              candidate.destination.placeId,
+            );
+            const isSelected = selectedKey === key;
+            const city = placeLabel(candidate.destination);
+            return (
+              <li key={key} className="min-w-0">
+                <button
+                  type="button"
+                  className={cn(
+                    '-mx-2 flex w-[calc(100%+1rem)] min-w-0 items-start gap-3 rounded-xl px-2 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600',
+                    isSelected ? 'bg-mist-50' : 'hover:bg-mist-50/80',
+                  )}
+                  aria-pressed={isSelected}
+                  aria-expanded={journeysOpen && isSelected}
+                  aria-label={`Rank ${candidate.rank} ${city}`}
+                  data-testid="candidate-card"
+                  onClick={() => {
+                    onSelectCandidate(key);
+                    setJourneysOpen(true);
+                  }}
+                >
+                  <span
+                    className={cn(
+                      'mt-0.5 w-5 shrink-0 text-sm tabular-nums',
+                      isSelected ? 'font-semibold text-teal-800' : 'text-ink-700',
+                    )}
+                    aria-hidden
+                  >
+                    {candidate.rank}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block break-words text-base font-semibold text-ink-950">
+                      {city}
+                    </span>
+                    <p
+                      className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-700"
+                      data-testid="candidate-metrics"
+                    >
+                      <span>{formatArrivalSpreadMs(candidate.arrivalSpreadMs)} apart</span>
+                      <span>{formatDurationMinutes(candidate.totalDurationMinutes)} combined</span>
+                      <span>
+                        {candidate.totalTransfers} change
+                        {candidate.totalTransfers === 1 ? '' : 's'}
+                      </span>
+                    </p>
+                    <span className="mt-2 flex flex-col gap-1.5">
+                      {candidate.journeys.map((journey) => (
+                        <span
+                          key={journey.journeyId}
+                          className="min-w-0"
+                          data-testid="candidate-traveler"
+                        >
+                          <span className="flex max-w-full items-center gap-1.5">
+                            <span
+                              className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white"
+                              style={{
+                                backgroundColor: travelerColorAt(journey.participantPosition),
+                              }}
+                              aria-hidden
+                            >
+                              {travelerLetterAt(journey.participantPosition)}
+                            </span>
+                            <span className="truncate text-sm text-ink-950">
+                              {journey.participantDisplayName}
+                            </span>
+                            <span className="shrink-0 tabular-nums text-sm text-ink-700">
+                              {formatDurationMinutes(journey.durationMinutes)}
+                            </span>
+                          </span>
+                          {journey.routeSummary.length > 0 ? (
+                            <JourneyRouteSummary
+                              segments={journey.routeSummary}
+                              className="mt-1"
+                            />
+                          ) : null}
+                        </span>
+                      ))}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+        {listFooter}
       </div>
 
-      <ul className="grid min-w-0 grid-cols-1 gap-2">
-        {candidates.map((candidate) => {
-          const key = candidateSelectionKey(
-            candidate.rankingMode,
-            candidate.rank,
-            candidate.destination.placeId,
-          );
-          const selected = selectedKey === key;
-          return (
-            <li key={key} className="min-w-0">
+      <div
+        className={cn('min-w-0', !journeysOpen && 'hidden')}
+        data-testid="results-journeys"
+      >
+        {selected ? (
+          <div className="min-w-0">
+            <div className="mb-4 flex items-start gap-2">
               <button
                 type="button"
-                className={cn(
-                  'w-full min-w-0 rounded-xl border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600',
-                  selected
-                    ? 'border-teal-600 bg-teal-50/50 ring-1 ring-teal-600/30'
-                    : 'border-ink-700/10 hover:border-ink-700/25',
-                )}
-                aria-pressed={selected}
-                data-testid="candidate-card"
-                onClick={() => onSelectCandidate(key)}
+                className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-sm font-medium text-teal-800 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                onClick={() => setJourneysOpen(false)}
+                data-testid="journeys-back"
               >
-                <div className="flex min-w-0 items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs text-ink-700">Rank {candidate.rank}</p>
-                    <p className="break-words text-base font-semibold text-ink-950">
-                      {placeLabel(candidate.destination)}
-                    </p>
-                  </div>
-                  {candidate.recommended ? (
-                    <Badge variant="success" className="shrink-0">
-                      Recommended
-                    </Badge>
-                  ) : null}
-                </div>
-                <ul
-                  className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-700"
-                  data-testid="candidate-metrics"
-                  aria-label="Journey summary"
-                >
-                  <li>Spread {formatArrivalSpreadMs(candidate.arrivalSpreadMs)}</li>
-                  <li>{formatDurationMinutes(candidate.totalDurationMinutes)} combined</li>
-                  <li>
-                    {candidate.totalTransfers} transfer{candidate.totalTransfers === 1 ? '' : 's'}
-                  </li>
-                </ul>
-                {candidate.journeys.map((journey) =>
-                  journey.routeSummary.length > 0 ? (
-                    <JourneyRouteSummary
-                      key={`summary-${journey.journeyId}`}
-                      segments={journey.routeSummary}
-                    />
-                  ) : null,
-                )}
-                <p className="mt-1 break-words text-xs text-ink-700">
-                  {candidate.journeys
-                    .map(
-                      (journey) =>
-                        `${journey.participantDisplayName} ${formatDurationMinutes(journey.durationMinutes)}`,
-                    )
-                    .join(' · ')}
-                </p>
+                Back
               </button>
-
-              {selected ? (
-                <Accordion type="single" collapsible defaultValue="details" className="mt-2">
-                  <AccordionItem value="details" className="border-none">
-                    <AccordionTrigger className="py-2 text-sm">Journey details</AccordionTrigger>
-                    <AccordionContent>
-                      <div className="space-y-3">
-                        {candidate.journeys.map((journey) => {
-                          const missingForTraveler = missingGeometry.filter(
-                            (note) => note.participantId === journey.participantId,
-                          );
-                          const emphasized =
-                            !emphasizedParticipantId ||
-                            emphasizedParticipantId === journey.participantId;
-                          const letter = travelerLetterAt(journey.participantPosition);
-                          const color = travelerColorAt(journey.participantPosition);
-                          return (
-                            <div
-                              key={`legs-${journey.journeyId}`}
-                              style={{ opacity: emphasized ? 1 : 0.45 }}
-                            >
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-2 font-medium text-ink-900 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
-                                aria-pressed={emphasizedParticipantId === journey.participantId}
-                                onClick={() =>
-                                  onEmphasizeParticipant?.(
-                                    emphasizedParticipantId === journey.participantId
-                                      ? null
-                                      : journey.participantId,
-                                  )
-                                }
-                              >
-                                <span
-                                  className="grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold text-white"
-                                  style={{ backgroundColor: color }}
-                                  aria-hidden
-                                >
-                                  {letter}
-                                </span>
-                                {journey.participantDisplayName}
-                              </button>
-                              <p className="text-xs text-ink-700">
-                                {placeLabel(journey.origin)} → {placeLabel(journey.destination)}
-                              </p>
-                              {missingForTraveler.length > 0 ? (
-                                <p className="mt-1 text-xs text-amber-800">
-                                  Route shape unavailable for {missingForTraveler.length} segment
-                                  {missingForTraveler.length === 1 ? '' : 's'}
-                                </p>
-                              ) : null}
-                                <JourneyDetailsPanel
-                                  searchId={results.searchId}
-                                  journeyId={journey.journeyId}
-                                  participantDisplayName={journey.participantDisplayName}
-                                  originLabel={placeLabel(journey.origin)}
-                                  destinationLabel={placeLabel(journey.destination)}
-                                />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+              <div className="min-w-0 pt-2">
+                <p className="text-xs text-ink-700">
+                  Rank {selected.rank} · {formatArrivalSpreadMs(selected.arrivalSpreadMs)} apart
+                </p>
+                <h2 className="break-words text-xl font-semibold text-ink-950">
+                  {placeLabel(selected.destination)}
+                </h2>
+              </div>
+            </div>
+            <div className="space-y-6">
+              {selected.journeys.map((journey) => {
+                const missingForTraveler = missingGeometry.filter(
+                  (note) => note.participantId === journey.participantId,
+                );
+                const emphasized =
+                  !emphasizedParticipantId ||
+                  emphasizedParticipantId === journey.participantId;
+                const highlighted = emphasizedParticipantId === journey.participantId;
+                return (
+                  <section
+                    key={`legs-${journey.journeyId}`}
+                    className="min-w-0 transition-opacity"
+                    style={{ opacity: emphasized ? 1 : 0.45 }}
+                    data-testid="journey-card"
+                  >
+                    <button
+                      type="button"
+                      className="flex min-h-11 w-full min-w-0 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                      aria-pressed={highlighted}
+                      onClick={() =>
+                        onEmphasizeParticipant?.(
+                          highlighted ? null : journey.participantId,
+                        )
+                      }
+                    >
+                      <span
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold text-white"
+                        style={{
+                          backgroundColor: travelerColorAt(journey.participantPosition),
+                        }}
+                        aria-hidden
+                      >
+                        {travelerLetterAt(journey.participantPosition)}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-950">
+                        {journey.participantDisplayName}
+                      </span>
+                      <span className="shrink-0 text-sm tabular-nums text-ink-700">
+                        {formatDurationMinutes(journey.durationMinutes)}
+                      </span>
+                    </button>
+                    {missingForTraveler.length > 0 ? (
+                      <p className="mt-1 text-xs text-amber-800">
+                        Route shape unavailable for {missingForTraveler.length} segment
+                        {missingForTraveler.length === 1 ? '' : 's'}
+                      </p>
+                    ) : null}
+                    <div className="mt-1 min-w-0">
+                      <JourneyDetailsPanel
+                        searchId={results.searchId}
+                        journeyId={journey.journeyId}
+                        originLabel={placeLabel(journey.origin)}
+                        destinationLabel={placeLabel(journey.destination)}
+                      />
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

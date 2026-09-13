@@ -12,15 +12,31 @@ import {
   type PlaceSuggestionView,
   type SelectedPlaceOrigin,
 } from '@railmeet/validation';
+import { format, parse } from 'date-fns';
+import {
+  Bus,
+  CableCar,
+  CalendarClock,
+  Calendar as CalendarIcon,
+  Loader2,
+  MapPin,
+  MapPinned,
+  Ship,
+  TrainFront,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 
 import { PlaceCombobox } from '@/components/search/place-combobox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -30,6 +46,7 @@ import {
 } from '@/components/ui/select';
 import { createMeetingSearch } from '@/lib/meeting-search-client';
 import { travelerColorAt, travelerLetterAt } from '@/lib/traveler-identity';
+import { cn } from '@/lib/utils';
 
 export type ParticipantDraft = {
   /** Stable React/map identity for this draft row — never reuse array index. */
@@ -91,6 +108,34 @@ function toSelectedOrigin(suggestion: PlaceSuggestionView): SelectedPlaceOrigin 
   };
 }
 
+const TRANSPORT_MODE_ICONS: Record<TransportMode, LucideIcon> = {
+  train: TrainFront,
+  bus: Bus,
+  tram: CableCar,
+  metro: TrainFront,
+  ferry: Ship,
+};
+
+function SectionHeading({
+  icon: Icon,
+  children,
+}: {
+  readonly icon: LucideIcon;
+  readonly children: ReactNode;
+}) {
+  return (
+    <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-950">
+      <Icon className="size-4 shrink-0 text-teal-600" aria-hidden />
+      {children}
+    </h2>
+  );
+}
+
+function parseTravelDate(value: string): Date | undefined {
+  const parsed = parse(value, 'yyyy-MM-dd', new Date());
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
 const RANKING_OPTIONS: { value: RankingMode; label: string }[] = [
   { value: 'fairest', label: 'Fairest' },
   { value: 'fastest-overall', label: 'Fastest overall' },
@@ -98,11 +143,100 @@ const RANKING_OPTIONS: { value: RankingMode; label: string }[] = [
   { value: 'arrive-together', label: 'Arrive together' },
 ];
 
+const TRAVELER_COUNTS = Array.from(
+  { length: PARTICIPANT_COUNT_MAX - PARTICIPANT_COUNT_MIN + 1 },
+  (_, index) => PARTICIPANT_COUNT_MIN + index,
+);
+
+function TravelerCountRail({
+  count,
+  disabled,
+  onChange,
+}: {
+  readonly count: number;
+  readonly disabled: boolean;
+  readonly onChange: (next: number) => void;
+}) {
+  const groupRef = useRef<HTMLDivElement>(null);
+
+  const commit = (next: number) => {
+    const clamped = Math.min(PARTICIPANT_COUNT_MAX, Math.max(PARTICIPANT_COUNT_MIN, next));
+    if (clamped === count) {
+      return;
+    }
+    onChange(clamped);
+    queueMicrotask(() => {
+      groupRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+    });
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (disabled) {
+      return;
+    }
+    if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      commit(count + 1);
+      return;
+    }
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      commit(count - 1);
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      commit(PARTICIPANT_COUNT_MIN);
+      return;
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      commit(PARTICIPANT_COUNT_MAX);
+    }
+  };
+
+  return (
+    <div
+      ref={groupRef}
+      role="radiogroup"
+      aria-label="Number of travelers"
+      data-testid="search-form-traveler-count"
+      className="grid grid-cols-5 overflow-hidden rounded-xl border border-ink-700/20"
+      onKeyDown={onKeyDown}
+    >
+      {TRAVELER_COUNTS.map((value, index) => {
+        const selected = value === count;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={`${value} travelers`}
+            tabIndex={selected ? 0 : -1}
+            disabled={disabled}
+            className={cn(
+              'min-h-11 min-w-11 text-sm font-semibold focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-600',
+              selected ? 'bg-teal-600 text-white' : 'bg-white text-ink-950 hover:bg-mist-50',
+              index < TRAVELER_COUNTS.length - 1 ? 'border-r border-ink-700/15' : null,
+            )}
+            onClick={() => onChange(value)}
+          >
+            {value}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SearchForm({ participants, onParticipantsChange }: SearchFormProps) {
   const router = useRouter();
   const formId = useId();
   const submittingRef = useRef(false);
   const [travelDate, setTravelDate] = useState('2026-09-15');
+  const [travelDateOpen, setTravelDateOpen] = useState(false);
+  const selectedTravelDate = parseTravelDate(travelDate);
   const [earliestDepartureTime, setEarliestDepartureTime] = useState('08:00');
   const [latestArrivalTime, setLatestArrivalTime] = useState('22:00');
   const [arrivalDayOffset, setArrivalDayOffset] = useState<'0' | '1'>('0');
@@ -139,6 +273,19 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
     onParticipantsChange((previous) =>
       previous.map((row) => (row.key === key ? { ...row, ...patch } : row)),
     );
+  };
+
+  const setTravelerCount = (nextCount: number) => {
+    onParticipantsChange((previous) => {
+      if (nextCount === previous.length) {
+        return previous;
+      }
+      if (nextCount < previous.length) {
+        return previous.slice(0, nextCount);
+      }
+      const added = Array.from({ length: nextCount - previous.length }, () => newParticipant());
+      return [...previous, ...added];
+    });
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -235,11 +382,13 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
       data-testid="search-form"
     >
       <section className="min-w-0 space-y-3" data-testid="search-form-travelers">
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold text-ink-950">Travelers</h2>
-          <p className="text-xs text-ink-700">
-            {PARTICIPANT_COUNT_MIN}–{PARTICIPANT_COUNT_MAX}
-          </p>
+        <div className="space-y-2">
+          <SectionHeading icon={Users}>Travelers</SectionHeading>
+          <TravelerCountRail
+            count={participants.length}
+            disabled={pending}
+            onChange={setTravelerCount}
+          />
         </div>
         {participants.map((participant, index) => (
           <div
@@ -282,7 +431,10 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`${participant.key}-origin`}>Starting place</Label>
+              <Label htmlFor={`${participant.key}-origin`} className="inline-flex items-center gap-1.5">
+                <MapPin className="size-3.5 shrink-0 text-teal-600" aria-hidden />
+                Starting place
+              </Label>
               <PlaceCombobox
                 id={`${participant.key}-origin`}
                 fieldPath={`participants.${index}.origin`}
@@ -308,28 +460,6 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
           </div>
         ))}
         {errors.participants ? <p className="text-sm text-red-700">{errors.participants}</p> : null}
-        <div className="flex flex-wrap gap-2" data-testid="search-form-traveler-actions">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="min-h-11"
-            disabled={participants.length >= PARTICIPANT_COUNT_MAX || pending}
-            onClick={() => onParticipantsChange((previous) => [...previous, newParticipant()])}
-          >
-            Add traveler
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="min-h-11"
-            disabled={participants.length <= PARTICIPANT_COUNT_MIN || pending}
-            onClick={() => onParticipantsChange((previous) => previous.slice(0, -1))}
-          >
-            Remove last
-          </Button>
-        </div>
       </section>
 
       <section
@@ -337,17 +467,43 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
         data-testid="search-form-schedule"
       >
         <div className="space-y-1.5 md:col-span-2">
-          <h2 className="text-sm font-semibold text-ink-950">When & preference</h2>
+          <SectionHeading icon={CalendarClock}>When & preference</SectionHeading>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 md:col-span-2">
           <Label htmlFor="travelDate">Travel date</Label>
-          <Input
-            id="travelDate"
-            data-field="travelDate"
-            type="date"
-            value={travelDate}
-            onChange={(event) => setTravelDate(event.target.value)}
-          />
+          <Popover open={travelDateOpen} onOpenChange={setTravelDateOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                id="travelDate"
+                data-field="travelDate"
+                className="w-full justify-start font-normal"
+                aria-label={
+                  selectedTravelDate
+                    ? `Travel date, ${format(selectedTravelDate, 'PPP')}`
+                    : 'Travel date'
+                }
+                aria-invalid={Boolean(errors.travelDate)}
+              >
+                <CalendarIcon className="size-4 shrink-0 text-teal-600" aria-hidden />
+                {selectedTravelDate ? format(selectedTravelDate, 'PPP') : <span>Pick a date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                required
+                selected={selectedTravelDate}
+                {...(selectedTravelDate ? { defaultMonth: selectedTravelDate } : {})}
+                onSelect={(date) => {
+                  setTravelDate(format(date, 'yyyy-MM-dd'));
+                  setTravelDateOpen(false);
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+          {errors.travelDate ? <p className="text-sm text-red-700">{errors.travelDate}</p> : null}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="rankingMode">Ranking preference</Label>
@@ -435,18 +591,22 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-ink-950">Transport modes</h2>
+        <SectionHeading icon={TrainFront}>Transport modes</SectionHeading>
         <div className="flex flex-wrap gap-3">
-          {TRANSPORT_MODES.map((mode) => (
-            <label key={mode} className="flex min-h-11 items-center gap-2 text-sm capitalize">
-              <Checkbox
-                checked={modes.includes(mode)}
-                onCheckedChange={(checked) => toggleMode(mode, checked === true)}
-                data-field="allowedTransportModes"
-              />
-              {mode}
-            </label>
-          ))}
+          {TRANSPORT_MODES.map((mode) => {
+            const ModeIcon = TRANSPORT_MODE_ICONS[mode];
+            return (
+              <label key={mode} className="flex min-h-11 items-center gap-2 text-sm capitalize">
+                <Checkbox
+                  checked={modes.includes(mode)}
+                  onCheckedChange={(checked) => toggleMode(mode, checked === true)}
+                  data-field="allowedTransportModes"
+                />
+                <ModeIcon className="size-3.5 shrink-0 text-ink-700" aria-hidden />
+                {mode}
+              </label>
+            );
+          })}
         </div>
         {errors.allowedTransportModes ? (
           <p className="text-sm text-red-700">{errors.allowedTransportModes}</p>
@@ -469,6 +629,11 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
         disabled={pending || !allOriginsSelected}
         aria-busy={pending}
       >
+        {pending ? (
+          <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+        ) : (
+          <MapPinned className="size-4 shrink-0" aria-hidden />
+        )}
         {pending ? 'Starting search…' : 'Find a meeting point'}
       </Button>
     </form>

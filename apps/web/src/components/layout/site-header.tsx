@@ -1,3 +1,4 @@
+import { Search } from 'lucide-react';
 import Link from 'next/link';
 
 export function SiteHeader() {
@@ -9,8 +10,9 @@ export function SiteHeader() {
         </Link>
         <Link
           href="/search"
-          className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-medium text-primary-800 hover:bg-primary-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-primary-800 hover:bg-primary-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
+          <Search className="size-4 shrink-0" aria-hidden />
           New search
         </Link>
       </div>
