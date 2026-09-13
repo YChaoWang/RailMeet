@@ -40,7 +40,8 @@ export function SearchPlannerPage() {
       <ChatAssistant>
         <ChatWaterfallItem index={0}>
           <p className="text-sm text-ink-950">
-            Hi! I'm your travel planner. I'll find a meeting city. Add each traveler's starting place and when you can travel.
+            Hi! I’m your travel planner. I’ll find a meeting city. Add each traveler’s starting
+            place and when you can travel.
           </p>
         </ChatWaterfallItem>
         <ChatWaterfallItem index={1}>
