@@ -46,17 +46,15 @@ describe('migration journal on fresh PostGIS', () => {
     }
   }, 60_000);
 
-  it('applies the complete migration journal through 0012 to a fresh PostGIS database', async () => {
+  it('applies the complete migration journal through 0014 to a fresh PostGIS database', async () => {
     const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as MigrationJournal;
-    expect(journal.entries.map((entry) => entry.tag)).toContain('0007_eager_lyja');
-    expect(journal.entries.map((entry) => entry.tag)).toContain(
-      '0011_catalog_ownership_namespaces',
-    );
-    expect(journal.entries.map((entry) => entry.tag)).toContain(
-      '0012_meeting_city_eligibility_fields',
-    );
-    expect(journal.entries.at(-1)?.tag).toBe('0012_meeting_city_eligibility_fields');
-    expect(journal.entries).toHaveLength(13);
+    const tags = journal.entries.map((entry) => entry.tag);
+    expect(tags).toContain('0007_eager_lyja');
+    expect(tags).toContain('0011_catalog_ownership_namespaces');
+    expect(tags).toContain('0012_meeting_city_eligibility_fields');
+    expect(tags).toContain('0013_expand_transport_modes');
+    expect(journal.entries.at(-1)?.tag).toBe('0014_transitous_transport_modes');
+    expect(journal.entries).toHaveLength(15);
 
     const before = await database.db.execute(sql`
       SELECT to_regclass('public.meeting_search_candidate_evaluations') AS evaluations_table
@@ -70,12 +68,12 @@ describe('migration journal on fresh PostGIS', () => {
       FROM "drizzle"."__drizzle_migrations"
       ORDER BY created_at ASC
     `);
-    expect(applied).toHaveLength(13);
+    expect(applied).toHaveLength(15);
     expect(applied.map((row) => Number(row['created_at']))).toEqual(
       journal.entries.map((entry) => entry.when),
     );
     expect(Number(applied.at(-1)?.['created_at'])).toBe(
-      journal.entries.find((entry) => entry.tag === '0012_meeting_city_eligibility_fields')?.when,
+      journal.entries.find((entry) => entry.tag === '0014_transitous_transport_modes')?.when,
     );
 
     const tables = await database.db.execute(sql`

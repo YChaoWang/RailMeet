@@ -267,9 +267,7 @@ export function createRoutingWorkProcessor(
         },
         'Unexpected routing work failure',
       );
-      throw new UnrecoverableError(
-        error instanceof Error ? error.message : 'Unexpected routing work failure',
-      );
+      throw error;
     }
   };
 }

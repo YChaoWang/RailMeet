@@ -276,9 +276,7 @@ export function createCandidateGenerationProcessor(
         },
         'Unexpected candidate generation failure',
       );
-      throw new UnrecoverableError(
-        error instanceof Error ? error.message : 'Unexpected candidate generation failure',
-      );
+      throw error;
     }
   };
 }
