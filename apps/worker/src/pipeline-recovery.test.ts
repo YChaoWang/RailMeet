@@ -105,7 +105,7 @@ describe('createPipelineRecovery', () => {
   it('abandons work that has been stuck longer than the abandon window', async () => {
     const completeCandidateGeneration = vi.fn().mockResolvedValue(undefined);
     const markRoutingWorkExhausted = vi.fn().mockResolvedValue(undefined);
-    const republishMappedJob = vi.fn();
+    const publishMappedJob = vi.fn();
     const recovery = createPipelineRecovery({
       searchPipeline: {
         listStalePipelineWork: vi.fn().mockResolvedValue({
@@ -127,7 +127,7 @@ describe('createPipelineRecovery', () => {
         findByAggregateId: vi.fn().mockResolvedValue([]),
       } as never,
       publisher: {
-        republishMappedJob,
+        publishMappedJob,
       } as never,
       logger: createLogger({ name: 'pipeline-recovery-test', level: 'silent', pretty: false }),
       now: () => new Date('2026-06-16T09:00:00.000Z'),
@@ -141,11 +141,11 @@ describe('createPipelineRecovery', () => {
       'PIPELINE_STALLED',
     );
     expect(markRoutingWorkExhausted).toHaveBeenCalledWith(routingWorkId, 'PIPELINE_STALLED');
-    expect(republishMappedJob).not.toHaveBeenCalled();
+    expect(publishMappedJob).not.toHaveBeenCalled();
   });
 
   it('re-enqueues published candidate jobs that are stale but not abandoned', async () => {
-    const republishMappedJob = vi.fn().mockResolvedValue('added');
+    const publishMappedJob = vi.fn().mockResolvedValue('added');
     const recovery = createPipelineRecovery({
       searchPipeline: {
         listStalePipelineWork: vi.fn().mockResolvedValue({
@@ -163,7 +163,7 @@ describe('createPipelineRecovery', () => {
         ]),
       } as never,
       publisher: {
-        republishMappedJob,
+        publishMappedJob,
       } as never,
       logger: createLogger({ name: 'pipeline-recovery-test', level: 'silent', pretty: false }),
       now: () => new Date('2026-06-15T09:00:00.000Z'),
@@ -171,8 +171,8 @@ describe('createPipelineRecovery', () => {
 
     const stats = await recovery.recoverOnce();
     expect(stats.republished).toBe(1);
-    expect(republishMappedJob).toHaveBeenCalledTimes(1);
-    expect(republishMappedJob.mock.calls[0]![0]).toMatchObject({
+    expect(publishMappedJob).toHaveBeenCalledTimes(1);
+    expect(publishMappedJob.mock.calls[0]![0]).toMatchObject({
       jobName: 'meeting-search.candidates-requested',
     });
   });

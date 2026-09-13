@@ -176,7 +176,7 @@ export function createPipelineRecovery(options: CreatePipelineRecoveryOptions): 
 
       let result: PublishResult;
       try {
-        result = await options.publisher.republishMappedJob(mapped.job);
+        result = await options.publisher.publishMappedJob(mapped.job);
       } catch (error) {
         stats.failed += 1;
         options.logger.error(

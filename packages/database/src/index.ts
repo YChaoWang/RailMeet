@@ -90,6 +90,7 @@ export type {
   FanOutRoutingInput,
   ExpandRoutingWaveInput,
   SearchPipelineRepository,
+  StalePipelineWork,
 } from './repositories/search-pipeline-repository.js';
 export { assertPostgisInstalled } from './repositories/place-repository.js';
 
