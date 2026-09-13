@@ -68,11 +68,13 @@ vi.mock('@/components/search/place-combobox', () => ({
 import { createInitialParticipants, SearchForm, type ParticipantDraft } from './search-form';
 
 function Harness({
-  initial = createInitialParticipants(),
+  initial,
 }: {
   readonly initial?: ParticipantDraft[];
 }) {
-  const [participants, setParticipants] = useState(initial);
+  const [participants, setParticipants] = useState(
+    () => initial ?? createInitialParticipants(),
+  );
   return <SearchForm participants={participants} onParticipantsChange={setParticipants} />;
 }
 
@@ -91,24 +93,36 @@ describe('SearchForm place selection', () => {
     render(<Harness />);
     const form = screen.getByRole('form', { name: 'Meeting search' });
     expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(2);
-    expect(within(form).getByRole('radio', { name: '2 travelers' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
-    await user.click(within(form).getByRole('radio', { name: '3 travelers' }));
+    expect(within(form).getByText('2 of 6')).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Add traveler' })).toBeEnabled();
+    expect(within(form).getByRole('button', { name: 'Remove traveler A' })).toBeDisabled();
+    await user.click(within(form).getByRole('button', { name: 'Add traveler' }));
     expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(3);
+    expect(within(form).getByText('3 of 6')).toBeInTheDocument();
   });
 
-  it('jumps traveler count within 2–6 and drops extra rows from the end', async () => {
+  it('adds up to 6 travelers and removes a specific row without going below 2', async () => {
     const user = userEvent.setup();
     render(<Harness />);
     const form = screen.getByRole('form', { name: 'Meeting search' });
-    await user.click(within(form).getByRole('radio', { name: '5 travelers' }));
+    const add = () => within(form).getByRole('button', { name: 'Add traveler' });
+    await user.click(add());
+    await user.click(add());
+    await user.click(add());
+    await user.click(add());
+    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(6);
+    expect(add()).toBeDisabled();
+    await user.click(within(form).getByRole('button', { name: 'Remove traveler C' }));
     expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(5);
-    await user.click(within(form).getByRole('radio', { name: '2 travelers' }));
+    expect(within(form).queryByPlaceholderText('Name (optional — defaults to Traveler C)')).not.toBeInTheDocument();
+    expect(within(form).getByPlaceholderText('Name (optional — defaults to Traveler A)')).toBeInTheDocument();
+    expect(within(form).getByPlaceholderText('Name (optional — defaults to Traveler B)')).toBeInTheDocument();
+    await user.click(within(form).getByRole('button', { name: 'Remove traveler D' }));
+    await user.click(within(form).getByRole('button', { name: 'Remove traveler E' }));
+    await user.click(within(form).getByRole('button', { name: 'Remove traveler F' }));
     expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(2);
-    expect(within(form).queryByRole('radio', { name: '1 travelers' })).not.toBeInTheDocument();
-    expect(within(form).queryByRole('radio', { name: '7 travelers' })).not.toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Remove traveler A' })).toBeDisabled();
+    expect(within(form).getByRole('button', { name: 'Remove traveler B' })).toBeDisabled();
   });
 
   it('picks a travel date from the calendar popover', async () => {

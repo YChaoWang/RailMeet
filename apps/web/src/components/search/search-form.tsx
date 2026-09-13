@@ -21,16 +21,19 @@ import {
   Loader2,
   MapPin,
   MapPinned,
+  Plus,
   Ship,
   TrainFront,
+  Trash2,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { PlaceCombobox } from '@/components/search/place-combobox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Avatar, AvatarFallback, AvatarGroup } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -46,7 +49,6 @@ import {
 } from '@/components/ui/select';
 import { createMeetingSearch } from '@/lib/meeting-search-client';
 import { travelerColorAt, travelerLetterAt } from '@/lib/traveler-identity';
-import { cn } from '@/lib/utils';
 
 export type ParticipantDraft = {
   /** Stable React/map identity for this draft row — never reuse array index. */
@@ -143,90 +145,19 @@ const RANKING_OPTIONS: { value: RankingMode; label: string }[] = [
   { value: 'arrive-together', label: 'Arrive together' },
 ];
 
-const TRAVELER_COUNTS = Array.from(
-  { length: PARTICIPANT_COUNT_MAX - PARTICIPANT_COUNT_MIN + 1 },
-  (_, index) => PARTICIPANT_COUNT_MIN + index,
-);
-
-function TravelerCountRail({
-  count,
-  disabled,
-  onChange,
+function TravelerAvatar({
+  letter,
+  color,
+  className,
 }: {
-  readonly count: number;
-  readonly disabled: boolean;
-  readonly onChange: (next: number) => void;
+  readonly letter: string;
+  readonly color: string;
+  readonly className?: string;
 }) {
-  const groupRef = useRef<HTMLDivElement>(null);
-
-  const commit = (next: number) => {
-    const clamped = Math.min(PARTICIPANT_COUNT_MAX, Math.max(PARTICIPANT_COUNT_MIN, next));
-    if (clamped === count) {
-      return;
-    }
-    onChange(clamped);
-    queueMicrotask(() => {
-      groupRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
-    });
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (disabled) {
-      return;
-    }
-    if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      commit(count + 1);
-      return;
-    }
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
-      event.preventDefault();
-      commit(count - 1);
-      return;
-    }
-    if (event.key === 'Home') {
-      event.preventDefault();
-      commit(PARTICIPANT_COUNT_MIN);
-      return;
-    }
-    if (event.key === 'End') {
-      event.preventDefault();
-      commit(PARTICIPANT_COUNT_MAX);
-    }
-  };
-
   return (
-    <div
-      ref={groupRef}
-      role="radiogroup"
-      aria-label="Number of travelers"
-      data-testid="search-form-traveler-count"
-      className="grid grid-cols-5 overflow-hidden rounded-xl border border-ink-700/20"
-      onKeyDown={onKeyDown}
-    >
-      {TRAVELER_COUNTS.map((value, index) => {
-        const selected = value === count;
-        return (
-          <button
-            key={value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            aria-label={`${value} travelers`}
-            tabIndex={selected ? 0 : -1}
-            disabled={disabled}
-            className={cn(
-              'min-h-11 min-w-11 text-sm font-semibold focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-600',
-              selected ? 'bg-teal-600 text-white' : 'bg-white text-ink-950 hover:bg-mist-50',
-              index < TRAVELER_COUNTS.length - 1 ? 'border-r border-ink-700/15' : null,
-            )}
-            onClick={() => onChange(value)}
-          >
-            {value}
-          </button>
-        );
-      })}
-    </div>
+    <Avatar className={className} aria-hidden>
+      <AvatarFallback style={{ backgroundColor: color }}>{letter}</AvatarFallback>
+    </Avatar>
   );
 }
 
@@ -275,17 +206,19 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
     );
   };
 
-  const setTravelerCount = (nextCount: number) => {
-    onParticipantsChange((previous) => {
-      if (nextCount === previous.length) {
-        return previous;
-      }
-      if (nextCount < previous.length) {
-        return previous.slice(0, nextCount);
-      }
-      const added = Array.from({ length: nextCount - previous.length }, () => newParticipant());
-      return [...previous, ...added];
-    });
+  const addTraveler = () => {
+    const added = newParticipant();
+    onParticipantsChange((previous) =>
+      previous.length >= PARTICIPANT_COUNT_MAX ? previous : [...previous, added],
+    );
+  };
+
+  const removeTraveler = (key: string) => {
+    onParticipantsChange((previous) =>
+      previous.length <= PARTICIPANT_COUNT_MIN
+        ? previous
+        : previous.filter((row) => row.key !== key),
+    );
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -383,12 +316,35 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
     >
       <section className="min-w-0 space-y-3" data-testid="search-form-travelers">
         <div className="space-y-2">
-          <SectionHeading icon={Users}>Travelers</SectionHeading>
-          <TravelerCountRail
-            count={participants.length}
-            disabled={pending}
-            onChange={setTravelerCount}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <SectionHeading icon={Users}>Travelers</SectionHeading>
+            <p className="text-xs text-ink-700" data-testid="search-form-traveler-count">
+              {participants.length} of {PARTICIPANT_COUNT_MAX}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <AvatarGroup role="group" aria-label={`${participants.length} travelers`} className="min-h-8">
+              {participants.map((participant) => (
+                <TravelerAvatar
+                  key={participant.key}
+                  letter={participant.letter}
+                  color={participant.color}
+                  className="ring-2 ring-white"
+                />
+              ))}
+            </AvatarGroup>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="min-h-11"
+              disabled={participants.length >= PARTICIPANT_COUNT_MAX || pending}
+              onClick={addTraveler}
+            >
+              <Plus className="size-4 shrink-0" aria-hidden />
+              Add traveler
+            </Button>
+          </div>
         </div>
         {participants.map((participant, index) => (
           <div
@@ -397,13 +353,11 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             data-testid="search-form-traveler-row"
           >
             <div className="flex items-center gap-2">
-              <span
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
-                style={{ backgroundColor: participant.color }}
-                aria-hidden
-              >
-                {participant.letter}
-              </span>
+              <TravelerAvatar
+                letter={participant.letter}
+                color={participant.color}
+                className="size-7"
+              />
               <div className="min-w-0 flex-1 space-y-1.5">
                 <Label htmlFor={`${participant.key}-name`} className="sr-only">
                   Traveler {participant.letter} name
@@ -429,6 +383,17 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
                   </p>
                 ) : null}
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0 px-2 text-ink-700 hover:text-red-700"
+                aria-label={`Remove traveler ${participant.letter}`}
+                disabled={participants.length <= PARTICIPANT_COUNT_MIN || pending}
+                onClick={() => removeTraveler(participant.key)}
+              >
+                <Trash2 className="size-4" aria-hidden />
+              </Button>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor={`${participant.key}-origin`} className="inline-flex items-center gap-1.5">
