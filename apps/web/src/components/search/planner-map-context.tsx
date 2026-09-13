@@ -21,8 +21,6 @@ export type PlannerMapApi = {
   readonly setPanelTitle: (title: string) => void;
   readonly setCollapseSheetWhen: (token: string | null) => void;
   readonly setSheetExpanded: (expanded: boolean) => void;
-  /** Lets the active page own the panel-header control (falls back to a New search link). */
-  readonly setHeaderAction: (action: ReactNode) => void;
   readonly setCandidateSelectHandler: (handler: CandidateHandler) => void;
   readonly setTravelerSelectHandler: (handler: TravelerHandler) => void;
 };
@@ -51,17 +49,11 @@ export function PlannerMapProvider({ children, disableMap = false }: PlannerMapP
   const [panelTitle, setPanelTitle] = useState('RailMeet');
   const [collapseSheetWhen, setCollapseSheetWhen] = useState<string | null>(null);
   const [sheetExpanded, setSheetExpanded] = useState(false);
-  const [headerAction, setHeaderActionState] = useState<ReactNode>(null);
   const candidateHandlerRef = useRef<CandidateHandler>(null);
   const travelerHandlerRef = useRef<TravelerHandler>(null);
 
   const setScene = useCallback((next: MapScene) => {
     setSceneState(next);
-  }, []);
-
-  const setHeaderAction = useCallback((action: ReactNode) => {
-    // Wrapped so an element is stored as state rather than treated as an updater.
-    setHeaderActionState(() => action);
   }, []);
 
   const setCandidateSelectHandler = useCallback((handler: CandidateHandler) => {
@@ -78,11 +70,10 @@ export function PlannerMapProvider({ children, disableMap = false }: PlannerMapP
       setPanelTitle,
       setCollapseSheetWhen,
       setSheetExpanded,
-      setHeaderAction,
       setCandidateSelectHandler,
       setTravelerSelectHandler,
     }),
-    [setScene, setHeaderAction, setCandidateSelectHandler, setTravelerSelectHandler],
+    [setScene, setCandidateSelectHandler, setTravelerSelectHandler],
   );
 
   return (
@@ -94,7 +85,6 @@ export function PlannerMapProvider({ children, disableMap = false }: PlannerMapP
         sheetExpanded={sheetExpanded}
         onSheetExpandedChange={setSheetExpanded}
         collapseSheetWhen={collapseSheetWhen}
-        headerAction={headerAction}
         onCandidateSelect={(key) => candidateHandlerRef.current?.(key)}
         onTravelerSelect={(id) => travelerHandlerRef.current?.(id)}
       >

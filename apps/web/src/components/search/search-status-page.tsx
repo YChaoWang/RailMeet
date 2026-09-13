@@ -1,17 +1,11 @@
 'use client';
 
-import { ArrowLeft, Search } from 'lucide-react';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motisPlanModeLabel, type RankingMode } from '@railmeet/shared';
 import type { MeetingSearchDetailData } from '@railmeet/validation';
 
 import { usePlannerMap } from '@/components/search/planner-map-context';
 import { SearchResultsView } from '@/components/search/search-results-view';
-import {
-  createInitialParticipants,
-  SearchForm,
-  type ParticipantDraft,
-} from '@/components/search/search-form';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ChatAssistant, ChatThread, ChatUser, ChatWaterfallItem } from '@/components/ui/chat';
@@ -20,12 +14,7 @@ import { PromptSuggestion } from '@/components/ui/prompt-suggestion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TextShimmer } from '@/components/ui/text-shimmer';
 import { useSearchPolling } from '@/hooks/use-search-polling';
-import {
-  buildDraftOriginScene,
-  buildMapScene,
-  candidateSelectionKey,
-  type MapScene,
-} from '@/lib/map-markers';
+import { buildMapScene, candidateSelectionKey, type MapScene } from '@/lib/map-markers';
 import {
   failureMessage,
   formatTravelDate,
@@ -56,7 +45,6 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     setScene,
     setPanelTitle,
     setSheetExpanded,
-    setHeaderAction,
     setCandidateSelectHandler,
     setTravelerSelectHandler,
   } = usePlannerMap();
@@ -64,10 +52,6 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
   const [rankingMode, setRankingMode] = useState<RankingMode>('fairest');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [emphasizedParticipantId, setEmphasizedParticipantId] = useState<string | null>(null);
-  const [newSearchOpen, setNewSearchOpen] = useState(false);
-  const [draftParticipants, setDraftParticipants] =
-    useState<ParticipantDraft[]>(createInitialParticipants);
-  const newSearchPanelId = useId();
 
   const summary = summaryFromState(state);
   const results = state.kind === 'completed' ? state.results : null;
@@ -107,12 +91,6 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     [summary, results, rankingMode, selectedKey, emphasizedParticipantId],
   );
 
-  const draftScene = useMemo(() => buildDraftOriginScene(draftParticipants), [draftParticipants]);
-
-  // While drafting a replacement search, preview its origins instead of the finished
-  // routes — but only once at least one origin exists, so the map never goes blank.
-  const activeScene = newSearchOpen && draftScene.markers.length > 0 ? draftScene : scene;
-
   useEffect(() => {
     setPanelTitle(panelTitleFor(state.kind));
   }, [state.kind, setPanelTitle]);
@@ -121,40 +99,13 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     // Keep draft traveler markers on the persistent map until the first search summary arrives.
     if (
       (state.kind === 'loading' || state.kind === 'not_found') &&
-      activeScene.markers.length === 0 &&
-      activeScene.routeLines.length === 0
+      scene.markers.length === 0 &&
+      scene.routeLines.length === 0
     ) {
       return;
     }
-    setScene(activeScene);
-  }, [activeScene, setScene, state.kind]);
-
-  useEffect(() => {
-    setHeaderAction(
-      <button
-        type="button"
-        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-teal-800 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
-        aria-expanded={newSearchOpen}
-        aria-controls={newSearchPanelId}
-        onClick={() => setNewSearchOpen((open) => !open)}
-        data-testid="new-search-toggle"
-      >
-        {newSearchOpen ? (
-          <ArrowLeft className="size-4 shrink-0" aria-hidden />
-        ) : (
-          <Search className="size-4 shrink-0" aria-hidden />
-        )}
-        {newSearchOpen ? 'Back to results' : 'New search'}
-      </button>,
-    );
-    return () => setHeaderAction(null);
-  }, [newSearchOpen, newSearchPanelId, setHeaderAction]);
-
-  useEffect(() => {
-    if (newSearchOpen) {
-      setSheetExpanded(true);
-    }
-  }, [newSearchOpen, setSheetExpanded]);
+    setScene(scene);
+  }, [scene, setScene, state.kind]);
 
   useEffect(() => {
     if (results?.searchId) {
@@ -173,49 +124,17 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     };
   }, [setCandidateSelectHandler, setTravelerSelectHandler]);
 
-  return (
-    <>
-      {newSearchOpen ? (
-        <section
-          id={newSearchPanelId}
-          className="min-w-0"
-          aria-label="New search"
-          data-testid="inline-new-search"
-        >
-          <ChatThread>
-            <ChatAssistant>
-              <ChatWaterfallItem index={0}>
-                <p className="text-sm text-ink-950">I’ll start a new search.</p>
-              </ChatWaterfallItem>
-              <ChatWaterfallItem index={1}>
-                <p className="text-sm text-ink-700">
-                  Choose each traveler’s starting place. Your last results stay on the map until you
-                  search again.
-                </p>
-              </ChatWaterfallItem>
-            </ChatAssistant>
-            <SearchForm
-              participants={draftParticipants}
-              onParticipantsChange={setDraftParticipants}
-              waterfallStart={2}
-            />
-          </ChatThread>
-        </section>
-      ) : (
-        renderPanelBody({
-          state,
-          retry,
-          rankingMode,
-          setRankingMode,
-          selectedKey,
-          setSelectedKey,
-          scene,
-          emphasizedParticipantId,
-          setEmphasizedParticipantId,
-        })
-      )}
-    </>
-  );
+  return renderPanelBody({
+    state,
+    retry,
+    rankingMode,
+    setRankingMode,
+    selectedKey,
+    setSelectedKey,
+    scene,
+    emphasizedParticipantId,
+    setEmphasizedParticipantId,
+  });
 }
 
 function panelTitleFor(kind: SearchPageViewState['kind']): string {

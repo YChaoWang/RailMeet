@@ -1,6 +1,6 @@
 'use client';
 
-import { MapPinned, Search } from 'lucide-react';
+import { MapPinned } from 'lucide-react';
 import Link from 'next/link';
 import {
   useCallback,
@@ -28,8 +28,6 @@ type PlannerWorkspaceProps = {
   readonly initialSheetExpanded?: boolean;
   /** When this value becomes truthy, collapse the mobile sheet once (results ready). */
   readonly collapseSheetWhen?: string | null;
-  /** Replaces the default New search link so a page can act without navigating. */
-  readonly headerAction?: ReactNode;
   readonly onCandidateSelect?: (selectionKey: string) => void;
   readonly onTravelerSelect?: (participantId: string | null) => void;
 };
@@ -52,7 +50,6 @@ export function PlannerWorkspace({
   onSheetExpandedChange,
   initialSheetExpanded = false,
   collapseSheetWhen = null,
-  headerAction = null,
   onCandidateSelect,
   onTravelerSelect,
 }: PlannerWorkspaceProps) {
@@ -213,15 +210,6 @@ export function PlannerWorkspace({
             >
               {sheetExpanded ? 'Collapse' : 'Expand'}
             </button>
-            {headerAction ?? (
-              <Link
-                href="/search"
-                className="hidden min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-teal-800 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 md:inline-flex"
-              >
-                <Search className="size-4 shrink-0" aria-hidden />
-                New search
-              </Link>
-            )}
           </div>
         </div>
 
