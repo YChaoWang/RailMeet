@@ -239,9 +239,10 @@ describe('SearchStatusPage map-first surfaces', () => {
     expect(
       await screen.findByText(/Determine route for Blake from Paris/, undefined, { timeout: 2000 }),
     ).toBeInTheDocument();
-    expect(
-      await screen.findByText('Show ranked meeting cities', undefined, { timeout: 2000 }),
-    ).toBeInTheDocument();
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 800);
+    });
+    expect(screen.queryByText('Show ranked meeting cities')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Determining routes/i }));
     expect(screen.getByRole('button', { name: /Determining routes/i })).toHaveAttribute(

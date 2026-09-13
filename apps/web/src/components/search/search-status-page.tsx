@@ -19,6 +19,7 @@ import { ChainOfThought } from '@/components/ui/chain-of-thought';
 import { PromptSuggestion } from '@/components/ui/prompt-suggestion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TextShimmer } from '@/components/ui/text-shimmer';
+import { TYPED_TEXT_GAP_MS, TypedText, typedTextDurationMs } from '@/components/ui/typed-text';
 import { useSearchPolling } from '@/hooks/use-search-polling';
 import {
   buildDraftOriginScene,
@@ -183,13 +184,14 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
         <ChatThread>
           <ChatAssistant>
             <ChatWaterfallItem index={0}>
-              <p className="text-sm text-ink-950">I’ll start a new search.</p>
+              <TypedText className="text-sm text-ink-950" text="I’ll start a new search." />
             </ChatWaterfallItem>
             <ChatWaterfallItem index={1}>
-              <p className="text-sm text-ink-700">
-                Choose each traveler’s starting place. Your last results stay on the map until you
-                search again.
-              </p>
+              <TypedText
+                className="text-sm text-ink-700"
+                delayMs={typedTextDurationMs('I’ll start a new search.') + TYPED_TEXT_GAP_MS}
+                text="Choose each traveler’s starting place. Your last results stay on the map until you search again."
+              />
             </ChatWaterfallItem>
           </ChatAssistant>
           <SearchForm
@@ -402,7 +404,7 @@ function SearchRouteProgress({
   readonly summary: MeetingSearchDetailData;
 }) {
   const travelerCount = summary.participants.length;
-  const targetStep = kind === 'queued' ? 1 : 3;
+  const targetStep = kind === 'queued' ? 1 : 2;
   const targetTravelers = kind === 'queued' ? 0 : travelerCount;
   const [visibleStep, setVisibleStep] = useState(0);
   const [visibleTravelers, setVisibleTravelers] = useState(0);
@@ -462,44 +464,32 @@ function SearchRouteProgress({
         <ChainOfThought.Steps>
           {visibleStep >= 1 ? (
             <ChainOfThought.Step label="Accepted" status="complete">
-              {acceptedBody}
+              <TypedText text={acceptedBody} />
             </ChainOfThought.Step>
           ) : null}
           {visibleStep >= 2 ? (
             <ChainOfThought.Step label="Determine routes" status={compareStatus}>
-              <p>{compareBody}</p>
+              <TypedText text={compareBody} />
               {visibleTravelers > 0 ? (
                 <ul className="mt-2 space-y-1">
-                  {summary.participants.slice(0, visibleTravelers).map((participant, index) => {
-                    const loading =
-                      index === visibleTravelers - 1 && visibleTravelers < targetTravelers;
-                    const line = (
-                      <>
-                        Determine route for {participant.displayName}
-                        {participant.origin.name ? ` from ${participant.origin.name}` : ''}
-                      </>
-                    );
+                  {summary.participants.slice(0, visibleTravelers).map((participant) => {
+                    const line = `Determine route for ${participant.displayName}${
+                      participant.origin.name ? ` from ${participant.origin.name}` : ''
+                    }`;
                     return (
-                      <li
+                      <ChatWaterfallItem
                         key={participant.id}
-                        className="min-w-0 break-words motion-safe:animate-cot-in"
+                        as="li"
+                        index={0}
+                        className="min-w-0 break-words"
                         data-testid="search-progress-traveler"
                       >
-                        {loading ? (
-                          <ChainOfThought.StreamingText>{line}</ChainOfThought.StreamingText>
-                        ) : (
-                          line
-                        )}
-                      </li>
+                        <TypedText as="span" text={line} />
+                      </ChatWaterfallItem>
                     );
                   })}
                 </ul>
               ) : null}
-            </ChainOfThought.Step>
-          ) : null}
-          {visibleStep >= 3 ? (
-            <ChainOfThought.Step label="Show ranked meeting cities" status="pending">
-              Ranked cities appear when every traveler’s routes are ready.
             </ChainOfThought.Step>
           ) : null}
         </ChainOfThought.Steps>
@@ -597,14 +587,19 @@ function renderPanelBody({
             <SearchSummaryCompact summary={state.summary} />
           </ChatUser>
           <ChatAssistant>
-            <p className="text-sm text-ink-950">
-              {searchProgressIntro(state.kind, state.summary.participants.length)}
-            </p>
-            <SearchRouteProgress
-              key={state.summary.searchId}
-              kind={state.kind}
-              summary={state.summary}
-            />
+            <ChatWaterfallItem index={0}>
+              <TypedText
+                className="text-sm text-ink-950"
+                text={searchProgressIntro(state.kind, state.summary.participants.length)}
+              />
+            </ChatWaterfallItem>
+            <ChatWaterfallItem index={1}>
+              <SearchRouteProgress
+                key={state.summary.searchId}
+                kind={state.kind}
+                summary={state.summary}
+              />
+            </ChatWaterfallItem>
           </ChatAssistant>
         </ChatThread>
       );
@@ -672,10 +667,14 @@ function AssistantReply({ title, body }: { readonly title: string; readonly body
     <ChatThread>
       <ChatAssistant>
         <ChatWaterfallItem index={0}>
-          <h2 className="text-base font-semibold text-ink-950">{title}</h2>
+          <TypedText as="h2" className="text-base font-semibold text-ink-950" text={title} />
         </ChatWaterfallItem>
         <ChatWaterfallItem index={1}>
-          <p className="text-sm text-ink-700">{body}</p>
+          <TypedText
+            className="text-sm text-ink-700"
+            delayMs={typedTextDurationMs(title) + TYPED_TEXT_GAP_MS}
+            text={body}
+          />
         </ChatWaterfallItem>
         <PromptSuggestion>
           <ChatWaterfallItem index={2}>

@@ -58,6 +58,22 @@ body {
   }
 }
 
+.typed-text__caret {
+  display: inline-block;
+  width: 0.08em;
+  height: 0.95em;
+  margin-left: 0.05em;
+  vertical-align: -0.1em;
+  background: currentColor;
+  animation: typed-text-caret 0.9s steps(1) infinite;
+}
+
+@keyframes typed-text-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

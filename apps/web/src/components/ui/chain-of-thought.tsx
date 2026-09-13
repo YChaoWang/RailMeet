@@ -2,6 +2,7 @@
 
 import * as Collapsible from '@radix-ui/react-collapsible';
 import { Brain, ChevronDown } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 import {
   createContext,
   useContext,
@@ -118,13 +119,18 @@ function ChainOfThoughtContent({
   children,
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
-  const { contentId } = useChainOfThought();
+  const { contentId, isStreaming } = useChainOfThought();
   return (
     <Collapsible.Content
       id={contentId}
       data-slot="chain-of-thought-content"
       className={cn(
-        'chain-of-thought__content overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down',
+        'chain-of-thought__content',
+        // While thoughts stream in, keep height auto so new steps are not clipped
+        // by the open-state collapsible height animation.
+        isStreaming
+          ? 'overflow-visible'
+          : 'overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down',
         className,
       )}
       {...props}
@@ -155,17 +161,21 @@ function ChainOfThoughtStep({
   readonly status?: 'complete' | 'active' | 'pending';
 }) {
   const { isStreaming } = useChainOfThought();
+  const reduceMotion = useReducedMotion() === true;
   const streamingLabel = isStreaming && status === 'active';
   return (
-    <li
+    <motion.li
       data-slot="chain-of-thought-step"
       data-status={status}
       aria-current={status === 'active' ? 'step' : undefined}
       className={cn(
-        'chain-of-thought__step relative flex gap-3 motion-safe:animate-cot-in',
+        'chain-of-thought__step relative flex gap-3',
         status === 'pending' && 'opacity-50',
         className,
       )}
+      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={reduceMotion ? { duration: 0 } : { duration: 0.45, ease: 'easeOut' }}
       {...props}
     >
       <div className="relative flex w-4 shrink-0 justify-center self-stretch" aria-hidden>
@@ -194,7 +204,7 @@ function ChainOfThoughtStep({
           <div className="chain-of-thought__step-content mt-0.5 text-sm text-ink-700">{children}</div>
         ) : null}
       </div>
-    </li>
+    </motion.li>
   );
 }
 
