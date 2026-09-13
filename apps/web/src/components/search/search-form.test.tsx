@@ -92,13 +92,41 @@ describe('SearchForm place selection', () => {
     const user = userEvent.setup();
     render(<Harness />);
     const form = screen.getByRole('form', { name: 'Meeting search' });
-    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(2);
+    expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(2);
+    expect(within(form).queryByRole('textbox', { name: /Traveler [A-Z] name/i })).not.toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Add a name for traveler A' })).toBeInTheDocument();
     expect(within(form).getByText('2 of 6')).toBeInTheDocument();
     expect(within(form).getByRole('button', { name: 'Add traveler' })).toBeEnabled();
     expect(within(form).getByRole('button', { name: 'Remove traveler A' })).toBeDisabled();
     await user.click(within(form).getByRole('button', { name: 'Add traveler' }));
-    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(3);
+    expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(3);
+    expect(within(form).getByRole('button', { name: 'Add a name for traveler C' })).toBeInTheDocument();
     expect(within(form).getByText('3 of 6')).toBeInTheDocument();
+  });
+
+  it('reveals the name field with save and undo, then returns after save', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const form = screen.getByRole('form', { name: 'Meeting search' });
+    await user.click(within(form).getByRole('button', { name: 'Add a name for traveler A' }));
+    expect(within(form).getByRole('textbox', { name: 'Traveler A name' })).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Save name for traveler A' })).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Undo name for traveler A' })).toBeInTheDocument();
+    await user.type(within(form).getByRole('textbox', { name: 'Traveler A name' }), 'Alex');
+    await user.click(within(form).getByRole('button', { name: 'Save name for traveler A' }));
+    expect(within(form).queryByRole('textbox', { name: 'Traveler A name' })).not.toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Edit name for traveler A, Alex' })).toBeInTheDocument();
+  });
+
+  it('discards an in-progress name with undo', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const form = screen.getByRole('form', { name: 'Meeting search' });
+    await user.click(within(form).getByRole('button', { name: 'Add a name for traveler A' }));
+    await user.type(within(form).getByRole('textbox', { name: 'Traveler A name' }), 'Alex');
+    await user.click(within(form).getByRole('button', { name: 'Undo name for traveler A' }));
+    expect(within(form).queryByRole('textbox', { name: 'Traveler A name' })).not.toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Add a name for traveler A' })).toBeInTheDocument();
   });
 
   it('adds up to 6 travelers and removes a specific row without going below 2', async () => {
@@ -110,17 +138,17 @@ describe('SearchForm place selection', () => {
     await user.click(add());
     await user.click(add());
     await user.click(add());
-    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(6);
+    expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(6);
     expect(add()).toBeDisabled();
     await user.click(within(form).getByRole('button', { name: 'Remove traveler C' }));
-    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(5);
-    expect(within(form).queryByPlaceholderText('Name (optional — defaults to Traveler C)')).not.toBeInTheDocument();
-    expect(within(form).getByPlaceholderText('Name (optional — defaults to Traveler A)')).toBeInTheDocument();
-    expect(within(form).getByPlaceholderText('Name (optional — defaults to Traveler B)')).toBeInTheDocument();
+    expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(5);
+    expect(within(form).queryByRole('button', { name: 'Add a name for traveler C' })).not.toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Add a name for traveler A' })).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Add a name for traveler B' })).toBeInTheDocument();
     await user.click(within(form).getByRole('button', { name: 'Remove traveler D' }));
     await user.click(within(form).getByRole('button', { name: 'Remove traveler E' }));
     await user.click(within(form).getByRole('button', { name: 'Remove traveler F' }));
-    expect(within(form).getAllByRole('textbox', { name: /Traveler [A-Z] name/i })).toHaveLength(2);
+    expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(2);
     expect(within(form).getByRole('button', { name: 'Remove traveler A' })).toBeDisabled();
     expect(within(form).getByRole('button', { name: 'Remove traveler B' })).toBeDisabled();
   });
@@ -157,12 +185,10 @@ describe('SearchForm place selection', () => {
     const form = screen.getByRole('form', { name: 'Meeting search' });
     expect(within(form).getByRole('button', { name: 'Find a meeting point' })).toBeDisabled();
 
-    fireEvent.change(document.querySelector('[data-field="participants.0.displayName"]')!, {
-      target: { value: 'Alex' },
-    });
-    fireEvent.change(document.querySelector('[data-field="participants.1.displayName"]')!, {
-      target: { value: 'Blake' },
-    });
+    await user.click(within(form).getByRole('button', { name: 'Add a name for traveler A' }));
+    await user.type(within(form).getByRole('textbox', { name: 'Traveler A name' }), 'Alex');
+    await user.click(within(form).getByRole('button', { name: 'Add a name for traveler B' }));
+    await user.type(within(form).getByRole('textbox', { name: 'Traveler B name' }), 'Blake');
     fireEvent.change(document.querySelector('[data-field="participants.0.origin"]')!, {
       target: { value: 'Berlin' },
     });

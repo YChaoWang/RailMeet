@@ -18,18 +18,21 @@ import {
   CableCar,
   CalendarClock,
   Calendar as CalendarIcon,
+  Check,
   Loader2,
   MapPin,
   MapPinned,
+  Pencil,
   Plus,
   Ship,
   TrainFront,
   Trash2,
+  Undo2,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { PlaceCombobox } from '@/components/search/place-combobox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -40,6 +43,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Timeline } from '@/components/ui/timeline';
 import {
   Select,
   SelectContent,
@@ -158,6 +162,147 @@ function TravelerAvatar({
     <Avatar className={className} aria-hidden>
       <AvatarFallback style={{ backgroundColor: color }}>{letter}</AvatarFallback>
     </Avatar>
+  );
+}
+
+function TravelerNameControl({
+  participant,
+  index,
+  error,
+  disabled,
+  onChange,
+}: {
+  readonly participant: ParticipantDraft;
+  readonly index: number;
+  readonly error?: string;
+  readonly disabled: boolean;
+  readonly onChange: (displayName: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const snapshotRef = useRef(participant.displayName);
+  const named = Boolean(participant.displayName.trim());
+  const [editing, setEditing] = useState(() => Boolean(error));
+  const [draft, setDraft] = useState(participant.displayName);
+  const label = named ? participant.displayName.trim() : `Traveler ${participant.letter}`;
+
+  const openEditor = () => {
+    snapshotRef.current = participant.displayName;
+    setDraft(participant.displayName);
+    setEditing(true);
+  };
+
+  const confirmEdit = () => {
+    onChange(draft);
+    setEditing(false);
+  };
+
+  const discardEdit = () => {
+    onChange(snapshotRef.current);
+    setDraft(snapshotRef.current);
+    setEditing(false);
+  };
+
+  useEffect(() => {
+    if (error) {
+      setEditing(true);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+    const input = inputRef.current;
+    if (!input) {
+      return;
+    }
+    input.focus();
+    if (input.value) {
+      input.select();
+    }
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="inline-flex min-h-11 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-1 text-left text-sm font-semibold text-ink-950 hover:bg-mist-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        disabled={disabled}
+        aria-label={
+          named
+            ? `Edit name for traveler ${participant.letter}, ${label}`
+            : `Add a name for traveler ${participant.letter}`
+        }
+        onClick={openEditor}
+      >
+        <span className="truncate">{label}</span>
+        <Pencil className="size-3.5 shrink-0 text-ink-700" aria-hidden />
+      </button>
+    );
+  }
+
+  return (
+    <div className="min-w-0 flex-1 space-y-1.5">
+      <div className="flex min-w-0 items-center gap-1">
+        <Label htmlFor={`${participant.key}-name`} className="sr-only">
+          Traveler {participant.letter} name
+        </Label>
+        <Input
+          ref={inputRef}
+          id={`${participant.key}-name`}
+          data-field={`participants.${index}.displayName`}
+          value={draft}
+          placeholder="Name (optional)"
+          disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${participant.key}-name-error` : undefined}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            onChange(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              confirmEdit();
+              return;
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              discardEdit();
+            }
+          }}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 px-2 text-teal-700 hover:text-teal-800"
+          aria-label={`Save name for traveler ${participant.letter}`}
+          disabled={disabled}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={confirmEdit}
+        >
+          <Check className="size-4" aria-hidden />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 px-2 text-ink-700"
+          aria-label={`Undo name for traveler ${participant.letter}`}
+          disabled={disabled}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={discardEdit}
+        >
+          <Undo2 className="size-4" aria-hidden />
+        </Button>
+      </div>
+      {error ? (
+        <p id={`${participant.key}-name-error`} className="text-sm text-red-700">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -358,31 +503,13 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
                 color={participant.color}
                 className="size-7"
               />
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <Label htmlFor={`${participant.key}-name`} className="sr-only">
-                  Traveler {participant.letter} name
-                </Label>
-                <Input
-                  id={`${participant.key}-name`}
-                  data-field={`participants.${index}.displayName`}
-                  value={participant.displayName}
-                  placeholder={`Name (optional — defaults to Traveler ${participant.letter})`}
-                  aria-invalid={Boolean(errors[`participants.${index}.displayName`])}
-                  aria-describedby={
-                    errors[`participants.${index}.displayName`]
-                      ? `${participant.key}-name-error`
-                      : undefined
-                  }
-                  onChange={(event) => {
-                    updateParticipant(participant.key, { displayName: event.target.value });
-                  }}
-                />
-                {errors[`participants.${index}.displayName`] ? (
-                  <p id={`${participant.key}-name-error`} className="text-sm text-red-700">
-                    {errors[`participants.${index}.displayName`]}
-                  </p>
-                ) : null}
-              </div>
+              <TravelerNameControl
+                participant={participant}
+                index={index}
+                error={errors[`participants.${index}.displayName`]}
+                disabled={pending}
+                onChange={(displayName) => updateParticipant(participant.key, { displayName })}
+              />
               <Button
                 type="button"
                 variant="ghost"
@@ -470,7 +597,63 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
           </Popover>
           {errors.travelDate ? <p className="text-sm text-red-700">{errors.travelDate}</p> : null}
         </div>
-        <div className="space-y-1.5">
+        <Timeline
+          aria-label="Leave after and arrive by"
+          data-testid="search-form-travel-window"
+          className="border-y border-ink-700/15 py-3 md:col-span-2"
+        >
+          <Timeline.Item>
+            <Timeline.Rail>
+              <Timeline.Marker />
+              <Timeline.Connector />
+            </Timeline.Rail>
+            <Timeline.Content className="space-y-1.5">
+              <Label htmlFor="earliestDepartureTime">Leave after</Label>
+              <Input
+                id="earliestDepartureTime"
+                data-field="earliestDepartureTime"
+                type="time"
+                value={earliestDepartureTime}
+                className="tabular-nums"
+                onChange={(event) => setEarliestDepartureTime(event.target.value)}
+              />
+            </Timeline.Content>
+          </Timeline.Item>
+          <Timeline.Item>
+            <Timeline.Rail>
+              <Timeline.Marker />
+            </Timeline.Rail>
+            <Timeline.Content className="space-y-3 pb-0">
+              <div className="space-y-1.5">
+                <Label htmlFor="latestArrivalTime">Arrive by</Label>
+                <Input
+                  id="latestArrivalTime"
+                  data-field="latestArrivalTime"
+                  type="time"
+                  value={latestArrivalTime}
+                  className="tabular-nums"
+                  onChange={(event) => setLatestArrivalTime(event.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="arrivalDayOffset">Arrival day</Label>
+                <Select
+                  value={arrivalDayOffset}
+                  onValueChange={(value) => setArrivalDayOffset(value as '0' | '1')}
+                >
+                  <SelectTrigger id="arrivalDayOffset">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Same day</SelectItem>
+                    <SelectItem value="1">Next day</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </Timeline.Content>
+          </Timeline.Item>
+        </Timeline>
+        <div className="space-y-1.5 md:col-span-2">
           <Label htmlFor="rankingMode">Ranking preference</Label>
           <Select
             value={rankingMode}
@@ -485,41 +668,6 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
                   {option.label}
                 </SelectItem>
               ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="earliestDepartureTime">Earliest departure</Label>
-          <Input
-            id="earliestDepartureTime"
-            data-field="earliestDepartureTime"
-            type="time"
-            value={earliestDepartureTime}
-            onChange={(event) => setEarliestDepartureTime(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="latestArrivalTime">Latest arrival</Label>
-          <Input
-            id="latestArrivalTime"
-            data-field="latestArrivalTime"
-            type="time"
-            value={latestArrivalTime}
-            onChange={(event) => setLatestArrivalTime(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="arrivalDayOffset">Arrival day</Label>
-          <Select
-            value={arrivalDayOffset}
-            onValueChange={(value) => setArrivalDayOffset(value as '0' | '1')}
-          >
-            <SelectTrigger id="arrivalDayOffset">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="0">Same day</SelectItem>
-              <SelectItem value="1">Next day</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -214,6 +214,11 @@ describe('responsive layout structure', () => {
     );
     expect(screen.getByTestId('search-form')).toHaveClass('min-w-0');
     expect(screen.getByTestId('search-form-schedule')).toHaveClass('grid-cols-1', 'md:grid-cols-2');
+    const window = screen.getByTestId('search-form-travel-window');
+    expect(window).toHaveAttribute('aria-label', 'Leave after and arrive by');
+    expect(within(window).getByLabelText('Leave after')).toBeInTheDocument();
+    expect(within(window).getByLabelText('Arrive by')).toBeInTheDocument();
+    expect(within(window).getByLabelText('Arrival day')).toBeInTheDocument();
     expect(screen.getAllByTestId('search-form-traveler-row').length).toBe(2);
   });
 

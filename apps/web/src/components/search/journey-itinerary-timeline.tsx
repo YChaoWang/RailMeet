@@ -3,10 +3,12 @@
 import {
   Accessibility,
   AlertTriangle,
+  ArrowLeftRight,
   Bike,
   Bus,
   CableCar,
   Car,
+  Check,
   ChevronDown,
   CircleHelp,
   ExternalLink,
@@ -15,8 +17,9 @@ import {
   Ship,
   TrainFront,
 } from 'lucide-react';
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useState, type CSSProperties, type ReactNode } from 'react';
 
+import { Timeline } from '@/components/ui/timeline';
 import {
   buildStopTimePresentation,
   buildTimelineItems,
@@ -39,12 +42,19 @@ import {
   motisIconKind,
   motisOperatorLabel,
   motisServiceLabel,
+  placeTitle,
   rankingLegToMotis,
   stopCountLabel,
   type RankingLeg,
 } from '@/lib/journey-leg-presentation';
 import { cn } from '@/lib/utils';
-import type { MotisItineraryJson, MotisLegJson, MotisModeIconKind, MotisPlaceJson } from '@railmeet/shared';
+import {
+  motisPlanModeLabel,
+  type MotisItineraryJson,
+  type MotisLegJson,
+  type MotisModeIconKind,
+  type MotisPlaceJson,
+} from '@railmeet/shared';
 
 const MODE_ICONS: Record<MotisModeIconKind, typeof TrainFront> = {
   walk: Footprints,
@@ -69,6 +79,151 @@ const MODE_ICONS: Record<MotisModeIconKind, typeof TrainFront> = {
 function ModeIcon({ kind, className }: { readonly kind: MotisModeIconKind; readonly className?: string }) {
   const Icon = MODE_ICONS[kind];
   return <Icon className={className} aria-hidden />;
+}
+
+const MUTED_BADGE = { background: '#eef2f1', color: '#3d4a46' };
+const WALK_MARKER = { backgroundColor: '#8a9692', color: '#ffffff' };
+const TRANSFER_MARKER = { backgroundColor: '#b45309', color: '#ffffff' };
+const ARRIVE_MARKER = { backgroundColor: '#0f766e', color: '#ffffff' };
+
+function shortModeBadge(mode: string, iconKind: MotisModeIconKind): string {
+  switch (iconKind) {
+    case 'walk':
+      return 'Walk';
+    case 'bike':
+    case 'cargo_bike':
+      return 'Bike';
+    case 'bus':
+      return 'Bus';
+    case 'tram':
+      return 'Tram';
+    case 'train':
+      return 'Train';
+    case 'metro':
+      return 'Metro';
+    case 'ship':
+      return 'Ferry';
+    case 'plane':
+      return 'Flight';
+    case 'car':
+    case 'moped':
+    case 'taxi':
+      return 'Car';
+    default:
+      return motisPlanModeLabel(mode) === 'Other transport' ? 'Other' : motisPlanModeLabel(mode);
+  }
+}
+
+function ModeBadge({
+  label,
+  colors,
+}: {
+  readonly label: string;
+  readonly colors: { readonly background: string; readonly color: string };
+}) {
+  return (
+    <span
+      className="inline-flex max-w-full truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none"
+      style={{ backgroundColor: colors.background, color: colors.color }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function EventMetrics({
+  items,
+}: {
+  readonly items: readonly { readonly label: string; readonly value: string }[];
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+      {items.map((item) => (
+        <div key={item.label} className="min-w-0">
+          <dt className="text-[11px] text-ink-700">{item.label}</dt>
+          <dd className="mt-0.5 truncate text-sm font-medium tabular-nums text-ink-950">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function EventMarker({
+  style,
+  children,
+}: {
+  readonly style?: CSSProperties;
+  readonly children: ReactNode;
+}) {
+  return (
+    <Timeline.Marker
+      className="mt-0.5 grid size-[18px] place-items-center rounded-full ring-2 ring-white [&>svg]:size-2.5"
+      style={style}
+    >
+      {children}
+    </Timeline.Marker>
+  );
+}
+
+function JourneyEvent({
+  time,
+  dayOffsetLabel,
+  badge,
+  badgeColors,
+  person,
+  title,
+  marker,
+  showConnector,
+  testId,
+  extraAttrs,
+  metrics,
+  children,
+}: {
+  readonly time?: string | undefined;
+  readonly dayOffsetLabel?: string | undefined;
+  readonly badge: string;
+  readonly badgeColors: { readonly background: string; readonly color: string };
+  readonly person?: string | undefined;
+  readonly title: ReactNode;
+  readonly marker: ReactNode;
+  readonly showConnector: boolean;
+  readonly testId?: string;
+  readonly extraAttrs?: Record<string, string>;
+  readonly metrics: readonly { readonly label: string; readonly value: string }[];
+  readonly children?: ReactNode;
+}) {
+  return (
+    <Timeline.Item data-testid={testId} {...extraAttrs}>
+      <Timeline.Leading>
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
+          {time ? (
+            <time className="text-sm font-medium tabular-nums text-ink-950">{time}</time>
+          ) : null}
+          {dayOffsetLabel ? (
+            <span className="text-[10px] font-medium text-ink-700">{dayOffsetLabel}</span>
+          ) : null}
+          <ModeBadge label={badge} colors={badgeColors} />
+        </div>
+        {person ? <p className="mt-1 truncate text-[11px] leading-snug text-ink-700">{person}</p> : null}
+      </Timeline.Leading>
+      <Timeline.Rail>
+        {marker}
+        {showConnector ? <Timeline.Connector className="top-5 bg-ink-700/20" /> : null}
+      </Timeline.Rail>
+      <Timeline.Content className="pb-6">
+        <div className="min-w-0 text-sm font-semibold leading-snug text-ink-950">{title}</div>
+        {children || metrics.length > 0 ? (
+          <Timeline.Card>
+            {children}
+            <EventMetrics items={metrics} />
+          </Timeline.Card>
+        ) : null}
+      </Timeline.Content>
+    </Timeline.Item>
+  );
 }
 
 function RoutePill({ leg }: { readonly leg: MotisLegJson }) {
@@ -192,85 +347,134 @@ function DateSeparator({ label }: { readonly label: string }) {
 function TransferBlock({
   breakdown,
   walkLeg,
+  person,
+  showConnector,
+  fallbackTime,
 }: {
   readonly breakdown: TransferBreakdown;
   readonly walkLeg: MotisLegJson | null;
+  readonly person?: string | undefined;
+  readonly showConnector: boolean;
+  readonly fallbackTime?: string | undefined;
 }) {
+  const time = walkLeg
+    ? formatMotisClock(walkLeg.startTime, walkLeg.from?.tz as string | undefined)
+    : fallbackTime;
+  const title = breakdown.stationChange
+    ? `Change to ${breakdown.toStop}`
+    : `Change at ${breakdown.fromStop}`;
+  const metrics = [
+    { label: 'Connection', value: formatMotisDuration(breakdown.connectionSeconds) },
+    breakdown.walkSeconds !== null
+      ? { label: 'Walk', value: formatMotisDuration(breakdown.walkSeconds) }
+      : breakdown.waitingSeconds !== null && breakdown.waitingSeconds > 0
+        ? { label: 'Wait', value: formatMotisDuration(breakdown.waitingSeconds) }
+        : { label: 'Wait', value: '—' },
+  ];
+
   return (
-    <div
-      className="rounded-lg border border-ink-700/10 bg-mist-50/80 px-3 py-2 text-xs text-ink-800"
-      data-testid="journey-transfer"
+    <JourneyEvent
+      time={time}
+      badge="Change"
+      badgeColors={{ background: '#fef3c7', color: '#92400e' }}
+      person={person}
+      title={title}
+      marker={
+        <EventMarker style={TRANSFER_MARKER}>
+          <ArrowLeftRight aria-hidden />
+        </EventMarker>
+      }
+      showConnector={showConnector}
+      testId="journey-transfer"
+      metrics={metrics}
     >
-      <p className="font-medium text-ink-950">
-        {formatMotisDuration(breakdown.connectionSeconds)} connection
-      </p>
       {walkLeg && breakdown.walkSeconds !== null ? (
-        <p className="mt-0.5">
+        <p className="text-xs text-ink-800">
           {formatMotisDuration(breakdown.walkSeconds)} walk
           {typeof walkLeg.distance === 'number' ? ` · ${formatMotisDistance(walkLeg.distance)}` : ''}
         </p>
-      ) : null}
+      ) : (
+        <p className="text-xs text-ink-800">
+          {formatMotisDuration(breakdown.connectionSeconds)} connection
+        </p>
+      )}
       {breakdown.fromPlatform || breakdown.toPlatform ? (
-        <p className="mt-0.5 text-ink-700">
+        <p className="mt-0.5 text-xs text-ink-700">
           {[breakdown.fromPlatform, breakdown.toPlatform].filter(Boolean).join(' → ')}
         </p>
       ) : null}
       {breakdown.waitingSeconds !== null && breakdown.waitingSeconds > 0 ? (
-        <p className="mt-0.5 text-ink-700">{formatMotisDuration(breakdown.waitingSeconds)} remaining</p>
+        <p className="mt-0.5 text-xs text-ink-700">{formatMotisDuration(breakdown.waitingSeconds)} remaining</p>
       ) : null}
       {breakdown.stationChange ? (
-        <p className="mt-1 font-medium text-amber-900" data-testid="journey-station-change">
+        <p className="mt-1 text-xs font-medium text-amber-900" data-testid="journey-station-change">
           Change station
           <span className="mt-0.5 block font-normal">
             {breakdown.fromStop} → {breakdown.toStop}
           </span>
         </p>
       ) : null}
-    </div>
+    </JourneyEvent>
   );
 }
 
-function WalkBlock({ leg, role }: { readonly leg: MotisLegJson; readonly role: string }) {
+function WalkBlock({
+  leg,
+  role,
+  person,
+  showConnector,
+}: {
+  readonly leg: MotisLegJson;
+  readonly role: string;
+  readonly person?: string | undefined;
+  readonly showConnector: boolean;
+}) {
   const [stepsOpen, setStepsOpen] = useState(false);
   const stepsId = useId();
   const distance = typeof leg.distance === 'number' ? formatMotisDistance(leg.distance) : null;
   const steps = (leg.steps ?? []).filter((step) => (step.streetName ?? '').trim().length > 0);
+  const destination = placeTitle(leg.to, '');
+  const title = destination ? `Walk to ${destination}` : 'Walk';
 
   return (
-    <div
-      className="flex gap-2 py-1 text-xs text-ink-700"
-      data-testid="journey-walk"
-      data-walk-role={role}
+    <JourneyEvent
+      time={formatMotisClock(leg.startTime, leg.from?.tz as string | undefined)}
+      badge={shortModeBadge(leg.mode, motisIconKind(leg))}
+      badgeColors={MUTED_BADGE}
+      person={person}
+      title={title}
+      marker={
+        <EventMarker style={WALK_MARKER}>
+          <Footprints aria-hidden />
+        </EventMarker>
+      }
+      showConnector={showConnector}
+      testId="journey-walk"
+      extraAttrs={{ 'data-walk-role': role }}
+      metrics={[
+        { label: 'Duration', value: formatMotisDuration(leg.duration) },
+        { label: 'Distance', value: distance ?? '—' },
+      ]}
     >
-      <div className="flex w-3 shrink-0 justify-center">
-        <div className="w-px border-l border-dashed border-ink-700/30" aria-hidden />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="inline-flex items-center gap-1 font-medium text-ink-900">
-          <Footprints className="h-3.5 w-3.5" aria-hidden />
-          Walk {formatMotisDuration(leg.duration)}
-          {distance ? ` · ${distance}` : ''}
-        </p>
-        {steps.length > 0 ? (
-          <>
-            <button
-              type="button"
-              className="mt-1 min-h-9 text-left text-[11px] font-medium text-teal-800 underline-offset-2 hover:underline"
-              aria-expanded={stepsOpen}
-              aria-controls={stepsId}
-              onClick={() => setStepsOpen((open) => !open)}
-            >
-              {stepsOpen ? 'Hide walking directions' : 'Show walking directions'}
-            </button>
-            {stepsOpen ? (
-              <p id={stepsId} className="mt-1 text-[11px] text-ink-700" data-testid="journey-leg-steps">
-                Via {steps.map((step) => step.streetName).join(', ')}
-              </p>
-            ) : null}
-          </>
-        ) : null}
-      </div>
-    </div>
+      {steps.length > 0 ? (
+        <>
+          <button
+            type="button"
+            className="mt-1 min-h-9 text-left text-[11px] font-medium text-teal-800 underline-offset-2 hover:underline"
+            aria-expanded={stepsOpen}
+            aria-controls={stepsId}
+            onClick={() => setStepsOpen((open) => !open)}
+          >
+            {stepsOpen ? 'Hide walking directions' : 'Show walking directions'}
+          </button>
+          {stepsOpen ? (
+            <p id={stepsId} className="mt-1 text-[11px] text-ink-700" data-testid="journey-leg-steps">
+              Via {steps.map((step) => step.streetName).join(', ')}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </JourneyEvent>
   );
 }
 
@@ -413,18 +617,14 @@ function IntermediateStops({ leg, journeyStartIso }: { readonly leg: MotisLegJso
   const [open, setOpen] = useState(false);
   const panelId = useId();
   if (expandable.length === 0) {
-    return (
-      <p className="py-1 pl-[3.75rem] text-[11px] text-ink-700 sm:pl-16">
-        {stopCountLabel(0)} · {formatMotisDuration(leg.duration)}
-      </p>
-    );
+    return null;
   }
 
   let previousTs: string | null = leg.startTime;
   let previousTz = leg.from?.tz as string | undefined;
 
   return (
-    <div className="py-1 pl-[3.75rem] sm:pl-16">
+    <div className="py-1">
       <button
         type="button"
         className="inline-flex min-h-9 items-center gap-1 text-left text-[11px] font-medium text-teal-800 underline-offset-2 hover:underline"
@@ -432,7 +632,7 @@ function IntermediateStops({ leg, journeyStartIso }: { readonly leg: MotisLegJso
         aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
       >
-        {stopCountLabel(expandable.length)} · {formatMotisDuration(leg.duration)}
+        {stopCountLabel(expandable.length)}
         <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} aria-hidden />
       </button>
       {open ? (
@@ -470,15 +670,21 @@ function TransitSection({
   leg,
   journeyStartIso,
   isLastTransit,
+  person,
+  showConnector,
 }: {
   readonly leg: MotisLegJson;
   readonly journeyStartIso: string;
   readonly isLastTransit: boolean;
+  readonly person?: string | undefined;
+  readonly showConnector: boolean;
 }) {
   const colors = motisChipColors(leg);
   const toward = directionLine(leg);
   const operator = motisOperatorLabel(leg);
   const continues = continuesAsStops(leg);
+  const iconKind = motisIconKind(leg);
+  const stopCount = expandableIntermediateStops(leg).length;
 
   const departure = buildStopTimePresentation({
     place: leg.from,
@@ -502,70 +708,82 @@ function TransitSection({
   });
 
   return (
-    <article className="min-w-0 space-y-1" data-testid="journey-leg" data-motis-mode={leg.mode}>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <RoutePill leg={leg} />
-        <span className="sr-only" data-testid="journey-leg-mode">
-          {motisServiceLabel(leg)}
-        </span>
-      </div>
+    <JourneyEvent
+      time={departure?.live}
+      dayOffsetLabel={departure?.dayOffsetLabel ?? undefined}
+      badge={shortModeBadge(leg.mode, iconKind)}
+      badgeColors={colors}
+      person={person}
+      title={
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <RoutePill leg={leg} />
+          <span className="sr-only" data-testid="journey-leg-mode">
+            {motisServiceLabel(leg)}
+          </span>
+        </div>
+      }
+      marker={
+        <EventMarker style={{ backgroundColor: colors.background, color: colors.color }}>
+          <ModeIcon kind={iconKind} />
+        </EventMarker>
+      }
+      showConnector={showConnector}
+      testId="journey-leg"
+      extraAttrs={{ 'data-motis-mode': leg.mode }}
+      metrics={[
+        { label: 'Duration', value: formatMotisDuration(leg.duration) },
+        { label: 'Stops', value: stopCountLabel(stopCount) },
+      ]}
+    >
       {toward ? (
         <p className="text-xs text-ink-700" data-testid="journey-leg-headsign">
           {toward}
         </p>
       ) : null}
       {operator ? (
-        <p className="text-[11px] text-ink-700" data-testid="journey-leg-operator">
+        <p className="mt-0.5 text-[11px] text-ink-700" data-testid="journey-leg-operator">
           {operator}
         </p>
       ) : null}
 
-      <div className="relative pl-3">
-        <div
-          className="absolute bottom-2 left-[0.4rem] top-2 w-1 rounded-full"
-          style={{ backgroundColor: colors.background }}
-          aria-hidden
-        />
+      <div className="mt-2 space-y-1">
+        {departure?.dateSeparator ? <DateSeparator label={departure.dateSeparator} /> : null}
+        {departure ? <StopRow presentation={departure} emphasize /> : null}
 
-        <div className="space-y-1 pb-1">
-          {departure?.dateSeparator ? <DateSeparator label={departure.dateSeparator} /> : null}
-          {departure ? <StopRow presentation={departure} emphasize /> : null}
+        <IntermediateStops leg={leg} journeyStartIso={journeyStartIso} />
 
-          <IntermediateStops leg={leg} journeyStartIso={journeyStartIso} />
+        {continues.map((stop, index) => {
+          const presentation = buildStopTimePresentation({
+            place: stop,
+            timestamp: stop.arrival ?? stop.departure,
+            scheduledTimestamp: stop.scheduledArrival ?? stop.scheduledDeparture,
+            realTime: Boolean(leg.realTime),
+            mode: leg.mode,
+            journeyStartIso,
+            previousTimestamp: leg.startTime,
+            previousTimeZone: leg.from?.tz as string | undefined,
+          });
+          if (!presentation) {
+            return null;
+          }
+          return (
+            <div key={`continues-${index}`} className="py-0.5">
+              <StopRow presentation={presentation} emphasize={false} />
+            </div>
+          );
+        })}
 
-          {continues.map((stop, index) => {
-            const presentation = buildStopTimePresentation({
-              place: stop,
-              timestamp: stop.arrival ?? stop.departure,
-              scheduledTimestamp: stop.scheduledArrival ?? stop.scheduledDeparture,
-              realTime: Boolean(leg.realTime),
-              mode: leg.mode,
-              journeyStartIso,
-              previousTimestamp: leg.startTime,
-              previousTimeZone: leg.from?.tz as string | undefined,
-            });
-            if (!presentation) {
-              return null;
-            }
-            return (
-              <div key={`continues-${index}`} className="py-0.5">
-                <StopRow presentation={presentation} emphasize={false} />
-              </div>
-            );
-          })}
-
-          {!isLastTransit && arrival?.dateSeparator ? (
-            <DateSeparator label={arrival.dateSeparator} />
-          ) : null}
-          {!isLastTransit && arrival ? <StopRow presentation={arrival} emphasize /> : null}
-        </div>
+        {!isLastTransit && arrival?.dateSeparator ? (
+          <DateSeparator label={arrival.dateSeparator} />
+        ) : null}
+        {!isLastTransit && arrival ? <StopRow presentation={arrival} emphasize /> : null}
       </div>
 
       <LegMetaBadges leg={leg} />
       <LegAlerts leg={leg} />
       <LegLinks leg={leg} />
       <LegAlternatives leg={leg} />
-    </article>
+    </JourneyEvent>
   );
 }
 
@@ -612,23 +830,69 @@ function JourneyOverview({
   );
 }
 
+function previousEventClock(items: readonly TimelineItem[], index: number): string | undefined {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const item = items[i];
+    if (item?.kind === 'transit') {
+      return formatMotisClock(item.leg.endTime, item.leg.to?.tz as string | undefined);
+    }
+    if (item?.kind === 'walk') {
+      return formatMotisClock(item.leg.endTime, item.leg.to?.tz as string | undefined);
+    }
+  }
+  return undefined;
+}
+
+function hasLaterEvent(
+  items: readonly TimelineItem[],
+  index: number,
+  hasArrival: boolean,
+): boolean {
+  for (let i = index + 1; i < items.length; i += 1) {
+    if (items[i]?.kind !== 'date-separator') {
+      return true;
+    }
+  }
+  return hasArrival;
+}
+
 function renderTimelineItem(
   item: TimelineItem,
+  index: number,
+  items: readonly TimelineItem[],
   journeyStartIso: string,
+  person: string | undefined,
+  hasArrival: boolean,
 ): ReactNode {
+  const showConnector = hasLaterEvent(items, index, hasArrival);
   switch (item.kind) {
     case 'date-separator':
-      return <DateSeparator key={`date-${item.label}`} label={item.label} />;
+      return (
+        <Timeline.Item key={`date-${item.label}`} className="flex-col gap-0">
+          <DateSeparator label={item.label} />
+        </Timeline.Item>
+      );
     case 'transfer':
       return (
         <TransferBlock
           key={`transfer-${item.breakdown.fromStop}-${item.breakdown.toStop}`}
           breakdown={item.breakdown}
           walkLeg={item.walkLeg}
+          person={person}
+          showConnector={showConnector}
+          fallbackTime={previousEventClock(items, index)}
         />
       );
     case 'walk':
-      return <WalkBlock key={`walk-${item.leg.startTime}`} leg={item.leg} role={item.role} />;
+      return (
+        <WalkBlock
+          key={`walk-${item.leg.startTime}`}
+          leg={item.leg}
+          role={item.role}
+          person={person}
+          showConnector={showConnector}
+        />
+      );
     case 'transit':
       return (
         <TransitSection
@@ -636,6 +900,8 @@ function renderTimelineItem(
           leg={item.leg}
           journeyStartIso={journeyStartIso}
           isLastTransit={item.isLastTransit}
+          person={person}
+          showConnector={showConnector}
         />
       );
     default:
@@ -668,16 +934,40 @@ export function JourneyItineraryTimeline({
     });
   }
 
+  const person = context.participantDisplayName;
+
   return (
     <div className="min-w-0 space-y-3 text-ink-800" data-testid="journey-itinerary">
       <JourneyOverview itinerary={itinerary} context={context} />
-      <div className="space-y-3">{items.map((item) => renderTimelineItem(item, itinerary.startTime))}</div>
-      {lastArrival ? (
-        <div className="border-t border-ink-700/10 pt-2">
-          {lastArrival.dateSeparator ? <DateSeparator label={lastArrival.dateSeparator} /> : null}
-          <StopRow presentation={lastArrival} emphasize />
-        </div>
-      ) : null}
+      <Timeline aria-label="Journey itinerary">
+        {items.map((item, index) =>
+          renderTimelineItem(item, index, items, itinerary.startTime, person, Boolean(lastArrival)),
+        )}
+        {lastArrival ? (
+          <JourneyEvent
+            time={lastArrival.live}
+            dayOffsetLabel={lastArrival.dayOffsetLabel ?? undefined}
+            badge="Arrive"
+            badgeColors={{ background: '#ccfbf1', color: '#115e59' }}
+            person={person}
+            title={lastArrival.stopName}
+            marker={
+              <EventMarker style={ARRIVE_MARKER}>
+                <Check strokeWidth={3} aria-hidden />
+              </EventMarker>
+            }
+            showConnector={false}
+            metrics={
+              lastArrival.platform
+                ? [{ label: 'Platform', value: lastArrival.platform }]
+                : []
+            }
+          >
+            {lastArrival.dateSeparator ? <DateSeparator label={lastArrival.dateSeparator} /> : null}
+            <StopRow presentation={lastArrival} emphasize />
+          </JourneyEvent>
+        ) : null}
+      </Timeline>
     </div>
   );
 }

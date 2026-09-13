@@ -242,12 +242,10 @@ describe('SearchPlannerPage live draft markers', () => {
     const user = userEvent.setup();
     renderPlanner();
     await user.click(screen.getByRole('button', { name: 'Add traveler' }));
-    expect(screen.getByPlaceholderText('Name (optional — defaults to Traveler C)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a name for traveler C' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Remove traveler C' }));
-    expect(
-      screen.queryByPlaceholderText('Name (optional — defaults to Traveler C)'),
-    ).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Name (optional — defaults to Traveler A)')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Name (optional — defaults to Traveler B)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add a name for traveler C' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a name for traveler A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a name for traveler B' })).toBeInTheDocument();
   });
 });
