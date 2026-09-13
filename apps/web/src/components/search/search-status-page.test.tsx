@@ -77,7 +77,7 @@ function renderState(state: SearchPageViewState) {
 }
 
 describe('SearchStatusPage map-first surfaces', () => {
-  it('keeps the planner map shell mounted across lifecycle states', () => {
+  it('keeps the planner map shell mounted across lifecycle states', async () => {
     const first = renderState({ kind: 'malformed_id' });
     expect(screen.getByTestId('planner-workspace')).toBeInTheDocument();
     expect(screen.getByTestId('planner-map-region')).toBeInTheDocument();
@@ -155,7 +155,7 @@ describe('SearchStatusPage map-first surfaces', () => {
       const { unmount } = renderState(entry.state);
       expect(screen.getByTestId('planner-workspace')).toBeInTheDocument();
       expect(screen.getByTestId('planner-map-region')).toBeInTheDocument();
-      expect(screen.getByText(entry.text)).toBeInTheDocument();
+      expect(await screen.findByText(entry.text, undefined, { timeout: 4000 })).toBeInTheDocument();
       if (entry.state.kind === 'network_error') {
         expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
         expect(screen.getByText(/Last known status/i)).toBeInTheDocument();
@@ -202,5 +202,43 @@ describe('SearchStatusPage map-first surfaces', () => {
     await user.click(screen.getByTestId('new-search-toggle'));
     expect(screen.queryByTestId('inline-new-search')).not.toBeInTheDocument();
     expect(screen.getByText(/couldn’t find a workable meeting plan/i)).toBeInTheDocument();
+  });
+
+  it('reveals determining-route progress one thought at a time', async () => {
+    const user = userEvent.setup();
+    renderState({ kind: 'running', summary: { ...summary, status: 'running' } });
+
+    const progress = screen.getByTestId('search-route-progress');
+    expect(progress).toHaveAttribute('aria-busy', 'true');
+    const trigger = screen.getByRole('button', { name: /Determining routes/i });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(trigger.querySelector('.chain-of-thought__streaming-text')).toHaveTextContent(
+      'Determining routes',
+    );
+    expect(screen.queryByText('Accepted')).not.toBeInTheDocument();
+    expect(screen.queryByText('Determine routes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Show ranked meeting cities')).not.toBeInTheDocument();
+
+    expect(await screen.findByText('Accepted', undefined, { timeout: 2000 })).toBeInTheDocument();
+    expect(screen.queryByText('Determine routes')).not.toBeInTheDocument();
+
+    expect(await screen.findByText('Determine routes', undefined, { timeout: 2000 })).toBeInTheDocument();
+    expect(
+      document.querySelector('.chain-of-thought__step-label.chain-of-thought__streaming-text'),
+    ).toHaveTextContent('Determine routes');
+    expect(await screen.findByText(/Comparing journeys for 2 travelers/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Determine route for Alex from Berlin/, undefined, { timeout: 2000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Determine route for Blake from Paris/, undefined, { timeout: 2000 }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText('Show ranked meeting cities', undefined, { timeout: 2000 }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Determining routes/i }));
+    expect(screen.getByRole('button', { name: /Determining routes/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });

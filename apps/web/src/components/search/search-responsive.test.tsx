@@ -37,14 +37,13 @@ vi.mock('@/components/map/search-map', async (importOriginal) => {
 });
 
 vi.mock('@/components/search/place-combobox', () => ({
-  PlaceCombobox: ({
-    fieldPath,
-    valueText,
-  }: {
-    fieldPath: string;
-    valueText: string;
-  }) => (
-    <input data-field={fieldPath} data-testid={`${fieldPath}-combobox`} value={valueText} readOnly />
+  PlaceCombobox: ({ fieldPath, valueText }: { fieldPath: string; valueText: string }) => (
+    <input
+      data-field={fieldPath}
+      data-testid={`${fieldPath}-combobox`}
+      value={valueText}
+      readOnly
+    />
   ),
 }));
 
@@ -246,7 +245,11 @@ describe('responsive layout structure', () => {
               endTime: '2026-06-15T09:00:00.000Z',
               duration: 3600,
               from: { name: 'Berlin Hauptbahnhof', lat: 52.52, lon: 13.4 },
-              to: { name: 'Munich Hauptbahnhof with a very long station name', lat: 48.13, lon: 11.58 },
+              to: {
+                name: 'Munich Hauptbahnhof with a very long station name',
+                lat: 48.13,
+                lon: 11.58,
+              },
             },
           ],
         }}
@@ -258,7 +261,11 @@ describe('responsive layout structure', () => {
 
   it('keeps the planner panel scroll region from overflowing horizontally', () => {
     render(
-      <PlannerWorkspace scene={buildDraftOriginScene([])} panelTitle="Plan a meeting point" disableMap>
+      <PlannerWorkspace
+        scene={buildDraftOriginScene([])}
+        panelTitle="Plan a meeting point"
+        disableMap
+      >
         <p>Panel body</p>
       </PlannerWorkspace>,
     );
@@ -284,20 +291,20 @@ describe('responsive layout structure', () => {
     );
 
     const list = screen.getByTestId('results-list');
-    const childTestIds = [...list.children].map((child) => child.getAttribute('data-testid'));
-    expect(childTestIds.indexOf('search-summary-compact')).toBeLessThan(
-      childTestIds.indexOf('ranking-mode-control'),
-    );
-    expect(childTestIds.indexOf('ranking-mode-control')).toBeLessThan(
-      childTestIds.indexOf('route-legend'),
-    );
-    expect(list).toContainElement(screen.getByTestId('search-summary-compact'));
-    expect(list).toContainElement(screen.getByTestId('route-legend'));
+    const summary = screen.getByTestId('search-summary-compact');
+    const ranking = screen.getByTestId('ranking-mode-control');
+    const legend = screen.getByTestId('route-legend');
+    expect(list).toContainElement(summary);
+    expect(list).toContainElement(ranking);
+    expect(list).toContainElement(legend);
+    expect(
+      summary.compareDocumentPosition(ranking) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(ranking.compareDocumentPosition(legend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByTestId('results-ranked')).toContainElement(
       screen.getByTestId('results-journeys'),
     );
 
-    const legend = screen.getByTestId('route-legend');
     expect(legend).toHaveClass('max-md:max-h-44', 'max-md:overflow-y-auto');
     expect(within(legend).getByText('Routes')).toBeInTheDocument();
   });

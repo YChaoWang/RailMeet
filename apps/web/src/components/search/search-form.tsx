@@ -174,7 +174,7 @@ function TravelerNameControl({
 }: {
   readonly participant: ParticipantDraft;
   readonly index: number;
-  readonly error?: string;
+  readonly error?: string | undefined;
   readonly disabled: boolean;
   readonly onChange: (displayName: string) => void;
 }) {

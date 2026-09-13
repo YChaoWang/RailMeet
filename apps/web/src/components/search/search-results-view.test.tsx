@@ -328,12 +328,16 @@ describe('SearchResultsView', () => {
     expect(screen.queryByText('Recommended')).not.toBeInTheDocument();
   });
 
-  it('wraps ranking modes as pills instead of an off-screen scroll strip', () => {
+  it('keeps ranking modes on one sliding segmented row', () => {
     render(<SearchResultsViewStandalone results={rankedResults} />);
     const tablist = screen.getByRole('tablist', { name: 'Ranking modes' });
-    expect(tablist).toHaveClass('flex', 'flex-wrap');
-    expect(tablist).not.toHaveClass('overflow-x-auto');
+    expect(tablist).toHaveClass('grid');
+    expect(tablist).not.toHaveClass('overflow-x-auto', 'grid-cols-2');
+    expect(tablist.style.gridTemplateColumns).toContain('repeat(4');
     expect(within(tablist).getAllByRole('tab')).toHaveLength(4);
+    expect(tablist.querySelector('[data-slot="segmented-indicator"]')).toHaveClass(
+      'transition-[left,width]',
+    );
     expect(screen.getByTestId('ranking-mode-control')).toContainElement(tablist);
     expect(screen.getByTestId('ranking-mode-description')).toHaveTextContent(
       'Balances travel effort across everyone.',

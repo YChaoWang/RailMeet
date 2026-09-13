@@ -1,7 +1,6 @@
 'use client';
 
 import { ArrowLeft, Search } from 'lucide-react';
-import Link from 'next/link';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { motisPlanModeLabel, type RankingMode } from '@railmeet/shared';
 import type { MeetingSearchDetailData } from '@railmeet/validation';
@@ -15,7 +14,11 @@ import {
 } from '@/components/search/search-form';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { ChatAssistant, ChatThread, ChatUser } from '@/components/ui/chat';
+import { ChainOfThought } from '@/components/ui/chain-of-thought';
+import { PromptSuggestion } from '@/components/ui/prompt-suggestion';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TextShimmer } from '@/components/ui/text-shimmer';
 import { useSearchPolling } from '@/hooks/use-search-polling';
 import {
   buildDraftOriginScene,
@@ -29,7 +32,7 @@ import {
   rankingsForMode,
   type SearchPageViewState,
 } from '@/lib/search-view-model';
-import { travelerColorAt, travelerLetterAt } from '@/lib/traveler-identity';
+import { travelerLetterAt } from '@/lib/traveler-identity';
 
 function summaryFromState(state: SearchPageViewState): MeetingSearchDetailData | null {
   switch (state.kind) {
@@ -104,10 +107,7 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     [summary, results, rankingMode, selectedKey, emphasizedParticipantId],
   );
 
-  const draftScene = useMemo(
-    () => buildDraftOriginScene(draftParticipants),
-    [draftParticipants],
-  );
+  const draftScene = useMemo(() => buildDraftOriginScene(draftParticipants), [draftParticipants]);
 
   // While drafting a replacement search, preview its origins instead of the finished
   // routes — but only once at least one origin exists, so the map never goes blank.
@@ -190,7 +190,10 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
             Choose each traveler’s starting place. Your last results stay on the map until you
             search again.
           </p>
-          <SearchForm participants={draftParticipants} onParticipantsChange={setDraftParticipants} />
+          <SearchForm
+            participants={draftParticipants}
+            onParticipantsChange={setDraftParticipants}
+          />
         </section>
       ) : (
         renderPanelBody({
@@ -268,7 +271,7 @@ function RouteLegend({
         {emphasizedParticipantId ? (
           <button
             type="button"
-            className="inline-flex min-h-11 shrink-0 items-center rounded px-2 text-xs font-medium text-teal-700 underline underline-offset-2 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+            className="inline-flex min-h-11 shrink-0 items-center rounded px-2 text-xs font-medium text-ink-950 underline underline-offset-2 hover:text-ink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-950"
             data-testid="route-legend-clear-emphasis"
             onClick={() => onSelect(null)}
           >
@@ -284,7 +287,7 @@ function RouteLegend({
             <li key={traveler.participantId} className="min-w-0">
               <button
                 type="button"
-                className="inline-flex min-h-11 w-full max-w-full items-start gap-2 rounded-lg border border-ink-700/10 px-2 py-1.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 md:w-auto md:items-center"
+                className="inline-flex min-h-11 w-full max-w-full items-start gap-2 rounded-lg border border-ink-700/10 px-2 py-1.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-950 md:w-auto md:items-center"
                 style={{ opacity: active ? 1 : 0.45 }}
                 aria-pressed={emphasizedParticipantId === traveler.participantId}
                 onClick={() =>
@@ -345,6 +348,146 @@ function RouteLegend({
   );
 }
 
+function searchProgressTrigger(
+  kind: 'queued' | 'running' | 'partially_completed' | 'cancelling',
+): string {
+  switch (kind) {
+    case 'queued':
+      return 'Preparing the search';
+    case 'cancelling':
+      return 'Stopping the search';
+    case 'partially_completed':
+      return 'Still refining routes';
+    default:
+      return 'Determining routes';
+  }
+}
+
+const REVEAL_STEP_MS = 520;
+const REVEAL_ITEM_MS = 260;
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+function SearchRouteProgress({
+  kind,
+  summary,
+}: {
+  readonly kind: 'queued' | 'running' | 'partially_completed' | 'cancelling';
+  readonly summary: MeetingSearchDetailData;
+}) {
+  const travelerCount = summary.participants.length;
+  const targetStep = kind === 'queued' ? 1 : 3;
+  const targetTravelers = kind === 'queued' ? 0 : travelerCount;
+  const [visibleStep, setVisibleStep] = useState(0);
+  const [visibleTravelers, setVisibleTravelers] = useState(0);
+
+  useEffect(() => {
+    if (prefersReducedMotion()) {
+      setVisibleStep(targetStep);
+      setVisibleTravelers(targetTravelers);
+      return;
+    }
+
+    if (visibleStep < targetStep) {
+      if (visibleStep === 2 && visibleTravelers < targetTravelers) {
+        const itemTimer = window.setTimeout(() => {
+          setVisibleTravelers((count) => count + 1);
+        }, REVEAL_ITEM_MS);
+        return () => window.clearTimeout(itemTimer);
+      }
+      const stepTimer = window.setTimeout(() => {
+        setVisibleStep((step) => step + 1);
+      }, REVEAL_STEP_MS);
+      return () => window.clearTimeout(stepTimer);
+    }
+
+    if (visibleTravelers < targetTravelers) {
+      const itemTimer = window.setTimeout(() => {
+        setVisibleTravelers((count) => count + 1);
+      }, REVEAL_ITEM_MS);
+      return () => window.clearTimeout(itemTimer);
+    }
+    return undefined;
+  }, [targetStep, targetTravelers, visibleStep, visibleTravelers]);
+
+  const compareStatus = kind === 'queued' ? 'pending' : 'active';
+  const acceptedBody =
+    kind === 'queued'
+      ? 'Your search is waiting to begin.'
+      : 'The search was accepted and handed to routing.';
+  const compareBody =
+    kind === 'queued'
+      ? 'Journey comparisons start after the search leaves the queue.'
+      : kind === 'cancelling'
+        ? 'Cancellation was requested. RailMeet is finishing cleanup before this search stops.'
+        : kind === 'partially_completed'
+          ? `Some journey comparisons are available, but RailMeet is still working for ${travelerCount} travelers.`
+          : `Comparing journeys for ${travelerCount} travelers…`;
+
+  return (
+    <ChainOfThought
+      defaultExpanded
+      isStreaming
+      data-testid="search-route-progress"
+      aria-label="Route search progress"
+    >
+      <ChainOfThought.Trigger>{searchProgressTrigger(kind)}</ChainOfThought.Trigger>
+      <ChainOfThought.Content>
+        <ChainOfThought.Steps>
+          {visibleStep >= 1 ? (
+            <ChainOfThought.Step label="Accepted" status="complete">
+              {acceptedBody}
+            </ChainOfThought.Step>
+          ) : null}
+          {visibleStep >= 2 ? (
+            <ChainOfThought.Step label="Determine routes" status={compareStatus}>
+              <p>{compareBody}</p>
+              {visibleTravelers > 0 ? (
+                <ul className="mt-2 space-y-1">
+                  {summary.participants.slice(0, visibleTravelers).map((participant, index) => {
+                    const loading =
+                      index === visibleTravelers - 1 && visibleTravelers < targetTravelers;
+                    const line = (
+                      <>
+                        Determine route for {participant.displayName}
+                        {participant.origin.name ? ` from ${participant.origin.name}` : ''}
+                      </>
+                    );
+                    return (
+                      <li
+                        key={participant.id}
+                        className="min-w-0 break-words motion-safe:animate-cot-in"
+                        data-testid="search-progress-traveler"
+                      >
+                        {loading ? (
+                          <ChainOfThought.StreamingText>{line}</ChainOfThought.StreamingText>
+                        ) : (
+                          line
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </ChainOfThought.Step>
+          ) : null}
+          {visibleStep >= 3 ? (
+            <ChainOfThought.Step label="Show ranked meeting cities" status="pending">
+              Ranked cities appear when every traveler’s routes are ready.
+            </ChainOfThought.Step>
+          ) : null}
+        </ChainOfThought.Steps>
+      </ChainOfThought.Content>
+    </ChainOfThought>
+  );
+}
+
 function renderPanelBody({
   state,
   retry,
@@ -376,24 +519,21 @@ function renderPanelBody({
       );
     case 'loading':
       return (
-        <div className="space-y-3" aria-busy="true" aria-live="polite">
-          <Skeleton className="h-6 w-40" />
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-32 w-full" />
-        </div>
+        <ChatThread aria-busy="true" aria-live="polite">
+          <ChatAssistant>
+            <TextShimmer className="text-sm text-muted">Loading search…</TextShimmer>
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-32 w-full" />
+          </ChatAssistant>
+        </ChatThread>
       );
     case 'not_found':
       return (
-        <div className="space-y-3 text-ink-700">
-          <h2 className="text-base font-semibold text-ink-950">Search not found.</h2>
-          <p className="text-sm">This search may no longer exist, or the link may be incorrect.</p>
-          <Link
-            className="inline-flex min-h-11 items-center text-sm font-medium text-teal-800 underline-offset-4 hover:underline"
-            href="/search"
-          >
-            Start a new search
-          </Link>
-        </div>
+        <AssistantReply
+          title="Search not found."
+          body="This search may no longer exist, or the link may be incorrect."
+        />
       );
     case 'network_error':
       return (
@@ -415,76 +555,47 @@ function renderPanelBody({
     case 'queued':
     case 'running':
     case 'partially_completed':
-    case 'cancelling': {
-      const travelerCount = state.summary.participants.length;
-      const body =
-        state.kind === 'queued'
-          ? 'Your search is waiting to begin.'
-          : state.kind === 'cancelling'
-            ? 'Cancellation was requested. RailMeet is finishing cleanup before this search stops.'
-            : state.kind === 'partially_completed'
-              ? `Some journey comparisons are available, but RailMeet is still working for ${travelerCount} travelers.`
-              : `Comparing journeys for ${travelerCount} travelers…`;
+    case 'cancelling':
       return (
-        <div className="space-y-3" aria-live="polite">
-          <SearchSummaryCompact summary={state.summary} />
-          <p className="text-sm text-ink-700">{body}</p>
-          <ol className="list-decimal space-y-1 pl-5 text-sm text-ink-700">
-            <li className={state.kind === 'queued' ? 'font-medium text-ink-950' : undefined}>
-              Accepted
-            </li>
-            <li
-              className={
-                state.kind === 'running' ||
-                state.kind === 'partially_completed' ||
-                state.kind === 'cancelling'
-                  ? 'font-medium text-ink-950'
-                  : undefined
-              }
-            >
-              Comparing journeys
-            </li>
-            <li>Show ranked meeting cities</li>
-          </ol>
-        </div>
+        <ChatThread aria-live="polite">
+          <ChatUser>
+            <SearchSummaryCompact summary={state.summary} />
+          </ChatUser>
+          <ChatAssistant>
+            <SearchRouteProgress
+              key={state.summary.searchId}
+              kind={state.kind}
+              summary={state.summary}
+            />
+          </ChatAssistant>
+        </ChatThread>
       );
-    }
     case 'failed':
       return (
-        <div className="space-y-3 text-ink-700">
-          <h2 className="text-base font-semibold text-ink-950">
-            We couldn’t complete this search.
-          </h2>
-          <p className="text-sm">{failureMessage(state.summary.failureCode)}</p>
-          <Link
-            className="inline-flex min-h-11 items-center text-sm font-medium text-teal-800 underline-offset-4 hover:underline"
-            href="/search"
-          >
-            Start a new search
-          </Link>
-        </div>
+        <AssistantReply
+          title="We couldn’t complete this search."
+          body={failureMessage(state.summary.failureCode)}
+        />
       );
     case 'cancelled':
       return (
-        <div className="space-y-3 text-ink-700">
-          <h2 className="text-base font-semibold text-ink-950">This search was cancelled.</h2>
-          <p className="text-sm">No ranked meeting plan is available for a cancelled search.</p>
-          <Link
-            className="inline-flex min-h-11 items-center text-sm font-medium text-teal-800 underline-offset-4 hover:underline"
-            href="/search"
-          >
-            Start a new search
-          </Link>
-        </div>
+        <AssistantReply
+          title="This search was cancelled."
+          body="No ranked meeting plan is available for a cancelled search."
+        />
       );
     case 'completed':
       if (state.resultsLoading || !state.results) {
         return (
-          <div className="space-y-3" aria-busy="true" aria-live="polite">
-            <SearchSummaryCompact summary={state.summary} />
-            <p className="text-sm text-ink-700">Loading ranked results…</p>
-            <Skeleton className="h-28 w-full" />
-          </div>
+          <ChatThread aria-busy="true" aria-live="polite">
+            <ChatUser>
+              <SearchSummaryCompact summary={state.summary} />
+            </ChatUser>
+            <ChatAssistant>
+              <TextShimmer className="text-sm text-muted">Loading ranked results…</TextShimmer>
+              <Skeleton className="h-28 w-full" />
+            </ChatAssistant>
+          </ChatThread>
         );
       }
       return (
@@ -517,21 +628,50 @@ function renderPanelBody({
   }
 }
 
+function AssistantReply({ title, body }: { readonly title: string; readonly body: string }) {
+  return (
+    <ChatThread>
+      <ChatAssistant>
+        <h2 className="text-base font-semibold text-ink-950">{title}</h2>
+        <p className="text-sm text-ink-700">{body}</p>
+        <PromptSuggestion>
+          <PromptSuggestion.Header>
+            <PromptSuggestion.Title>What can I help with?</PromptSuggestion.Title>
+            <PromptSuggestion.Description>
+              Start from a suggested prompt.
+            </PromptSuggestion.Description>
+          </PromptSuggestion.Header>
+          <PromptSuggestion.Items>
+            <PromptSuggestion.ItemLink href="/search">
+              <PromptSuggestion.ItemTitle>Start a new search</PromptSuggestion.ItemTitle>
+              <PromptSuggestion.ItemDescription>
+                Try different origins, times, or modes.
+              </PromptSuggestion.ItemDescription>
+            </PromptSuggestion.ItemLink>
+          </PromptSuggestion.Items>
+        </PromptSuggestion>
+      </ChatAssistant>
+    </ChatThread>
+  );
+}
+
 function SearchSummaryCompact({ summary }: { readonly summary: MeetingSearchDetailData }) {
   return (
     <div
-      className="min-w-0 break-words rounded-xl border border-ink-700/10 bg-mist-50 px-3 py-2 text-xs text-ink-700"
+      className="max-w-[min(100%,17.5rem)] min-w-0 break-words rounded-2xl rounded-br-md bg-ink-950 px-3 py-2 text-xs text-white"
       data-testid="search-summary-compact"
     >
-      <p className="font-medium text-ink-950">
+      <p className="font-medium text-white">
         {formatTravelDate(summary.travelDate)} · {summary.participants.length} travelers
       </p>
-      <p className="mt-1 flex flex-wrap gap-2">
+      <p className="mt-1 flex flex-wrap gap-2 text-white/80">
         {summary.participants.map((participant, index) => (
-          <span key={participant.id} className="inline-flex min-w-0 max-w-full items-center gap-1 break-words">
+          <span
+            key={participant.id}
+            className="inline-flex min-w-0 max-w-full items-center gap-1 break-words"
+          >
             <span
-              className="grid h-4 w-4 place-items-center rounded-full text-[9px] font-bold text-white"
-              style={{ backgroundColor: travelerColorAt(index) }}
+              className="grid h-4 w-4 place-items-center rounded-full bg-white/20 text-[9px] font-bold text-white"
               aria-hidden
             >
               {travelerLetterAt(index)}
