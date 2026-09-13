@@ -28,6 +28,8 @@ type PlannerWorkspaceProps = {
   readonly initialSheetExpanded?: boolean;
   /** When this value becomes truthy, collapse the mobile sheet once (results ready). */
   readonly collapseSheetWhen?: string | null;
+  /** Header control on the right of the RailMeet title (New Search / Back to result). */
+  readonly headerAction?: ReactNode;
   readonly onCandidateSelect?: (selectionKey: string) => void;
   readonly onTravelerSelect?: (participantId: string | null) => void;
 };
@@ -50,6 +52,7 @@ export function PlannerWorkspace({
   onSheetExpandedChange,
   initialSheetExpanded = false,
   collapseSheetWhen = null,
+  headerAction = null,
   onCandidateSelect,
   onTravelerSelect,
 }: PlannerWorkspaceProps) {
@@ -192,7 +195,7 @@ export function PlannerWorkspace({
           <div className="min-w-0">
             <Link
               href="/search"
-              className="hidden font-display text-xl tracking-tight text-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 md:inline"
+              className="font-display text-xl tracking-tight text-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
             >
               RailMeet
             </Link>
@@ -210,6 +213,7 @@ export function PlannerWorkspace({
             >
               {sheetExpanded ? 'Collapse' : 'Expand'}
             </button>
+            {headerAction}
           </div>
         </div>
 

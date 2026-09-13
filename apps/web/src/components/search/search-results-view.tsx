@@ -38,6 +38,7 @@ type SearchResultsViewProps = {
   readonly embedded?: boolean;
   readonly listHeader?: ReactNode;
   readonly listFooter?: ReactNode;
+  readonly onNewSearch?: () => void;
 };
 
 export function SearchResultsView({
@@ -52,6 +53,7 @@ export function SearchResultsView({
   embedded = false,
   listHeader,
   listFooter,
+  onNewSearch,
 }: SearchResultsViewProps) {
   const [journeysOpen, setJourneysOpen] = useState(false);
   useEffect(() => {
@@ -111,12 +113,21 @@ export function SearchResultsView({
               </ChatWaterfallItem>
               <PromptSuggestion.Items>
                 <ChatWaterfallItem index={nextEmpty()}>
-                  <PromptSuggestion.ItemLink href="/search">
-                    <PromptSuggestion.ItemTitle>Start a new search</PromptSuggestion.ItemTitle>
-                    <PromptSuggestion.ItemDescription>
-                      Try different origins, times, or modes.
-                    </PromptSuggestion.ItemDescription>
-                  </PromptSuggestion.ItemLink>
+                  {onNewSearch ? (
+                    <PromptSuggestion.Item onClick={onNewSearch}>
+                      <PromptSuggestion.ItemTitle>Start a new search</PromptSuggestion.ItemTitle>
+                      <PromptSuggestion.ItemDescription>
+                        Try different origins, times, or modes.
+                      </PromptSuggestion.ItemDescription>
+                    </PromptSuggestion.Item>
+                  ) : (
+                    <PromptSuggestion.ItemLink href="/search">
+                      <PromptSuggestion.ItemTitle>Start a new search</PromptSuggestion.ItemTitle>
+                      <PromptSuggestion.ItemDescription>
+                        Try different origins, times, or modes.
+                      </PromptSuggestion.ItemDescription>
+                    </PromptSuggestion.ItemLink>
+                  )}
                 </ChatWaterfallItem>
               </PromptSuggestion.Items>
             </PromptSuggestion>

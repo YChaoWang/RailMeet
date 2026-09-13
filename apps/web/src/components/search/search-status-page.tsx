@@ -1,10 +1,16 @@
 'use client';
 
+import { ArrowLeft, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { motisPlanModeLabel, type RankingMode } from '@railmeet/shared';
 import type { MeetingSearchDetailData } from '@railmeet/validation';
 
 import { usePlannerMap } from '@/components/search/planner-map-context';
+import {
+  createInitialParticipants,
+  SearchForm,
+  type ParticipantDraft,
+} from '@/components/search/search-form';
 import { SearchResultsView } from '@/components/search/search-results-view';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -14,7 +20,12 @@ import { PromptSuggestion } from '@/components/ui/prompt-suggestion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TextShimmer } from '@/components/ui/text-shimmer';
 import { useSearchPolling } from '@/hooks/use-search-polling';
-import { buildMapScene, candidateSelectionKey, type MapScene } from '@/lib/map-markers';
+import {
+  buildDraftOriginScene,
+  buildMapScene,
+  candidateSelectionKey,
+  type MapScene,
+} from '@/lib/map-markers';
 import {
   failureMessage,
   formatTravelDate,
@@ -45,6 +56,7 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     setScene,
     setPanelTitle,
     setSheetExpanded,
+    setHeaderAction,
     setCandidateSelectHandler,
     setTravelerSelectHandler,
   } = usePlannerMap();
@@ -52,6 +64,9 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
   const [rankingMode, setRankingMode] = useState<RankingMode>('fairest');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [emphasizedParticipantId, setEmphasizedParticipantId] = useState<string | null>(null);
+  const [newSearchOpen, setNewSearchOpen] = useState(false);
+  const [draftParticipants, setDraftParticipants] =
+    useState<ParticipantDraft[]>(createInitialParticipants);
 
   const summary = summaryFromState(state);
   const results = state.kind === 'completed' ? state.results : null;
@@ -91,27 +106,65 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     [summary, results, rankingMode, selectedKey, emphasizedParticipantId],
   );
 
+  const draftScene = useMemo(() => buildDraftOriginScene(draftParticipants), [draftParticipants]);
+  const activeScene = newSearchOpen && draftScene.markers.length > 0 ? draftScene : scene;
+
   useEffect(() => {
-    setPanelTitle(panelTitleFor(state.kind));
-  }, [state.kind, setPanelTitle]);
+    setPanelTitle(newSearchOpen ? 'Plan a meeting point' : panelTitleFor(state.kind));
+  }, [newSearchOpen, state.kind, setPanelTitle]);
 
   useEffect(() => {
     // Keep draft traveler markers on the persistent map until the first search summary arrives.
     if (
       (state.kind === 'loading' || state.kind === 'not_found') &&
-      scene.markers.length === 0 &&
-      scene.routeLines.length === 0
+      activeScene.markers.length === 0 &&
+      activeScene.routeLines.length === 0
     ) {
       return;
     }
-    setScene(scene);
-  }, [scene, setScene, state.kind]);
+    setScene(activeScene);
+  }, [activeScene, setScene, state.kind]);
+
+  useEffect(() => {
+    if (newSearchOpen) {
+      setSheetExpanded(true);
+    }
+  }, [newSearchOpen, setSheetExpanded]);
 
   useEffect(() => {
     if (results?.searchId) {
       setSheetExpanded(true);
     }
   }, [results?.searchId, setSheetExpanded]);
+
+  useEffect(() => {
+    const headerButtonClassName =
+      'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-ink-950 hover:bg-ink-950/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-950';
+    setHeaderAction(
+      newSearchOpen ? (
+        <button
+          type="button"
+          className={headerButtonClassName}
+          data-testid="back-to-result"
+          onClick={() => setNewSearchOpen(false)}
+        >
+          <ArrowLeft className="size-4 shrink-0" aria-hidden />
+          Back to result
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={headerButtonClassName}
+          data-testid="new-search-toggle"
+          onClick={() => setNewSearchOpen(true)}
+        >
+          <Search className="size-4 shrink-0" aria-hidden />
+          New Search
+        </button>
+      ),
+    );
+    return () => setHeaderAction(null);
+  }, [newSearchOpen, setHeaderAction]);
 
   useEffect(() => {
     setCandidateSelectHandler(setSelectedKey);
@@ -124,6 +177,31 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     };
   }, [setCandidateSelectHandler, setTravelerSelectHandler]);
 
+  if (newSearchOpen) {
+    return (
+      <section className="min-w-0" aria-label="New search" data-testid="inline-new-search">
+        <ChatThread>
+          <ChatAssistant>
+            <ChatWaterfallItem index={0}>
+              <p className="text-sm text-ink-950">I’ll start a new search.</p>
+            </ChatWaterfallItem>
+            <ChatWaterfallItem index={1}>
+              <p className="text-sm text-ink-700">
+                Choose each traveler’s starting place. Your last results stay on the map until you
+                search again.
+              </p>
+            </ChatWaterfallItem>
+          </ChatAssistant>
+          <SearchForm
+            participants={draftParticipants}
+            onParticipantsChange={setDraftParticipants}
+            waterfallStart={2}
+          />
+        </ChatThread>
+      </section>
+    );
+  }
+
   return renderPanelBody({
     state,
     retry,
@@ -134,6 +212,7 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     scene,
     emphasizedParticipantId,
     setEmphasizedParticipantId,
+    onNewSearch: () => setNewSearchOpen(true),
   });
 }
 
@@ -439,6 +518,7 @@ function renderPanelBody({
   scene,
   emphasizedParticipantId,
   setEmphasizedParticipantId,
+  onNewSearch,
 }: {
   state: SearchPageViewState;
   retry: () => void;
@@ -449,6 +529,7 @@ function renderPanelBody({
   scene: MapScene;
   emphasizedParticipantId: string | null;
   setEmphasizedParticipantId: (id: string | null) => void;
+  onNewSearch: () => void;
 }) {
   switch (state.kind) {
     case 'malformed_id':
@@ -575,6 +656,7 @@ function renderPanelBody({
                 onSelect={setEmphasizedParticipantId}
               />
             }
+            onNewSearch={onNewSearch}
           />
         </div>
       );

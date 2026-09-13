@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -162,7 +162,8 @@ describe('SearchStatusPage map-first surfaces', () => {
     }
   });
 
-  it('keeps completed results in the panel without a New search header control', () => {
+  it('opens a new search from results and returns with Back to result', async () => {
+    const user = userEvent.setup();
     renderState({
       kind: 'completed',
       summary: {
@@ -182,9 +183,27 @@ describe('SearchStatusPage map-first surfaces', () => {
       resultsLoading: false,
     });
 
-    expect(screen.queryByTestId('new-search-toggle')).not.toBeInTheDocument();
+    const start = screen.getByTestId('new-search-toggle');
+    expect(start).toHaveTextContent('New Search');
+    expect(start.querySelector('svg')).toBeTruthy();
+    expect(screen.getByTestId('planner-panel')).toContainElement(start);
+    const panelBrand = within(screen.getByTestId('planner-panel')).getByRole('link', {
+      name: 'RailMeet',
+    });
+    expect(
+      panelBrand.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.queryByTestId('inline-new-search')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /^New search$/ })).not.toBeInTheDocument();
+
+    await user.click(start);
+
+    expect(screen.getByTestId('inline-new-search')).toBeInTheDocument();
+    expect(screen.getByTestId('search-form')).toBeInTheDocument();
+    expect(screen.getByTestId('back-to-result')).toHaveTextContent('Back to result');
+    expect(screen.queryByText(/couldn’t find a workable meeting plan/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('back-to-result'));
+    expect(screen.queryByTestId('inline-new-search')).not.toBeInTheDocument();
     expect(screen.getByText(/couldn’t find a workable meeting plan/i)).toBeInTheDocument();
     expect(screen.getByTestId('planner-map-region')).toBeInTheDocument();
   });
