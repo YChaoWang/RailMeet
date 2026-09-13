@@ -67,7 +67,7 @@ export function ChatAssistant({ className, children, ...props }: HTMLAttributes<
   return (
     <div className={cn('flex min-w-0 gap-2.5', className)} {...props}>
       <span
-        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink-950 text-[10px] font-bold text-white"
+        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink-950 text-[10px] font-bold text-white dark:bg-mist-50 dark:text-ink-950"
         aria-hidden
       >
         R

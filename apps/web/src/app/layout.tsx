@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import { Fraunces, Source_Sans_3 } from 'next/font/google';
 import type { ReactNode } from 'react';
 
+import { ThemeProvider } from '@/components/theme-provider';
+
 import './globals.css';
 
 const display = Fraunces({
@@ -30,9 +32,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable}`}>
-      <body className="min-h-screen overflow-x-hidden font-sans text-ink-900 antialiased">
-        {children}
+    <html lang="en" className={`${display.variable} ${sans.variable}`} suppressHydrationWarning>
+      <body className="min-h-screen overflow-x-hidden bg-[#d9e2ec] font-sans text-ink-900 antialiased dark:bg-[#0b1220] dark:text-mist-50">
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

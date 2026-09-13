@@ -9,6 +9,14 @@
   --teal: #0f766e;
 }
 
+.dark {
+  color-scheme: dark;
+  --surface: #121a26;
+  --ink: #e8eef5;
+  --primary: #8fb3d6;
+  --teal: #2dd4bf;
+}
+
 html {
   overflow-x: hidden;
 }
@@ -17,6 +25,42 @@ body {
   background: #d9e2ec;
   color: var(--ink);
   min-width: 0;
+}
+
+.dark body {
+  background: #0b1220;
+}
+
+.dark [data-testid='planner-workspace'],
+.dark [data-testid='search-map'] {
+  background-color: #0b1220;
+}
+
+.dark [data-testid='planner-panel'] {
+  background-color: #121a26;
+  color: #e8eef5;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark [data-testid='planner-panel'] .text-ink-950 {
+  color: #f4f7fb;
+}
+
+.dark [data-testid='planner-panel'] .text-ink-900 {
+  color: #e8eef5;
+}
+
+.dark [data-testid='planner-panel'] .text-ink-700 {
+  color: #9aa8b8;
+}
+
+.dark [data-testid='planner-panel'] .bg-white {
+  background-color: #1a2433;
+}
+
+.dark [data-testid='planner-panel'] .bg-mist-50,
+.dark [data-testid='planner-panel'] .bg-mist-100 {
+  background-color: #1a2433;
 }
 
 /* HeroUI-shaped TextShimmer: readable text at 45% alpha, inert copy clips a currentColor sweep to the glyphs. */
@@ -115,6 +159,34 @@ body {
     sans-serif;
   color: #152033;
   box-shadow: 0 8px 20px rgba(21, 32, 51, 0.18);
+}
+
+.dark .railmeet-map-popup .maplibregl-popup-content {
+  color: #e8eef5;
+  background: #121a26;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+.dark .maplibregl-ctrl-group {
+  background: #121a26;
+  border-color: rgba(232, 238, 245, 0.12);
+}
+
+.dark .maplibregl-ctrl-group button {
+  background: #121a26;
+}
+
+.dark .maplibregl-ctrl-group button + button {
+  border-top-color: rgba(232, 238, 245, 0.12);
+}
+
+.dark .maplibregl-ctrl button span {
+  filter: invert(1);
+}
+
+.dark .maplibregl-ctrl-attrib {
+  background: #121a26;
+  color: #9aa8b8;
 }
 
 .railmeet-map-popup .maplibregl-popup-close-button {

@@ -140,7 +140,7 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
 
   useEffect(() => {
     const headerButtonClassName =
-      'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-ink-950 hover:bg-ink-950/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-950';
+      'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-ink-950 hover:bg-ink-950/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-950 dark:hover:bg-white/10 dark:focus-visible:ring-mist-50';
     setHeaderAction(
       newSearchOpen ? (
         <button

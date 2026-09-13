@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+
+import { useColorScheme, type ColorScheme } from '@/hooks/use-color-scheme';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { motisPlanModeLabel } from '@railmeet/shared';
@@ -27,8 +29,20 @@ import {
 import { formatArrivalSpreadMs, formatDurationMinutes } from '@/lib/search-view-model';
 import { cn } from '@/lib/utils';
 
-/** OpenFreeMap Liberty — open style with required attribution. */
-export const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+/** OpenFreeMap Positron — mapcn-style light gray basemap with required attribution. */
+export const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
+
+/** OpenFreeMap Dark — mapcn-style dark basemap. */
+export const MAP_DARK_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+
+export const MAP_STYLE_URLS = {
+  light: MAP_STYLE_URL,
+  dark: MAP_DARK_STYLE_URL,
+} as const;
+
+export function mapStyleUrlForScheme(scheme: ColorScheme): string {
+  return MAP_STYLE_URLS[scheme];
+}
 
 /** Public-domain Terrarium DEM (AWS elevation tiles) for optional Terrain mode. */
 export const TERRAIN_DEM_TILES_URL =
@@ -53,7 +67,7 @@ const STATION_CLUSTER_LAYER_ID = 'railmeet-viewport-stations-clusters';
 export const MAP_POPUP_MAX_WIDTH = 'min(280px, calc(100vw - 2rem))';
 
 const MAP_STATUS_TOAST_CLASS =
-  'pointer-events-none absolute left-1/2 z-[5] max-w-[min(90%,28rem)] -translate-x-1/2 rounded-lg bg-white/90 px-3 py-1.5 text-center text-[11px] shadow-sm max-md:top-14 max-md:bottom-auto md:bottom-3 md:left-[calc(50%+200px)] md:top-auto';
+  'pointer-events-none absolute left-1/2 z-[5] max-w-[min(90%,28rem)] -translate-x-1/2 rounded-lg bg-white/90 px-3 py-1.5 text-center text-[11px] text-ink-900 shadow-sm dark:bg-[#121a26]/90 dark:text-mist-50 max-md:top-14 max-md:bottom-auto md:bottom-3 md:left-[calc(50%+200px)] md:top-auto';
 const STATION_CLUSTER_COUNT_LAYER_ID = 'railmeet-viewport-stations-cluster-count';
 const STATION_POINT_LAYER_ID = 'railmeet-viewport-stations-points';
 const STATION_LABEL_LAYER_ID = 'railmeet-viewport-stations-labels';
@@ -74,32 +88,27 @@ const ROUTE_STOP_LAYER_IDS = [
   ROUTE_STOP_LABEL_LAYER_ID,
 ] as const;
 
-/** Inspected OpenFreeMap Liberty rail line layer IDs (do not invent). */
+/** Inspected OpenFreeMap Positron rail line layer IDs (do not invent). */
 const BASEMAP_RAIL_LINE_IDS = [
-  'road_major_rail',
-  'road_major_rail_hatching',
-  'road_transit_rail',
-  'road_transit_rail_hatching',
-  'bridge_major_rail',
-  'bridge_major_rail_hatching',
-  'bridge_transit_rail',
-  'bridge_transit_rail_hatching',
-  'tunnel_major_rail',
-  'tunnel_major_rail_hatching',
-  'tunnel_transit_rail',
-  'tunnel_transit_rail_hatching',
+  'railway',
+  'railway_dashline',
+  'railway_transit',
+  'railway_transit_dashline',
+  'railway_service',
+  'railway_service_dashline',
 ] as const;
 
-/** Inspected OpenFreeMap Liberty place/country label layer IDs. */
+/** Inspected OpenFreeMap Positron place/country label layer IDs. */
 const BASEMAP_PLACE_LABEL_IDS = [
+  'label_other',
+  'label_village',
+  'label_town',
+  'label_state',
   'label_city',
   'label_city_capital',
-  'label_town',
-  'label_village',
-  'label_state',
-  'label_country_1',
-  'label_country_2',
   'label_country_3',
+  'label_country_2',
+  'label_country_1',
 ] as const;
 
 const STATION_FETCH_DEBOUNCE_MS = 400;
@@ -170,6 +179,11 @@ export function SearchMap({
   const stationCacheRef = useRef(new Map<string, GeoJsonFeatureCollection>());
   const onCandidateSelectRef = useRef(onCandidateSelect);
   const onTravelerSelectRef = useRef(onTravelerSelect);
+  const colorScheme = useColorScheme();
+  const colorSchemeRef = useRef(colorScheme);
+  const mapStyleUrlRef = useRef(mapStyleUrlForScheme(colorScheme));
+  const preserveCameraRef = useRef(false);
+  colorSchemeRef.current = colorScheme;
   const [stationStatus, setStationStatus] = useState<
     'idle' | 'loading' | 'ready' | 'zoom' | 'error' | 'aggregated'
   >('idle');
@@ -195,9 +209,10 @@ export function SearchMap({
       }
       ensureMapLibreWorker();
       maplibreglRef.current = maplibregl;
+      mapStyleUrlRef.current = mapStyleUrlForScheme(colorSchemeRef.current);
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: MAP_STYLE_URL,
+        style: mapStyleUrlRef.current,
         // Paris region at a provider-safe span so the first station request can succeed
         // while OpenFreeMap cities/rails remain visible before any traveler is added.
         center: [2.3522, 48.8566],
@@ -341,9 +356,9 @@ export function SearchMap({
           });
       };
 
-      let styleReadyHandled = false;
+      let appliedStyleUrl: string | null = null;
       const onStyleReady = () => {
-        if (cancelled || styleReadyHandled) {
+        if (cancelled) {
           return;
         }
         // Prefer style stylesheet readiness over map.loaded()/isStyleLoaded().
@@ -353,11 +368,16 @@ export function SearchMap({
         if (!style?._loaded && !map.getStyle()) {
           return;
         }
-        styleReadyHandled = true;
+        const wantedStyle = mapStyleUrlRef.current;
+        if (appliedStyleUrl === wantedStyle && styleReadyRef.current) {
+          return;
+        }
+        appliedStyleUrl = wantedStyle;
         styleReadyRef.current = true;
         wrapperRef.current?.setAttribute('data-style-ready', '1');
+        wrapperRef.current?.setAttribute('data-map-theme', colorSchemeRef.current);
         try {
-          enhanceBasemapTransport(map);
+          enhanceBasemapTransport(map, colorSchemeRef.current);
           ensureTerrainSupport(map, maplibregl);
           // Defer custom sources slightly so the basemap vector pipeline can start.
           // Custom overlays still apply on the next turn via applyCurrentScene.
@@ -365,7 +385,8 @@ export function SearchMap({
             if (cancelled || mapRef.current !== map) {
               return;
             }
-            applyCurrentScene(true);
+            applyCurrentScene(!preserveCameraRef.current);
+            preserveCameraRef.current = false;
             raiseTravelerLayers(map);
             labelNavigationControls(wrapperRef.current ?? containerRef.current);
             labelTerrainControl(wrapperRef.current ?? containerRef.current);
@@ -438,7 +459,7 @@ export function SearchMap({
             refreshStations();
           }, 0);
         } catch {
-          styleReadyHandled = false;
+          appliedStyleUrl = null;
           styleReadyRef.current = false;
           wrapperRef.current?.removeAttribute('data-style-ready');
         }
@@ -478,6 +499,20 @@ export function SearchMap({
 
   useEffect(() => {
     const map = mapRef.current;
+    const nextStyle = mapStyleUrlForScheme(colorScheme);
+    if (!map || disabled || mapStyleUrlRef.current === nextStyle) {
+      return;
+    }
+    mapStyleUrlRef.current = nextStyle;
+    styleReadyRef.current = false;
+    preserveCameraRef.current = true;
+    stationViewportKeyRef.current = null;
+    wrapperRef.current?.removeAttribute('data-style-ready');
+    map.setStyle(nextStyle, { diff: false });
+  }, [colorScheme, disabled]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     const maplibregl = maplibreglRef.current;
     if (!map || !maplibregl || disabled || !styleReadyRef.current) {
       return;
@@ -504,8 +539,12 @@ export function SearchMap({
   return (
     <div
       ref={wrapperRef}
-      className={cn('relative h-full min-h-[12rem] w-full min-w-0 bg-[#d9e2ec]', className)}
+      className={cn(
+        'relative h-full min-h-[12rem] w-full min-w-0 bg-[#d9e2ec] dark:bg-[#0b1220]',
+        className,
+      )}
       data-testid="search-map"
+      data-map-theme={colorScheme}
       data-marker-count={scene.markers.length}
       data-route-line-count={scene.routeLines.length}
       data-route-segment-count={scene.routeLines.length}
@@ -554,49 +593,15 @@ function clearMarkers(markersRef: { current: InstanceType<MapLibreModule['Marker
   markersRef.current = [];
 }
 
-function enhanceBasemapTransport(map: MapInstance) {
+function enhanceBasemapTransport(map: MapInstance, scheme: ColorScheme = 'light') {
   for (const layerId of BASEMAP_RAIL_LINE_IDS) {
     if (!map.getLayer(layerId)) {
       continue;
     }
     try {
       map.setLayoutProperty(layerId, 'visibility', 'visible');
-      // Stock Liberty rails are near-invisible (#bbb, width≈0 until z14). Strengthen mid-zoom context.
-      if (layerId.endsWith('_hatching')) {
-        map.setPaintProperty(layerId, 'line-color', '#6b7280');
-        map.setPaintProperty(layerId, 'line-opacity', 0.75);
-        map.setPaintProperty(layerId, 'line-width', [
-          'interpolate',
-          ['exponential', 1.3],
-          ['zoom'],
-          7,
-          0.6,
-          11,
-          1.4,
-          14,
-          2.4,
-          18,
-          5,
-        ]);
-      } else {
-        map.setPaintProperty(layerId, 'line-color', '#4b5563');
-        map.setPaintProperty(layerId, 'line-opacity', 0.95);
-        map.setPaintProperty(layerId, 'line-width', [
-          'interpolate',
-          ['exponential', 1.3],
-          ['zoom'],
-          7,
-          0.9,
-          11,
-          1.8,
-          14,
-          2.6,
-          18,
-          4,
-        ]);
-      }
     } catch {
-      // Keep stock layer.
+      // Keep stock Positron rail styling.
     }
   }
 
@@ -608,20 +613,9 @@ function enhanceBasemapTransport(map: MapInstance) {
       map.setLayoutProperty(layerId, 'visibility', 'visible');
       map.setPaintProperty(layerId, 'text-opacity', 1);
       map.setPaintProperty(layerId, 'text-halo-width', 1.4);
-      map.setPaintProperty(layerId, 'text-halo-color', '#ffffff');
+      map.setPaintProperty(layerId, 'text-halo-color', scheme === 'dark' ? '#0b1220' : '#ffffff');
     } catch {
       // Keep stock labels.
-    }
-  }
-
-  if (map.getLayer('poi_transit')) {
-    try {
-      map.setLayoutProperty('poi_transit', 'visibility', 'visible');
-      map.setPaintProperty('poi_transit', 'icon-opacity', 0.9);
-      map.setPaintProperty('poi_transit', 'text-opacity', 0.95);
-      map.setPaintProperty('poi_transit', 'text-halo-width', 1.2);
-    } catch {
-      // Keep stock POI styling.
     }
   }
 }

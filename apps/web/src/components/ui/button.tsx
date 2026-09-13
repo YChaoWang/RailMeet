@@ -10,9 +10,11 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: 'bg-primary-700 text-white hover:bg-primary-800',
-        secondary: 'bg-mist-100 text-ink-900 hover:bg-mist-50 border border-ink-700/10',
-        outline: 'border border-ink-700/20 bg-white hover:bg-mist-50 text-ink-900',
-        ghost: 'hover:bg-mist-100 text-ink-900',
+        secondary:
+          'border border-ink-700/10 bg-mist-100 text-ink-900 hover:bg-mist-50 dark:border-white/10 dark:bg-[#1a2433] dark:text-mist-50 dark:hover:bg-white/10',
+        outline:
+          'border border-ink-700/20 bg-white text-ink-900 hover:bg-mist-50 dark:border-white/15 dark:bg-[#1a2433] dark:text-mist-50 dark:hover:bg-white/10',
+        ghost: 'text-ink-900 hover:bg-mist-100 dark:text-mist-50 dark:hover:bg-white/10',
         link: 'text-primary-700 underline-offset-4 hover:underline min-h-0 px-0',
       },
       size: {

@@ -14,7 +14,10 @@ import {
   SEARCH_MAP_STATION_LAYER_IDS,
   SEARCH_MAP_STATION_SOURCE_ID,
   SearchMap,
+  MAP_DARK_STYLE_URL,
+  MAP_STYLE_URL,
   candidateMarkerStyle,
+  mapStyleUrlForScheme,
 } from './search-map';
 
 type LayerSpec = {
@@ -137,6 +140,7 @@ vi.mock('maplibre-gl', () => {
     getCanvas = () => ({ style: { cursor: '' } });
     getTerrain = () => null;
     moveLayer = vi.fn();
+    setStyle = vi.fn();
     hasImage = vi.fn(() => false);
     addImage = vi.fn();
     getStyle = () => ({
@@ -463,6 +467,15 @@ const dualCandidateScene: MapScene = {
     },
   ],
 };
+
+describe('mapcn theme styles', () => {
+  it('uses OpenFreeMap Positron in light and Dark in dark', () => {
+    expect(mapStyleUrlForScheme('light')).toBe(MAP_STYLE_URL);
+    expect(mapStyleUrlForScheme('dark')).toBe(MAP_DARK_STYLE_URL);
+    expect(MAP_STYLE_URL).toContain('positron');
+    expect(MAP_DARK_STYLE_URL).toContain('/dark');
+  });
+});
 
 describe('candidateMarkerStyle', () => {
   it('renders the selected meeting candidate as the largest teal circle with a white border', () => {

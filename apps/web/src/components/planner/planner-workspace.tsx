@@ -12,6 +12,7 @@ import {
 } from 'react';
 
 import { SearchMap, type MapFitPadding } from '@/components/map/search-map';
+import { ThemeToggle } from '@/components/theme-toggle';
 import type { MapScene } from '@/lib/map-markers';
 import { cn } from '@/lib/utils';
 
@@ -133,7 +134,10 @@ export function PlannerWorkspace({
 
   return (
     <div
-      className={cn('relative h-[100dvh] w-full overflow-hidden bg-[#d9e2ec]', className)}
+      className={cn(
+        'relative h-[100dvh] w-full overflow-hidden bg-[#d9e2ec] dark:bg-[#0b1220]',
+        className,
+      )}
       data-testid="planner-workspace"
       data-desktop={isDesktop ? 'true' : 'false'}
     >
@@ -148,18 +152,19 @@ export function PlannerWorkspace({
         />
       </div>
 
-      <div className="pointer-events-none absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] z-20 rounded-xl border border-ink-700/10 bg-white px-3 py-2 shadow-sm md:hidden">
+      <div className="pointer-events-none absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center gap-1 rounded-xl border border-ink-700/10 bg-white px-3 py-2 shadow-sm dark:border-white/10 dark:bg-[#121a26] md:hidden">
         <Link
           href="/search"
-          className="pointer-events-auto font-display text-lg text-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+          className="pointer-events-auto font-display text-lg text-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:text-mist-50"
         >
           RailMeet
         </Link>
+        <ThemeToggle className="pointer-events-auto" />
       </div>
 
       <aside
         className={cn(
-          'pointer-events-auto absolute z-10 flex flex-col overflow-hidden border border-ink-700/15 bg-white shadow-lg',
+          'pointer-events-auto absolute z-10 flex flex-col overflow-hidden border border-ink-700/15 bg-white text-ink-900 shadow-lg dark:border-white/10 dark:bg-[#121a26] dark:text-mist-50',
           'inset-x-0 bottom-0 rounded-t-2xl',
           'md:left-3 md:right-auto md:top-3 md:bottom-auto md:w-[360px] md:max-h-[calc(100dvh-1.5rem)] md:rounded-2xl',
           'pb-[max(0.5rem,env(safe-area-inset-bottom))]',
@@ -178,7 +183,7 @@ export function PlannerWorkspace({
         data-fit-left={fitPadding.left}
         aria-label={panelTitle}
       >
-        <div className="flex items-center justify-center border-b border-ink-700/10 px-4 py-1 md:hidden">
+        <div className="flex items-center justify-center border-b border-ink-700/10 px-4 py-1 dark:border-white/10 md:hidden">
           <button
             type="button"
             className="flex min-h-11 w-full touch-none items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
@@ -187,27 +192,28 @@ export function PlannerWorkspace({
             onClick={() => setSheetExpanded(!sheetExpanded)}
             onPointerDown={onHandlePointerDown}
           >
-            <span className="h-1.5 w-10 rounded-full bg-ink-700/25" aria-hidden />
+            <span className="h-1.5 w-10 rounded-full bg-ink-700/25 dark:bg-white/20" aria-hidden />
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-b border-ink-700/10 px-4 py-3">
+        <div className="flex items-center justify-between gap-2 border-b border-ink-700/10 px-4 py-3 dark:border-white/10">
           <div className="min-w-0">
             <Link
               href="/search"
-              className="font-display text-xl tracking-tight text-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+              className="font-display text-xl tracking-tight text-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:text-mist-50"
             >
               RailMeet
             </Link>
-            <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-ink-950 md:mt-0.5 md:text-xs md:font-medium md:text-ink-700">
+            <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-ink-950 dark:text-mist-50 md:mt-0.5 md:text-xs md:font-medium md:text-ink-700 dark:md:text-mist-50/70">
               <MapPinned className="size-3.5 shrink-0 text-teal-600" aria-hidden />
               <span className="truncate">{panelTitle}</span>
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            <ThemeToggle className="max-md:hidden" />
             <button
               type="button"
-              className="min-h-11 rounded-lg px-3 text-sm font-medium text-teal-800 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 md:hidden"
+              className="min-h-11 rounded-lg px-3 text-sm font-medium text-teal-800 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:text-teal-50 dark:hover:bg-white/10 md:hidden"
               aria-expanded={sheetExpanded}
               onClick={() => setSheetExpanded(!sheetExpanded)}
             >
@@ -224,7 +230,7 @@ export function PlannerWorkspace({
           {children}
         </div>
         <p
-          className="border-t border-ink-700/10 px-4 py-2 text-[10px] leading-snug text-ink-700"
+          className="border-t border-ink-700/10 px-4 py-2 text-[10px] leading-snug text-ink-700 dark:border-white/10 dark:text-mist-50/60"
           data-testid="panel-attribution"
         >
           Map © OpenStreetMap · Journey data © Transitous

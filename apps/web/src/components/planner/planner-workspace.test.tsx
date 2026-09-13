@@ -59,6 +59,7 @@ describe('PlannerWorkspace', () => {
     expect(screen.getByTestId('planner-panel')).not.toHaveClass('md:w-[400px]');
     expect(screen.getByText('Panel body')).toBeInTheDocument();
     expect(screen.getByTestId('panel-attribution')).toBeInTheDocument();
+    expect(screen.getAllByTestId('theme-toggle').length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: 'Expand search panel' }));
     expect(screen.getByTestId('planner-panel')).toHaveAttribute('data-sheet-state', 'expanded');

@@ -10,7 +10,6 @@ import {
   useState,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
-  type LiHTMLAttributes,
   type OlHTMLAttributes,
   type ReactNode,
 } from 'react';
@@ -155,10 +154,11 @@ function ChainOfThoughtStep({
   status = 'complete',
   className,
   children,
-  ...props
-}: LiHTMLAttributes<HTMLLIElement> & {
+}: {
   readonly label?: ReactNode;
   readonly status?: 'complete' | 'active' | 'pending';
+  readonly className?: string;
+  readonly children?: ReactNode;
 }) {
   const { isStreaming } = useChainOfThought();
   const reduceMotion = useReducedMotion() === true;
@@ -176,7 +176,6 @@ function ChainOfThoughtStep({
       initial={reduceMotion ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={reduceMotion ? { duration: 0 } : { duration: 0.45, ease: 'easeOut' }}
-      {...props}
     >
       <div className="relative flex w-4 shrink-0 justify-center self-stretch" aria-hidden>
         <span
