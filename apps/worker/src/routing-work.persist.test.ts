@@ -43,7 +43,7 @@ const richJourney: PlannedJourney = {
   },
   legs: [
     {
-      mode: 'train',
+      mode: 'highspeed_rail',
       motisMode: 'HIGHSPEED_RAIL',
       displayName: 'ICE 148',
       agencyName: 'DB Fernverkehr AG',
@@ -133,7 +133,7 @@ describe('createRoutingWorkProcessor persist contract', () => {
       mode: 'HIGHSPEED_RAIL',
     });
     expect(journey.legs[0]).toMatchObject({
-      mode: 'train',
+      mode: 'highspeed_rail',
       motisMode: 'HIGHSPEED_RAIL',
       displayName: 'ICE 148',
       agencyName: 'DB Fernverkehr AG',

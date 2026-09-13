@@ -190,7 +190,7 @@ describe('routing worker persists provider itinerary document', () => {
       expect(legs.itinerary?.legs?.[0]?.agencyName).toBe('DB Fernverkehr AG');
       expect(legs.itinerary?.legs?.[0]?.mode).toBe('HIGHSPEED_RAIL');
       expect(legs.rankingLegs?.[0]).toMatchObject({
-        mode: 'train',
+        mode: 'highspeed_rail',
         motisMode: 'HIGHSPEED_RAIL',
         displayName: 'ICE 148',
       });

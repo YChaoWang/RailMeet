@@ -165,6 +165,7 @@ export function createRoutingWorkProcessor(
           },
           departureAt,
           maxTransfers: search.maxTransfers,
+          allowedTransportModes: search.allowedTransportModes,
         });
       } catch (error) {
         if (error instanceof RoutingError) {

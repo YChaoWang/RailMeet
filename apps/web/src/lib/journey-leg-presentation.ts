@@ -34,22 +34,23 @@ export type RankingLeg = {
   readonly routeTextColor?: string | undefined;
 };
 
-const RANKING_MODE_TO_MOTIS: Record<string, string> = {
+const LEGACY_RANKING_MODE_TO_TRANSITOUS: Readonly<Record<string, string>> = {
   walk: 'WALK',
   train: 'RAIL',
-  bus: 'BUS',
   metro: 'SUBWAY',
-  tram: 'TRAM',
-  ferry: 'FERRY',
-  other: 'OTHER',
+  flight: 'AIRPLANE',
 };
 
-/** Exact MOTIS token for a ranking leg, preferring the persisted provider token. */
+/** Transitous token for a ranking leg, preferring the persisted provider token. */
 export function rankingLegMotisMode(leg: {
   readonly mode: string;
   readonly motisMode?: string | undefined;
 }): string {
-  return leg.motisMode ?? RANKING_MODE_TO_MOTIS[leg.mode] ?? canonicalMotisModeToken(leg.mode);
+  return (
+    leg.motisMode ??
+    LEGACY_RANKING_MODE_TO_TRANSITOUS[leg.mode] ??
+    canonicalMotisModeToken(leg.mode)
+  );
 }
 
 /** Legacy ranking-leg fallback only. Does not invent stop names or provider fields. */

@@ -4,6 +4,7 @@ import {
   RANKING_MODES,
   SEARCH_STATUSES,
   TRANSPORT_MODES,
+  transitousTransitModesQuery,
 } from './index.js';
 import { describe, expect, it } from 'vitest';
 
@@ -17,8 +18,33 @@ describe('shared finite-value constants', () => {
     ]);
   });
 
+  it('maps Transitous planner filters to the plan query', () => {
+    expect(transitousTransitModesQuery(TRANSPORT_MODES)).toBe('TRANSIT');
+    expect(transitousTransitModesQuery(['train'])).toBe(
+      'HIGHSPEED_RAIL,LONG_DISTANCE,NIGHT_RAIL,REGIONAL_RAIL,SUBURBAN',
+    );
+    expect(transitousTransitModesQuery(['airplane', 'tram'])).toBe('AIRPLANE,TRAM');
+  });
+
   it('exposes provider-independent transport modes', () => {
-    expect(TRANSPORT_MODES).toEqual(['train', 'bus', 'tram', 'metro', 'ferry']);
+    expect(TRANSPORT_MODES).toEqual([
+      'airplane',
+      'highspeed_rail',
+      'long_distance',
+      'night_rail',
+      'coach',
+      'ride_sharing',
+      'regional_rail',
+      'suburban',
+      'subway',
+      'tram',
+      'bus',
+      'ferry',
+      'odm',
+      'funicular',
+      'aerial_lift',
+      'other',
+    ]);
   });
 
   it('exposes asynchronous search statuses', () => {

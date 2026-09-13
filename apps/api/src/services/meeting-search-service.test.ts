@@ -21,7 +21,7 @@ const sampleRequest: CreateMeetingSearchRequest = {
   maxJourneyDurationMinutes: 480,
   maxTransfers: 2,
   minTransferDurationMinutes: 5,
-  allowedTransportModes: ['train'],
+  allowedTransportModes: ['regional_rail'],
   rankingMode: 'fairest',
 };
 
@@ -98,7 +98,7 @@ describe('meeting-search service', () => {
         minTransferDurationMinutes: 5,
         rankingMode: 'fairest',
         participants: [],
-        allowedTransportModes: ['train'],
+        allowedTransportModes: ['regional_rail'],
         allowedCountryCodes: [],
         ...terminalFields,
         createdAt: new Date('2026-06-01T12:00:00.000Z'),

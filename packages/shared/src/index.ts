@@ -56,7 +56,15 @@ export {
 export { asNonEmptyStringTuple } from './tuple.js';
 
 export { RANKING_MODES, isRankingMode, type RankingMode } from './ranking-mode.js';
-export { TRANSPORT_MODES, isTransportMode, type TransportMode } from './transport-mode.js';
+export {
+  PERSISTED_TRANSPORT_MODES,
+  TRANSPORT_MODES,
+  TRANSPORT_MODE_LABELS,
+  isTransportMode,
+  transitousTransitModesQuery,
+  type PersistedTransportMode,
+  type TransportMode,
+} from './transport-mode.js';
 export {
   MOTIS_PLAN_MODES,
   MOTIS_PLAN_MODE_LABELS,

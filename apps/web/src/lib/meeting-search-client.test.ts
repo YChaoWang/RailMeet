@@ -34,7 +34,7 @@ describe('meeting-search client', () => {
       maxJourneyDurationMinutes: 480,
       maxTransfers: 2,
       minTransferDurationMinutes: 5,
-      allowedTransportModes: ['train'],
+      allowedTransportModes: ['regional_rail'],
       rankingMode: 'fairest',
     });
 
@@ -71,7 +71,7 @@ describe('meeting-search client', () => {
       maxJourneyDurationMinutes: 480,
       maxTransfers: 2,
       minTransferDurationMinutes: 5,
-      allowedTransportModes: ['train'],
+      allowedTransportModes: ['regional_rail'],
       rankingMode: 'fairest',
     } as never);
 

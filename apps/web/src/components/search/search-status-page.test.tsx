@@ -53,7 +53,7 @@ const summary = {
       origin: { placeId: 'place:paris', name: 'Paris', longitude: 2.35, latitude: 48.85 },
     },
   ],
-  allowedTransportModes: ['train' as const],
+  allowedTransportModes: ['regional_rail' as const],
   allowedCountryCodes: [],
   createdAt: '2026-06-01T12:00:00.000Z',
   updatedAt: '2026-06-01T12:00:00.000Z',

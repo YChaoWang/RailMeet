@@ -23,6 +23,8 @@ export type PlanJourneyInput = {
   readonly arriveBy?: boolean;
   readonly locale?: string;
   readonly maxTransfers?: number;
+  /** Transitous planner filters. Omitted or complete set → all public transport. */
+  readonly allowedTransportModes?: readonly string[];
   /** Application shutdown / cancellation; distinguished from request timeout. */
   readonly signal?: AbortSignal;
 };

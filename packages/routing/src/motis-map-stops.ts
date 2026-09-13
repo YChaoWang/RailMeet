@@ -46,15 +46,20 @@ import { mapMotisLegMode } from './motis-mode.js';
 function mapModeToKind(mode: string): StationKind {
   const mapped = mapMotisLegMode(mode);
   switch (mapped) {
-    case 'train':
+    case 'highspeed_rail':
+    case 'long_distance':
+    case 'night_rail':
+    case 'regional_rail':
+    case 'suburban':
       return 'rail';
-    case 'metro':
+    case 'subway':
       return 'metro';
     case 'tram':
       return 'tram';
     case 'ferry':
       return 'ferry';
     case 'bus':
+    case 'coach':
       return 'bus';
     default:
       return 'other';

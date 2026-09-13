@@ -6,6 +6,7 @@ import type {
   RouteSummarySegment,
   SearchCompletionOutcome,
   SearchStatus,
+  PersistedTransportMode,
   TransportMode,
 } from '@railmeet/shared';
 
@@ -122,7 +123,7 @@ export type MeetingSearchRecord = {
   readonly minTransferDurationMinutes: number;
   readonly rankingMode: RankingMode;
   readonly participants: readonly MeetingSearchParticipantRecord[];
-  readonly allowedTransportModes: readonly TransportMode[];
+  readonly allowedTransportModes: readonly PersistedTransportMode[];
   /** Empty array means no country restriction. */
   readonly allowedCountryCodes: readonly string[];
   /** Set once on first queued→running kickoff; null while still queued. */

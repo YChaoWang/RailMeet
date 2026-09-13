@@ -23,7 +23,7 @@ const validBody = {
   maxJourneyDurationMinutes: 480,
   maxTransfers: 2,
   minTransferDurationMinutes: 5,
-  allowedTransportModes: ['train', 'bus'],
+  allowedTransportModes: ['regional_rail', 'bus'],
   allowedCountryCodes: ['DE', 'FR'],
   rankingMode: 'fairest',
 };

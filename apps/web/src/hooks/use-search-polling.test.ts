@@ -30,7 +30,7 @@ function summary(status: string, overrides: Record<string, unknown> = {}) {
       { id: 'p1', displayName: 'Alex', origin: { placeId: 'place:berlin', name: 'Berlin' } },
       { id: 'p2', displayName: 'Blake', origin: { placeId: 'place:paris', name: 'Paris' } },
     ],
-    allowedTransportModes: ['train'],
+    allowedTransportModes: ['regional_rail'],
     allowedCountryCodes: [],
     createdAt: '2026-06-01T12:00:00.000Z',
     updatedAt: '2026-06-01T12:00:00.000Z',

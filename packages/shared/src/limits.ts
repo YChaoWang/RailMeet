@@ -165,8 +165,8 @@ export const ARRIVAL_DAY_OFFSET_MIN = ARRIVAL_DAY_OFFSET_SAME_DAY;
 /** Inclusive upper bound for arrival-day offset. */
 export const ARRIVAL_DAY_OFFSET_MAX = ARRIVAL_DAY_OFFSET_NEXT_DAY;
 
-/** Maximum number of allowed transport modes in one request (all known modes). */
-export const ALLOWED_TRANSPORT_MODES_MAX = 8;
+/** Maximum number of allowed transport modes in one request (all Transitous filters). */
+export const ALLOWED_TRANSPORT_MODES_MAX = 16;
 
 /** Maximum number of country filter codes in one request. */
 export const ALLOWED_COUNTRY_CODES_MAX = 50;

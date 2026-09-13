@@ -9,30 +9,34 @@ import { normalizeMotisPlanResponse } from './motis-normalize.js';
 
 describe('mapMotisLegMode', () => {
   it.each([
-    ['RAIL', 'train'],
-    ['TRAIN', 'train'],
-    ['HIGHSPEED_RAIL', 'train'],
-    ['HIGH_SPEED_RAIL', 'train'],
-    ['LONG_DISTANCE', 'train'],
-    ['NIGHT_RAIL', 'train'],
-    ['REGIONAL_RAIL', 'train'],
-    ['REGIONAL_FAST_RAIL', 'train'],
-    ['SUBURBAN', 'train'],
-    ['INTERCITY', 'train'], // known intercity rail → train
-    ['subway', 'metro'],
-    ['METRO', 'train'], // deprecated MOTIS alias of SUBURBAN
+    ['RAIL', 'regional_rail'],
+    ['TRAIN', 'regional_rail'],
+    ['HIGHSPEED_RAIL', 'highspeed_rail'],
+    ['HIGH_SPEED_RAIL', 'highspeed_rail'],
+    ['LONG_DISTANCE', 'long_distance'],
+    ['NIGHT_RAIL', 'night_rail'],
+    ['REGIONAL_RAIL', 'regional_rail'],
+    ['REGIONAL_FAST_RAIL', 'regional_rail'],
+    ['SUBURBAN', 'suburban'],
+    ['INTERCITY', 'long_distance'],
+    ['subway', 'subway'],
+    ['METRO', 'suburban'],
     ['TRAM', 'tram'],
     ['LIGHT_RAIL', 'tram'],
     ['LIGHTRAIL', 'tram'],
     ['BUS', 'bus'],
-    ['COACH', 'bus'],
+    ['COACH', 'coach'],
     ['FERRY', 'ferry'],
     ['BOAT', 'ferry'],
     ['WALK', 'walk'],
     ['FOOT', 'walk'],
-    ['AIRPLANE', 'other'],
-    ['RENTAL', 'other'],
-    ['TELEPORTER', 'other'],
+    ['AIRPLANE', 'airplane'],
+    ['RENTAL', 'unmapped'],
+    ['TELEPORTER', 'unmapped'],
+    ['RIDE_SHARING', 'ride_sharing'],
+    ['ODM', 'odm'],
+    ['FUNICULAR', 'funicular'],
+    ['OTHER', 'other'],
   ] as const)('maps %s → %s', (raw, expected) => {
     expect(mapMotisLegMode(raw)).toBe(expected);
   });
@@ -44,45 +48,59 @@ describe('collectJourneyTransportModes', () => {
       collectJourneyTransportModes([
         { mode: 'ferry' },
         { mode: 'walk' },
-        { mode: 'train' },
-        { mode: 'metro' },
-        { mode: 'train' },
-        { mode: 'other' },
+        { mode: 'regional_rail' },
+        { mode: 'subway' },
+        { mode: 'regional_rail' },
+        { mode: 'unmapped' },
       ]),
-    ).toEqual(['train', 'metro', 'ferry']);
+    ).toEqual(['regional_rail', 'subway', 'ferry']);
   });
 
   it('excludes walk-only access from the transit summary', () => {
     expect(collectJourneyTransportModes([{ mode: 'walk' }, { mode: 'walk' }])).toEqual([]);
   });
 
-  it('keeps train+walk as train', () => {
-    expect(collectJourneyTransportModes([{ mode: 'walk' }, { mode: 'train' }])).toEqual(['train']);
+  it('keeps regional rail + walk as regional rail', () => {
+    expect(collectJourneyTransportModes([{ mode: 'walk' }, { mode: 'regional_rail' }])).toEqual([
+      'regional_rail',
+    ]);
   });
 
-  it('keeps train+metro', () => {
-    expect(collectJourneyTransportModes([{ mode: 'train' }, { mode: 'metro' }])).toEqual([
-      'train',
-      'metro',
-    ]);
+  it('keeps regional rail + subway', () => {
+    expect(
+      collectJourneyTransportModes([{ mode: 'regional_rail' }, { mode: 'subway' }]),
+    ).toEqual(['regional_rail', 'subway']);
   });
 
   it('maps bus and tram into the summary', () => {
     expect(collectJourneyTransportModes([{ mode: 'bus' }, { mode: 'tram' }])).toEqual([
-      'bus',
       'tram',
+      'bus',
     ]);
   });
 
+  it('keeps Transitous filters including other, not street access', () => {
+    expect(
+      collectJourneyTransportModes([
+        { mode: 'airplane' },
+        { mode: 'coach' },
+        { mode: 'suburban' },
+        { mode: 'other' },
+        { mode: 'walk' },
+        { mode: 'unmapped' },
+      ]),
+    ).toEqual(['airplane', 'coach', 'suburban', 'other']);
+  });
+
   it('detects unmapped transit legs without inventing train', () => {
-    const legs = [{ mode: 'other' as const }, { mode: 'walk' as const }];
+    const legs = [{ mode: 'unmapped' as const }, { mode: 'walk' as const }];
     expect(collectJourneyTransportModes(legs)).toEqual([]);
     expect(hasUnmappedTransitLegs(legs)).toBe(true);
   });
 });
 
 describe('normalizeMotisPlanResponse modes', () => {
-  it('maps LONG_DISTANCE rail legs to train in a real-shaped itinerary', () => {
+  it('maps LONG_DISTANCE rail legs to intercity rail in a real-shaped itinerary', () => {
     const journeys = normalizeMotisPlanResponse({
       itineraries: [
         {
@@ -107,9 +125,9 @@ describe('normalizeMotisPlanResponse modes', () => {
         },
       ],
     });
-    expect(journeys[0]?.legs.map((leg) => leg.mode)).toEqual(['walk', 'train']);
+    expect(journeys[0]?.legs.map((leg) => leg.mode)).toEqual(['walk', 'long_distance']);
     expect(journeys[0]?.legs[1]?.motisMode).toBe('LONG_DISTANCE');
-    expect(collectJourneyTransportModes(journeys[0]!.legs)).toEqual(['train']);
+    expect(collectJourneyTransportModes(journeys[0]!.legs)).toEqual(['long_distance']);
   });
 
   it('maps coach, ferry, metro, tram, suburban, and light rail', () => {
@@ -170,18 +188,18 @@ describe('normalizeMotisPlanResponse modes', () => {
       'FERRY',
     ]);
     expect(journeys[0]?.legs.map((leg) => leg.mode)).toEqual([
-      'bus',
-      'metro',
+      'coach',
+      'subway',
       'tram',
-      'train',
+      'suburban',
       'tram',
       'ferry',
     ]);
     expect(collectJourneyTransportModes(journeys[0]!.legs)).toEqual([
-      'train',
-      'bus',
+      'coach',
+      'suburban',
+      'subway',
       'tram',
-      'metro',
       'ferry',
     ]);
   });
@@ -205,15 +223,15 @@ describe('normalizeMotisPlanResponse modes', () => {
         },
       ],
     });
-    expect(journeys[0]?.legs[0]?.mode).toBe('other');
+    expect(journeys[0]?.legs[0]?.mode).toBe('unmapped');
     expect(journeys[0]?.legs[0]?.motisMode).toBe('TELEPORTER');
     expect(collectJourneyTransportModes(journeys[0]!.legs)).toEqual([]);
     expect(hasUnmappedTransitLegs(journeys[0]!.legs)).toBe(true);
   });
 
-  it('does not treat known MOTIS airplane/rental modes as unmapped', () => {
-    expect(hasUnmappedTransitLegs([{ mode: 'other', motisMode: 'AIRPLANE' }])).toBe(false);
-    expect(hasUnmappedTransitLegs([{ mode: 'other', motisMode: 'RENTAL' }])).toBe(false);
-    expect(hasUnmappedTransitLegs([{ mode: 'other', motisMode: 'HYPERLOOP' }])).toBe(true);
+  it('does not treat known Transitous airplane/rental modes as unmapped', () => {
+    expect(hasUnmappedTransitLegs([{ mode: 'airplane', motisMode: 'AIRPLANE' }])).toBe(false);
+    expect(hasUnmappedTransitLegs([{ mode: 'unmapped', motisMode: 'RENTAL' }])).toBe(false);
+    expect(hasUnmappedTransitLegs([{ mode: 'unmapped', motisMode: 'HYPERLOOP' }])).toBe(true);
   });
 });

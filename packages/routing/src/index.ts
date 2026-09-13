@@ -41,7 +41,6 @@ export {
 } from './motis-normalize.js';
 
 export {
-  JOURNEY_TRANSPORT_MODE_ORDER,
   collectJourneyTransportModes,
   hasUnmappedTransitLegs,
   mapMotisLegMode,

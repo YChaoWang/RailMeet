@@ -26,20 +26,20 @@ describe('MOTIS v5 plan mode catalog', () => {
     expect(motisPlanModeLabel('REGIONAL_FAST_RAIL')).toBe('Regional express');
     expect(motisPlanModeLabel('REGIONAL_RAIL')).toBe('Regional rail');
     expect(motisPlanModeLabel('SUBURBAN')).toBe('Suburban rail');
-    expect(mapMotisPlanModeToDomain('HIGHSPEED_RAIL')).toBe('train');
-    expect(mapMotisPlanModeToDomain('SUBURBAN')).toBe('train');
+    expect(mapMotisPlanModeToDomain('HIGHSPEED_RAIL')).toBe('highspeed_rail');
+    expect(mapMotisPlanModeToDomain('SUBURBAN')).toBe('suburban');
   });
 
   it('treats deprecated METRO as suburban rail, not subway', () => {
     expect(motisPlanModeLabel('METRO')).toBe('Suburban rail');
-    expect(mapMotisPlanModeToDomain('METRO')).toBe('train');
+    expect(mapMotisPlanModeToDomain('METRO')).toBe('suburban');
     expect(motisPlanModeLabel('SUBWAY')).toBe('Metro');
-    expect(mapMotisPlanModeToDomain('SUBWAY')).toBe('metro');
+    expect(mapMotisPlanModeToDomain('SUBWAY')).toBe('subway');
   });
 
   it('never labels unknown future modes as Train', () => {
     expect(motisPlanModeLabel('HYPERLOOP')).toBe(UNKNOWN_MOTIS_MODE_LABEL);
-    expect(mapMotisPlanModeToDomain('HYPERLOOP')).toBe('other');
+    expect(mapMotisPlanModeToDomain('HYPERLOOP')).toBe('unmapped');
     expect(motisPlanModeLabel('HYPERLOOP')).not.toMatch(/train/i);
   });
 

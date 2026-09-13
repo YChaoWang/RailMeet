@@ -92,7 +92,7 @@ describe('SearchForm place selection', () => {
     const user = userEvent.setup();
     render(<Harness />);
     const form = screen.getByRole('form', { name: 'Meeting search' });
-    expect(form.querySelectorAll('[data-slot="chat-waterfall-item"]')).toHaveLength(18);
+    expect(form.querySelectorAll('[data-slot="chat-waterfall-item"]')).toHaveLength(29);
     expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(2);
     expect(within(form).queryByRole('textbox', { name: /Traveler [A-Z] name/i })).not.toBeInTheDocument();
     expect(within(form).getByRole('button', { name: 'Add a name for traveler A' })).toBeInTheDocument();
@@ -250,6 +250,24 @@ describe('SearchForm place selection', () => {
     const body = JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body));
     expect(body.participants[0].displayName).toBe('Traveler A');
     expect(body.participants[1].displayName).toBe('Traveler B');
+    expect(body.allowedTransportModes).toEqual([
+      'airplane',
+      'highspeed_rail',
+      'long_distance',
+      'night_rail',
+      'coach',
+      'ride_sharing',
+      'regional_rail',
+      'suburban',
+      'subway',
+      'tram',
+      'bus',
+      'ferry',
+      'odm',
+      'funicular',
+      'aerial_lift',
+      'other',
+    ]);
     expect(body.participants[0].id).toBe('traveler-1');
     expect(screen.queryByLabelText(/Participant ID/i)).not.toBeInTheDocument();
   });

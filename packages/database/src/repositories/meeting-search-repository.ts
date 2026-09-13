@@ -4,7 +4,7 @@ import {
   isTransportMode,
   type RankingMode,
   type SearchStatus,
-  type TransportMode,
+  type PersistedTransportMode,
 } from '@railmeet/shared';
 import { asc, eq, inArray, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
@@ -80,7 +80,7 @@ function assertRankingMode(value: string): RankingMode {
   return value;
 }
 
-function assertTransportMode(value: string): TransportMode {
+function assertTransportMode(value: string): PersistedTransportMode {
   if (!isTransportMode(value)) {
     throw new Error(`Unexpected transport mode from database: ${value}`);
   }
