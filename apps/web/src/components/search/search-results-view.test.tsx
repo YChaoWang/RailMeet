@@ -318,6 +318,16 @@ describe('SearchResultsView', () => {
     expect(screen.getAllByTestId('journey-route-summary').length).toBeGreaterThan(0);
   });
 
+  it('waterfalls ranked list sections from top to bottom', () => {
+    render(<SearchResultsViewStandalone results={rankedResults} />);
+    expect(screen.getByTestId('results-list').querySelectorAll('[data-slot="chat-waterfall-item"]')).toHaveLength(
+      9,
+    );
+    expect(
+      screen.getByTestId('results-journeys').querySelectorAll('[data-slot="chat-waterfall-item"]'),
+    ).toHaveLength(3);
+  });
+
   it('groups each traveler with their duration and services on the candidate card', () => {
     render(<SearchResultsViewStandalone results={rankedResults} />);
     const cologne = screen.getByRole('button', { name: /Rank 2.*Cologne/i });
@@ -394,6 +404,9 @@ describe('SearchResultsView', () => {
       );
       expect(screen.getByText('We couldn’t find a workable meeting plan.')).toBeInTheDocument();
       expect(screen.queryByText(/couldn’t complete this search/i)).not.toBeInTheDocument();
+      expect(
+        screen.getByTestId('results-empty').querySelectorAll('[data-slot="chat-waterfall-item"]'),
+      ).toHaveLength(4);
       unmount();
     }
   });

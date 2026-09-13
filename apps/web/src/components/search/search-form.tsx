@@ -37,6 +37,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } fr
 import { PlaceCombobox } from '@/components/search/place-combobox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarGroup } from '@/components/ui/avatar';
+import { ChatAssistant, ChatWaterfallItem } from '@/components/ui/chat';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -98,7 +99,33 @@ export type ParticipantsUpdater =
 export type SearchFormProps = {
   readonly participants: ParticipantDraft[];
   readonly onParticipantsChange: (next: ParticipantsUpdater) => void;
+  /** Offset so the form turns continue a parent chat waterfall. */
+  readonly waterfallStart?: number;
 };
+
+function travelerWaterfallOffset(letter: string): number {
+  const code = letter.toUpperCase().charCodeAt(0);
+  return Number.isFinite(code) ? Math.max(0, code - 65) : 0;
+}
+
+function formWaterfallSteps(start: number) {
+  const afterTravelers = start + 1 + PARTICIPANT_COUNT_MAX;
+  return {
+    travelersHeader: start,
+    traveler: (letter: string) => start + 1 + travelerWaterfallOffset(letter),
+    whenHeading: afterTravelers,
+    travelDate: afterTravelers + 1,
+    leaveAfter: afterTravelers + 2,
+    arriveBy: afterTravelers + 3,
+    ranking: afterTravelers + 4,
+    maxJourney: afterTravelers + 5,
+    maxTransfers: afterTravelers + 6,
+    minTransfer: afterTravelers + 7,
+    modesHeading: afterTravelers + 8,
+    mode: (modeIndex: number) => afterTravelers + 9 + modeIndex,
+    submit: afterTravelers + 9 + TRANSPORT_MODES.length,
+  };
+}
 
 function toSelectedOrigin(suggestion: PlaceSuggestionView): SelectedPlaceOrigin {
   return {
@@ -306,7 +333,11 @@ function TravelerNameControl({
   );
 }
 
-export function SearchForm({ participants, onParticipantsChange }: SearchFormProps) {
+export function SearchForm({
+  participants,
+  onParticipantsChange,
+  waterfallStart = 0,
+}: SearchFormProps) {
   const router = useRouter();
   const formId = useId();
   const submittingRef = useRef(false);
@@ -450,17 +481,20 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
     }
   };
 
+  const steps = formWaterfallSteps(waterfallStart);
+
   return (
     <form
       id={formId}
       onSubmit={onSubmit}
-      className="min-w-0 space-y-5"
+      className="flex min-w-0 flex-col gap-4"
       noValidate
       aria-label="Meeting search"
       data-testid="search-form"
     >
+      <ChatAssistant>
       <section className="min-w-0 space-y-3" data-testid="search-form-travelers">
-        <div className="space-y-2">
+        <ChatWaterfallItem index={steps.travelersHeader} className="space-y-2" data-testid="search-form-waterfall-item">
           <div className="flex items-center justify-between gap-2">
             <SectionHeading icon={Users}>Travelers</SectionHeading>
             <p className="text-xs text-ink-700" data-testid="search-form-traveler-count">
@@ -490,11 +524,12 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
               Add traveler
             </Button>
           </div>
-        </div>
+        </ChatWaterfallItem>
         {participants.map((participant, index) => (
-          <div
+          <ChatWaterfallItem
             key={participant.key}
-            className="grid min-w-0 gap-2 border-b border-ink-700/10 pb-3 last:border-b-0"
+            index={steps.traveler(participant.letter)}
+            className="grid min-w-0 gap-2 rounded-2xl border border-ink-700/10 bg-white px-3 py-3"
             data-testid="search-form-traveler-row"
           >
             <div className="flex items-center gap-2">
@@ -549,19 +584,21 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
                 <p className="text-sm text-red-700">{errors[`participants.${index}.origin`]}</p>
               ) : null}
             </div>
-          </div>
+          </ChatWaterfallItem>
         ))}
         {errors.participants ? <p className="text-sm text-red-700">{errors.participants}</p> : null}
       </section>
+      </ChatAssistant>
 
+      <ChatAssistant>
       <section
         className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2"
         data-testid="search-form-schedule"
       >
-        <div className="space-y-1.5 md:col-span-2">
+        <ChatWaterfallItem index={steps.whenHeading} className="space-y-1.5 md:col-span-2" data-testid="search-form-waterfall-item">
           <SectionHeading icon={CalendarClock}>When & preference</SectionHeading>
-        </div>
-        <div className="space-y-1.5 md:col-span-2">
+        </ChatWaterfallItem>
+        <ChatWaterfallItem index={steps.travelDate} className="space-y-1.5 md:col-span-2" data-testid="search-form-waterfall-item">
           <Label htmlFor="travelDate">Travel date</Label>
           <Popover open={travelDateOpen} onOpenChange={setTravelDateOpen}>
             <PopoverTrigger asChild>
@@ -596,13 +633,18 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             </PopoverContent>
           </Popover>
           {errors.travelDate ? <p className="text-sm text-red-700">{errors.travelDate}</p> : null}
-        </div>
+        </ChatWaterfallItem>
         <Timeline
           aria-label="Leave after and arrive by"
           data-testid="search-form-travel-window"
           className="border-y border-ink-700/15 py-3 md:col-span-2"
         >
-          <Timeline.Item>
+          <ChatWaterfallItem
+            as="li"
+            index={steps.leaveAfter}
+            className="relative flex list-none gap-2.5"
+            data-testid="search-form-waterfall-item"
+          >
             <Timeline.Rail>
               <Timeline.Marker />
               <Timeline.Connector />
@@ -618,8 +660,13 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
                 onChange={(event) => setEarliestDepartureTime(event.target.value)}
               />
             </Timeline.Content>
-          </Timeline.Item>
-          <Timeline.Item>
+          </ChatWaterfallItem>
+          <ChatWaterfallItem
+            as="li"
+            index={steps.arriveBy}
+            className="relative flex list-none gap-2.5"
+            data-testid="search-form-waterfall-item"
+          >
             <Timeline.Rail>
               <Timeline.Marker />
             </Timeline.Rail>
@@ -651,9 +698,9 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
                 </Select>
               </div>
             </Timeline.Content>
-          </Timeline.Item>
+          </ChatWaterfallItem>
         </Timeline>
-        <div className="space-y-1.5 md:col-span-2">
+        <ChatWaterfallItem index={steps.ranking} className="space-y-1.5 md:col-span-2" data-testid="search-form-waterfall-item">
           <Label htmlFor="rankingMode">Ranking preference</Label>
           <Select
             value={rankingMode}
@@ -670,8 +717,8 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-1.5">
+        </ChatWaterfallItem>
+        <ChatWaterfallItem index={steps.maxJourney} className="space-y-1.5" data-testid="search-form-waterfall-item">
           <Label htmlFor="maxJourneyDurationMinutes">Max journey minutes</Label>
           <Input
             id="maxJourneyDurationMinutes"
@@ -680,8 +727,8 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             value={maxJourneyDurationMinutes}
             onChange={(event) => setMaxJourneyDurationMinutes(event.target.value)}
           />
-        </div>
-        <div className="space-y-1.5">
+        </ChatWaterfallItem>
+        <ChatWaterfallItem index={steps.maxTransfers} className="space-y-1.5" data-testid="search-form-waterfall-item">
           <Label htmlFor="maxTransfers">Max transfers</Label>
           <Input
             id="maxTransfers"
@@ -690,8 +737,8 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             value={maxTransfers}
             onChange={(event) => setMaxTransfers(event.target.value)}
           />
-        </div>
-        <div className="space-y-1.5">
+        </ChatWaterfallItem>
+        <ChatWaterfallItem index={steps.minTransfer} className="space-y-1.5" data-testid="search-form-waterfall-item">
           <Label htmlFor="minTransferDurationMinutes">Min transfer minutes</Label>
           <Input
             id="minTransferDurationMinutes"
@@ -700,24 +747,34 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
             value={minTransferDurationMinutes}
             onChange={(event) => setMinTransferDurationMinutes(event.target.value)}
           />
-        </div>
+        </ChatWaterfallItem>
       </section>
+      </ChatAssistant>
 
+      <ChatAssistant>
       <section className="space-y-2">
-        <SectionHeading icon={TrainFront}>Transport modes</SectionHeading>
+        <ChatWaterfallItem index={steps.modesHeading} data-testid="search-form-waterfall-item">
+          <SectionHeading icon={TrainFront}>Transport modes</SectionHeading>
+        </ChatWaterfallItem>
         <div className="flex flex-wrap gap-3">
-          {TRANSPORT_MODES.map((mode) => {
+          {TRANSPORT_MODES.map((mode, modeIndex) => {
             const ModeIcon = TRANSPORT_MODE_ICONS[mode];
             return (
-              <label key={mode} className="flex min-h-11 items-center gap-2 text-sm capitalize">
-                <Checkbox
-                  checked={modes.includes(mode)}
-                  onCheckedChange={(checked) => toggleMode(mode, checked === true)}
-                  data-field="allowedTransportModes"
-                />
-                <ModeIcon className="size-3.5 shrink-0 text-ink-700" aria-hidden />
-                {mode}
-              </label>
+              <ChatWaterfallItem
+                key={mode}
+                index={steps.mode(modeIndex)}
+                data-testid="search-form-waterfall-item"
+              >
+                <label className="flex min-h-11 items-center gap-2 text-sm capitalize">
+                  <Checkbox
+                    checked={modes.includes(mode)}
+                    onCheckedChange={(checked) => toggleMode(mode, checked === true)}
+                    data-field="allowedTransportModes"
+                  />
+                  <ModeIcon className="size-3.5 shrink-0 text-ink-700" aria-hidden />
+                  {mode}
+                </label>
+              </ChatWaterfallItem>
             );
           })}
         </div>
@@ -725,7 +782,10 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
           <p className="text-sm text-red-700">{errors.allowedTransportModes}</p>
         ) : null}
       </section>
+      </ChatAssistant>
 
+      <ChatAssistant>
+      <ChatWaterfallItem index={steps.submit} className="space-y-3" data-testid="search-form-waterfall-item">
       {formError || Object.keys(errors).length > 0 ? (
         <Alert variant="destructive">
           <AlertTitle>Check the form</AlertTitle>
@@ -749,6 +809,8 @@ export function SearchForm({ participants, onParticipantsChange }: SearchFormPro
         )}
         {pending ? 'Starting search…' : 'Find a meeting point'}
       </Button>
+      </ChatWaterfallItem>
+      </ChatAssistant>
     </form>
   );
 }

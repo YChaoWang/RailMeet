@@ -233,6 +233,9 @@ describe('SearchPlannerPage live draft markers', () => {
   it('does not create a marker for an empty added traveler', async () => {
     const user = userEvent.setup();
     renderPlanner();
+    const conversation = screen.getByRole('log', { name: 'Search conversation' });
+    expect(conversation).toHaveTextContent('RailMeet');
+    expect(conversation).toHaveTextContent('I’ll find a meeting city');
     await user.click(screen.getByRole('button', { name: 'Add traveler' }));
     expect(screen.getByTestId('search-map')).toHaveAttribute('data-marker-count', '0');
     expect(createMeetingSearch).not.toHaveBeenCalled();

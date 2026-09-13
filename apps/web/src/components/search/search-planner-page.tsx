@@ -8,6 +8,7 @@ import {
   type ParticipantDraft,
 } from '@/components/search/search-form';
 import { usePlannerMap } from '@/components/search/planner-map-context';
+import { ChatAssistant, ChatThread, ChatWaterfallItem } from '@/components/ui/chat';
 import { buildDraftOriginScene } from '@/lib/map-markers';
 
 export function SearchPlannerPage() {
@@ -35,17 +36,33 @@ export function SearchPlannerPage() {
   }, [selectedOriginCount, setSheetExpanded]);
 
   return (
-    <>
-      <p className="mb-4 text-sm text-ink-700" data-testid="planner-draft-copy">
-        Search for each traveler’s station or city. Selected origins appear on the map immediately —
-        before you start the search.
-      </p>
-      {selectedOriginCount > 0 ? (
-        <p className="mb-3 text-xs text-teal-800" data-testid="draft-marker-status">
-          Showing {selectedOriginCount} origin{selectedOriginCount === 1 ? '' : 's'} on the map
-        </p>
-      ) : null}
-      <SearchForm participants={participants} onParticipantsChange={setParticipants} />
-    </>
+    <ChatThread>
+      <ChatAssistant>
+        <ChatWaterfallItem index={0}>
+          <p className="text-sm text-ink-950">
+            I’ll find a meeting city. Add each traveler’s starting place and when you can travel.
+          </p>
+        </ChatWaterfallItem>
+        <ChatWaterfallItem index={1}>
+          <p className="text-sm text-ink-700" data-testid="planner-draft-copy">
+            Search for each traveler’s station or city. Selected origins appear on the map
+            immediately — before you start the search.
+          </p>
+        </ChatWaterfallItem>
+        {selectedOriginCount > 0 ? (
+          <ChatWaterfallItem index={2}>
+            <p className="text-xs text-ink-700" data-testid="draft-marker-status">
+              Showing {selectedOriginCount} origin{selectedOriginCount === 1 ? '' : 's'} on the
+              map
+            </p>
+          </ChatWaterfallItem>
+        ) : null}
+      </ChatAssistant>
+      <SearchForm
+        participants={participants}
+        onParticipantsChange={setParticipants}
+        waterfallStart={2}
+      />
+    </ChatThread>
   );
 }

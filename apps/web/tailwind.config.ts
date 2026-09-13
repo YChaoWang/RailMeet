@@ -36,14 +36,6 @@ const config = {
         sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
       },
       keyframes: {
-        'accordion-down': {
-          from: { height: '0' },
-          to: { height: 'var(--radix-accordion-content-height)' },
-        },
-        'accordion-up': {
-          from: { height: 'var(--radix-accordion-content-height)' },
-          to: { height: '0' },
-        },
         'collapsible-down': {
           from: { height: '0' },
           to: { height: 'var(--radix-collapsible-content-height)' },
@@ -52,22 +44,15 @@ const config = {
           from: { height: 'var(--radix-collapsible-content-height)' },
           to: { height: '0' },
         },
-        shimmer: {
-          '0%': { backgroundPosition: '100% 50%' },
-          '100%': { backgroundPosition: '0% 50%' },
-        },
         'cot-in': {
-          from: { opacity: '0', transform: 'translateY(6px)' },
+          from: { opacity: '0', transform: 'translateY(10px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
       },
       animation: {
-        'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out',
         'collapsible-down': 'collapsible-down 0.2s ease-out',
         'collapsible-up': 'collapsible-up 0.2s ease-out',
-        shimmer: 'shimmer 1.6s linear infinite',
-        'cot-in': 'cot-in 0.35s ease-out',
+        'cot-in': 'cot-in 0.45s ease-out both',
       },
     },
   },

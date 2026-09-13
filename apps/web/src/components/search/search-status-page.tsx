@@ -14,7 +14,7 @@ import {
 } from '@/components/search/search-form';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { ChatAssistant, ChatThread, ChatUser } from '@/components/ui/chat';
+import { ChatAssistant, ChatThread, ChatUser, ChatWaterfallItem } from '@/components/ui/chat';
 import { ChainOfThought } from '@/components/ui/chain-of-thought';
 import { PromptSuggestion } from '@/components/ui/prompt-suggestion';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -182,18 +182,24 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
           aria-label="New search"
           data-testid="inline-new-search"
         >
-          <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink-950">
-            <Search className="size-4 shrink-0 text-teal-600" aria-hidden />
-            New search
-          </h2>
-          <p className="mb-4 text-sm text-ink-700">
-            Choose each traveler’s starting place. Your last results stay on the map until you
-            search again.
-          </p>
-          <SearchForm
-            participants={draftParticipants}
-            onParticipantsChange={setDraftParticipants}
-          />
+          <ChatThread>
+            <ChatAssistant>
+              <ChatWaterfallItem index={0}>
+                <p className="text-sm text-ink-950">I’ll start a new search.</p>
+              </ChatWaterfallItem>
+              <ChatWaterfallItem index={1}>
+                <p className="text-sm text-ink-700">
+                  Choose each traveler’s starting place. Your last results stay on the map until you
+                  search again.
+                </p>
+              </ChatWaterfallItem>
+            </ChatAssistant>
+            <SearchForm
+              participants={draftParticipants}
+              onParticipantsChange={setDraftParticipants}
+              waterfallStart={2}
+            />
+          </ChatThread>
         </section>
       ) : (
         renderPanelBody({
@@ -346,6 +352,22 @@ function RouteLegend({
       </ul>
     </div>
   );
+}
+
+function searchProgressIntro(
+  kind: 'queued' | 'running' | 'partially_completed' | 'cancelling',
+  travelerCount: number,
+): string {
+  switch (kind) {
+    case 'queued':
+      return 'I’ve accepted this search. I’ll start comparing journeys as soon as routing begins.';
+    case 'cancelling':
+      return 'I’m stopping this search.';
+    case 'partially_completed':
+      return `Some routes are in. I’m still comparing journeys for ${travelerCount} travelers.`;
+    default:
+      return `I’m determining routes for ${travelerCount} travelers.`;
+  }
 }
 
 function searchProgressTrigger(
@@ -512,10 +534,16 @@ function renderPanelBody({
   switch (state.kind) {
     case 'malformed_id':
       return (
-        <Alert variant="destructive">
-          <AlertTitle>Invalid search link</AlertTitle>
-          <AlertDescription>The search ID in this URL is not a valid identifier.</AlertDescription>
-        </Alert>
+        <ChatThread>
+          <ChatAssistant>
+            <Alert variant="destructive">
+              <AlertTitle>Invalid search link</AlertTitle>
+              <AlertDescription>
+                The search ID in this URL is not a valid identifier.
+              </AlertDescription>
+            </Alert>
+          </ChatAssistant>
+        </ChatThread>
       );
     case 'loading':
       return (
@@ -537,20 +565,27 @@ function renderPanelBody({
       );
     case 'network_error':
       return (
-        <div className="space-y-3">
+        <ChatThread>
           {state.summary ? (
-            <p className="text-sm text-ink-700">
-              Last known status: <strong>{state.summary.status}</strong>
-            </p>
+            <ChatUser>
+              <SearchSummaryCompact summary={state.summary} />
+            </ChatUser>
           ) : null}
-          <Alert variant="warning">
-            <AlertTitle>We lost connection while checking the search.</AlertTitle>
-            <AlertDescription>{state.message}</AlertDescription>
-          </Alert>
-          <Button type="button" onClick={retry}>
-            Retry
-          </Button>
-        </div>
+          <ChatAssistant>
+            {state.summary ? (
+              <p className="text-sm text-ink-700">
+                Last known status: <strong>{state.summary.status}</strong>
+              </p>
+            ) : null}
+            <Alert variant="warning">
+              <AlertTitle>We lost connection while checking the search.</AlertTitle>
+              <AlertDescription>{state.message}</AlertDescription>
+            </Alert>
+            <Button type="button" onClick={retry}>
+              Retry
+            </Button>
+          </ChatAssistant>
+        </ChatThread>
       );
     case 'queued':
     case 'running':
@@ -562,6 +597,9 @@ function renderPanelBody({
             <SearchSummaryCompact summary={state.summary} />
           </ChatUser>
           <ChatAssistant>
+            <p className="text-sm text-ink-950">
+              {searchProgressIntro(state.kind, state.summary.participants.length)}
+            </p>
             <SearchRouteProgress
               key={state.summary.searchId}
               kind={state.kind}
@@ -632,22 +670,30 @@ function AssistantReply({ title, body }: { readonly title: string; readonly body
   return (
     <ChatThread>
       <ChatAssistant>
-        <h2 className="text-base font-semibold text-ink-950">{title}</h2>
-        <p className="text-sm text-ink-700">{body}</p>
+        <ChatWaterfallItem index={0}>
+          <h2 className="text-base font-semibold text-ink-950">{title}</h2>
+        </ChatWaterfallItem>
+        <ChatWaterfallItem index={1}>
+          <p className="text-sm text-ink-700">{body}</p>
+        </ChatWaterfallItem>
         <PromptSuggestion>
-          <PromptSuggestion.Header>
-            <PromptSuggestion.Title>What can I help with?</PromptSuggestion.Title>
-            <PromptSuggestion.Description>
-              Start from a suggested prompt.
-            </PromptSuggestion.Description>
-          </PromptSuggestion.Header>
+          <ChatWaterfallItem index={2}>
+            <PromptSuggestion.Header>
+              <PromptSuggestion.Title>What can I help with?</PromptSuggestion.Title>
+              <PromptSuggestion.Description>
+                Start from a suggested prompt.
+              </PromptSuggestion.Description>
+            </PromptSuggestion.Header>
+          </ChatWaterfallItem>
           <PromptSuggestion.Items>
-            <PromptSuggestion.ItemLink href="/search">
-              <PromptSuggestion.ItemTitle>Start a new search</PromptSuggestion.ItemTitle>
-              <PromptSuggestion.ItemDescription>
-                Try different origins, times, or modes.
-              </PromptSuggestion.ItemDescription>
-            </PromptSuggestion.ItemLink>
+            <ChatWaterfallItem index={3}>
+              <PromptSuggestion.ItemLink href="/search">
+                <PromptSuggestion.ItemTitle>Start a new search</PromptSuggestion.ItemTitle>
+                <PromptSuggestion.ItemDescription>
+                  Try different origins, times, or modes.
+                </PromptSuggestion.ItemDescription>
+              </PromptSuggestion.ItemLink>
+            </ChatWaterfallItem>
           </PromptSuggestion.Items>
         </PromptSuggestion>
       </ChatAssistant>

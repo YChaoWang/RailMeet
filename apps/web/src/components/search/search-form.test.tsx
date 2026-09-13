@@ -92,6 +92,7 @@ describe('SearchForm place selection', () => {
     const user = userEvent.setup();
     render(<Harness />);
     const form = screen.getByRole('form', { name: 'Meeting search' });
+    expect(form.querySelectorAll('[data-slot="chat-waterfall-item"]')).toHaveLength(18);
     expect(within(form).getAllByTestId('search-form-traveler-row')).toHaveLength(2);
     expect(within(form).queryByRole('textbox', { name: /Traveler [A-Z] name/i })).not.toBeInTheDocument();
     expect(within(form).getByRole('button', { name: 'Add a name for traveler A' })).toBeInTheDocument();

@@ -208,6 +208,10 @@ describe('SearchStatusPage map-first surfaces', () => {
     const user = userEvent.setup();
     renderState({ kind: 'running', summary: { ...summary, status: 'running' } });
 
+    const conversation = screen.getByRole('log', { name: 'Search conversation' });
+    expect(conversation).toBeInTheDocument();
+    expect(conversation).toHaveTextContent('RailMeet');
+    expect(conversation).toHaveTextContent('I’m determining routes for 2 travelers');
     const progress = screen.getByTestId('search-route-progress');
     expect(progress).toHaveAttribute('aria-busy', 'true');
     const trigger = screen.getByRole('button', { name: /Determining routes/i });
