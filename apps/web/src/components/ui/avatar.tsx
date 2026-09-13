@@ -15,20 +15,6 @@ export function Avatar({ className, ...props }: React.HTMLAttributes<HTMLSpanEle
   );
 }
 
-export function AvatarImage({
-  className,
-  alt,
-  ...props
-}: React.ImgHTMLAttributes<HTMLImageElement>) {
-  return (
-    <img
-      alt={alt}
-      className={cn('aspect-square size-full rounded-full object-cover', className)}
-      {...props}
-    />
-  );
-}
-
 export function AvatarFallback({
   className,
   ...props
