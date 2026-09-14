@@ -74,6 +74,8 @@ export type MapStopMarker = {
   /** Service arriving at / departing from this stop. Both are set at a transfer. */
   readonly arrivingService?: string;
   readonly departingService?: string;
+  readonly arrivingMode?: string;
+  readonly departingMode?: string;
   /** False when another traveler's journey is focused. */
   readonly emphasized: boolean;
   /** Whether the symbol layer should try to keep a permanent name here. */
@@ -245,6 +247,8 @@ export type RouteStopProperties = {
   readonly departureAt: string;
   readonly arrivingService: string;
   readonly departingService: string;
+  readonly arrivingMode: string;
+  readonly departingMode: string;
   readonly track: string;
 };
 
@@ -296,6 +300,8 @@ export function routeStopsToGeoJson(scene: MapScene): {
           departureAt: marker.departureAt ?? '',
           arrivingService: marker.arrivingService ?? '',
           departingService: marker.departingService ?? '',
+          arrivingMode: marker.arrivingMode ?? '',
+          departingMode: marker.departingMode ?? '',
           track: marker.track ?? '',
         },
         geometry: {
@@ -400,6 +406,8 @@ type StopDraft = {
   track: string | undefined;
   arrivingService: string | undefined;
   departingService: string | undefined;
+  arrivingMode: string | undefined;
+  departingMode: string | undefined;
 };
 
 /** Which side of a leg called at this stop, so transfer paint can be split. */
@@ -448,6 +456,8 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
       readonly departureAt?: string | undefined;
       readonly arrivingService?: string | undefined;
       readonly departingService?: string | undefined;
+      readonly arrivingMode?: string | undefined;
+      readonly departingMode?: string | undefined;
     },
   ): void => {
     const { longitude, latitude } = stop;
@@ -482,6 +492,8 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
         track: stop.track,
         arrivingService: detail.arrivingService,
         departingService: detail.departingService,
+        arrivingMode: detail.arrivingMode,
+        departingMode: detail.departingMode,
       });
       order.push(key);
       return;
@@ -505,6 +517,8 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
     existing.track ??= stop.track;
     existing.arrivingService ??= detail.arrivingService;
     existing.departingService ??= detail.departingService;
+    existing.arrivingMode ??= detail.arrivingMode;
+    existing.departingMode ??= detail.departingMode;
   };
 
   const legs = journey.legs;
@@ -528,12 +542,17 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
       upsert(leg.from, role, paint, isTransit, 'departing', {
         departureAt: leg.departureAt,
         departingService: service,
+        departingMode: isTransit ? motisMode : undefined,
       });
     }
     for (const stop of leg.intermediateStops ?? []) {
       upsert(stop, 'intermediate', paint, isTransit, 'calling', {
         arrivalAt: stop.arrivalAt ?? stop.scheduledArrivalAt,
         departureAt: stop.departureAt ?? stop.scheduledDepartureAt,
+        arrivingService: service,
+        departingService: service,
+        arrivingMode: isTransit ? motisMode : undefined,
+        departingMode: isTransit ? motisMode : undefined,
       });
     }
     if (leg.to) {
@@ -542,6 +561,7 @@ function collectJourneyStops(journey: ResultsJourney): readonly StopDraft[] {
       upsert(leg.to, role, paint, isTransit, 'arriving', {
         arrivalAt: leg.arrivalAt,
         arrivingService: service,
+        arrivingMode: isTransit ? motisMode : undefined,
       });
     }
   }
@@ -855,6 +875,8 @@ export function buildMapScene(input: {
           ...(stop.track ? { track: stop.track } : {}),
           ...(stop.arrivingService ? { arrivingService: stop.arrivingService } : {}),
           ...(stop.departingService ? { departingService: stop.departingService } : {}),
+          ...(stop.arrivingMode ? { arrivingMode: stop.arrivingMode } : {}),
+          ...(stop.departingMode ? { departingMode: stop.departingMode } : {}),
           emphasized,
           showLabel,
           labelPriority: STOP_LABEL_PRIORITY[stop.role],
