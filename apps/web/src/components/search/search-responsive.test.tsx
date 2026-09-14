@@ -89,7 +89,7 @@ const rankedSummary = {
       origin: { placeId: 'place:paris', name: 'Paris', longitude: 2.35, latitude: 48.85 },
     },
   ],
-  allowedTransportModes: ['train'],
+  allowedTransportModes: ['regional_rail'],
   allowedCountryCodes: [],
   createdAt: '2026-06-01T12:00:00.000Z',
   updatedAt: '2026-06-01T12:00:00.000Z',

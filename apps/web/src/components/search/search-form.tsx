@@ -4,6 +4,7 @@ import {
   PARTICIPANT_COUNT_MAX,
   PARTICIPANT_COUNT_MIN,
   TRANSPORT_MODES,
+  TRANSPORT_MODE_LABELS,
   type RankingMode,
   type TransportMode,
 } from '@railmeet/shared';
@@ -18,11 +19,14 @@ import {
   CableCar,
   CalendarClock,
   Calendar as CalendarIcon,
+  Car,
   Check,
+  CircleHelp,
   Loader2,
   MapPin,
   MapPinned,
   Pencil,
+  Plane,
   Plus,
   Ship,
   TrainFront,
@@ -142,11 +146,22 @@ function toSelectedOrigin(suggestion: PlaceSuggestionView): SelectedPlaceOrigin 
 }
 
 const TRANSPORT_MODE_ICONS: Record<TransportMode, LucideIcon> = {
-  train: TrainFront,
-  bus: Bus,
+  airplane: Plane,
+  highspeed_rail: TrainFront,
+  long_distance: TrainFront,
+  night_rail: TrainFront,
+  coach: Bus,
+  ride_sharing: Car,
+  regional_rail: TrainFront,
+  suburban: TrainFront,
+  subway: TrainFront,
   tram: CableCar,
-  metro: TrainFront,
+  bus: Bus,
   ferry: Ship,
+  odm: Car,
+  funicular: CableCar,
+  aerial_lift: CableCar,
+  other: CircleHelp,
 };
 
 function SectionHeading({
@@ -350,7 +365,7 @@ export function SearchForm({
   const [maxJourneyDurationMinutes, setMaxJourneyDurationMinutes] = useState('480');
   const [maxTransfers, setMaxTransfers] = useState('2');
   const [minTransferDurationMinutes, setMinTransferDurationMinutes] = useState('5');
-  const [modes, setModes] = useState<TransportMode[]>(['train']);
+  const [modes, setModes] = useState<TransportMode[]>(() => [...TRANSPORT_MODES]);
   const [rankingMode, setRankingMode] = useState<RankingMode>('fairest');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -765,14 +780,14 @@ export function SearchForm({
                 index={steps.mode(modeIndex)}
                 data-testid="search-form-waterfall-item"
               >
-                <label className="flex min-h-11 items-center gap-2 text-sm capitalize">
+                <label className="flex min-h-11 items-center gap-2 text-sm">
                   <Checkbox
                     checked={modes.includes(mode)}
                     onCheckedChange={(checked) => toggleMode(mode, checked === true)}
                     data-field="allowedTransportModes"
                   />
                   <ModeIcon className="size-3.5 shrink-0 text-ink-700" aria-hidden />
-                  {mode}
+                  {TRANSPORT_MODE_LABELS[mode]}
                 </label>
               </ChatWaterfallItem>
             );

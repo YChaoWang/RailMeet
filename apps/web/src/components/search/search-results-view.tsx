@@ -20,6 +20,7 @@ import { JourneyRouteSummary } from '@/components/search/journey-itinerary-timel
 import { ChatAssistant, ChatThread, ChatUser, ChatWaterfallItem } from '@/components/ui/chat';
 import { PromptSuggestion } from '@/components/ui/prompt-suggestion';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { TYPED_TEXT_GAP_MS, TypedText, typedTextDurationMs } from '@/components/ui/typed-text';
 
 function placeLabel(place: { placeId: string; name?: string | undefined }): string {
   return place.name ?? place.placeId;
@@ -38,6 +39,7 @@ type SearchResultsViewProps = {
   readonly embedded?: boolean;
   readonly listHeader?: ReactNode;
   readonly listFooter?: ReactNode;
+  readonly onNewSearch?: () => void;
 };
 
 export function SearchResultsView({
@@ -52,6 +54,7 @@ export function SearchResultsView({
   embedded = false,
   listHeader,
   listFooter,
+  onNewSearch,
 }: SearchResultsViewProps) {
   const [journeysOpen, setJourneysOpen] = useState(false);
   useEffect(() => {
@@ -93,12 +96,21 @@ export function SearchResultsView({
           ) : null}
           <ChatAssistant>
             <ChatWaterfallItem index={nextEmpty()}>
-              <h2 className="text-base font-semibold text-ink-950">
-                We couldn’t find a workable meeting plan.
-              </h2>
+              <TypedText
+                as="h2"
+                className="text-base font-semibold text-ink-950"
+                text="We couldn’t find a workable meeting plan."
+              />
             </ChatWaterfallItem>
             <ChatWaterfallItem index={nextEmpty()}>
-              <p className="text-sm text-ink-700">{emptyOutcomeMessage(results.completionOutcome)}</p>
+              <TypedText
+                className="text-sm text-ink-700"
+                delayMs={
+                  typedTextDurationMs('We couldn’t find a workable meeting plan.') +
+                  TYPED_TEXT_GAP_MS
+                }
+                text={emptyOutcomeMessage(results.completionOutcome)}
+              />
             </ChatWaterfallItem>
             <PromptSuggestion>
               <ChatWaterfallItem index={nextEmpty()}>
@@ -111,12 +123,21 @@ export function SearchResultsView({
               </ChatWaterfallItem>
               <PromptSuggestion.Items>
                 <ChatWaterfallItem index={nextEmpty()}>
-                  <PromptSuggestion.ItemLink href="/search">
-                    <PromptSuggestion.ItemTitle>Start a new search</PromptSuggestion.ItemTitle>
-                    <PromptSuggestion.ItemDescription>
-                      Try different origins, times, or modes.
-                    </PromptSuggestion.ItemDescription>
-                  </PromptSuggestion.ItemLink>
+                  {onNewSearch ? (
+                    <PromptSuggestion.Item onClick={onNewSearch}>
+                      <PromptSuggestion.ItemTitle>Start a new search</PromptSuggestion.ItemTitle>
+                      <PromptSuggestion.ItemDescription>
+                        Try different origins, times, or modes.
+                      </PromptSuggestion.ItemDescription>
+                    </PromptSuggestion.Item>
+                  ) : (
+                    <PromptSuggestion.ItemLink href="/search">
+                      <PromptSuggestion.ItemTitle>Start a new search</PromptSuggestion.ItemTitle>
+                      <PromptSuggestion.ItemDescription>
+                        Try different origins, times, or modes.
+                      </PromptSuggestion.ItemDescription>
+                    </PromptSuggestion.ItemLink>
+                  )}
                 </ChatWaterfallItem>
               </PromptSuggestion.Items>
             </PromptSuggestion>
@@ -140,10 +161,10 @@ export function SearchResultsView({
           ) : null}
           <ChatAssistant>
             <ChatWaterfallItem index={nextList()}>
-              <p className="text-sm text-ink-950">
-                I ranked {candidates.length} meeting {candidates.length === 1 ? 'city' : 'cities'} by{' '}
-                {RANKING_MODE_LABELS[rankingMode].title.toLowerCase()}.
-              </p>
+              <TypedText
+                className="text-sm text-ink-950"
+                text={`I ranked ${candidates.length} meeting ${candidates.length === 1 ? 'city' : 'cities'} by ${RANKING_MODE_LABELS[rankingMode].title.toLowerCase()}.`}
+              />
             </ChatWaterfallItem>
             <ChatWaterfallItem index={nextList()}>
               <div

@@ -3,7 +3,7 @@ import {
   SEARCH_COMPLETION_OUTCOMES,
   SEARCH_FAILURE_CODES,
   SEARCH_STATUSES,
-  TRANSPORT_MODES,
+  PERSISTED_TRANSPORT_MODES,
   asNonEmptyStringTuple,
 } from '@railmeet/shared';
 import { z } from 'zod';
@@ -12,7 +12,7 @@ import { successEnvelopeSchema } from './envelopes.js';
 import { calendarDateSchema, isoCountryCodeSchema, localTimeSchema } from './primitives.js';
 
 const rankingModeSchema = z.enum(asNonEmptyStringTuple(RANKING_MODES));
-const transportModeSchema = z.enum(asNonEmptyStringTuple(TRANSPORT_MODES));
+const transportModeSchema = z.enum(asNonEmptyStringTuple(PERSISTED_TRANSPORT_MODES));
 const searchStatusSchema = z.enum(asNonEmptyStringTuple(SEARCH_STATUSES));
 const completionOutcomeSchema = z.enum(asNonEmptyStringTuple(SEARCH_COMPLETION_OUTCOMES));
 const searchFailureCodeSchema = z.enum(asNonEmptyStringTuple(SEARCH_FAILURE_CODES));

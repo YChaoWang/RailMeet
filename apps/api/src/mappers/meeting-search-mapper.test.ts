@@ -31,7 +31,7 @@ const sampleRequest: CreateMeetingSearchRequest = {
   maxJourneyDurationMinutes: 480,
   maxTransfers: 2,
   minTransferDurationMinutes: 5,
-  allowedTransportModes: ['bus', 'train'],
+  allowedTransportModes: ['bus', 'regional_rail'],
   allowedCountryCodes: ['FR', 'DE'],
   rankingMode: 'fairest',
 };
@@ -55,7 +55,7 @@ describe('meeting-search mapper', () => {
         position: 1,
       },
     ]);
-    expect(command.allowedTransportModes).toEqual(['bus', 'train']);
+    expect(command.allowedTransportModes).toEqual(['bus', 'regional_rail']);
     expect(command.allowedCountryCodes).toEqual(['FR', 'DE']);
   });
 

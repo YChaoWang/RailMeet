@@ -54,7 +54,7 @@ export function SegmentedControl<T extends string>({
       role="tablist"
       aria-label={ariaLabel}
       className={cn(
-        'relative grid w-full min-w-0 rounded-xl bg-ink-950/8 p-1',
+        'relative grid w-full min-w-0 rounded-xl bg-ink-950/8 p-1 dark:bg-white/10',
         className,
       )}
       style={{ gridTemplateColumns: `repeat(${Math.max(items.length, 1)}, minmax(0, 1fr))` }}
@@ -62,7 +62,7 @@ export function SegmentedControl<T extends string>({
       <span
         aria-hidden
         data-slot="segmented-indicator"
-        className="pointer-events-none absolute top-1 z-0 rounded-lg bg-white shadow-sm transition-[left,width] duration-300 ease-out motion-reduce:transition-none"
+        className="pointer-events-none absolute top-1 z-0 rounded-lg bg-white shadow-sm transition-[left,width] duration-300 ease-out motion-reduce:transition-none dark:bg-[#1a2433]"
         style={{ left: indicator.left, width: indicator.width, height: 'calc(100% - 0.5rem)' }}
       />
       {items.map((item) => {

@@ -1,4 +1,5 @@
 import type { Logger } from '@railmeet/observability';
+import { transitousTransitModesQuery } from '@railmeet/shared';
 
 import { RoutingError } from './errors.js';
 import {
@@ -55,6 +56,7 @@ export function createTransitousJourneyPlanner(options: TransitousClientOptions)
       url.searchParams.set('time', input.departureAt.toISOString());
       // Required for intermediateStops on transit legs (map stop markers).
       url.searchParams.set('detailedLegs', 'true');
+      url.searchParams.set('transitModes', transitousTransitModesQuery(input.allowedTransportModes));
       if (input.arriveBy !== undefined) {
         url.searchParams.set('arriveBy', String(input.arriveBy));
       }

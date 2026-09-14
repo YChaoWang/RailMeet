@@ -90,16 +90,44 @@ describe('Transitous MOTIS plan client', () => {
       expect(seenUrl).toContain('time=2026-09-01T07%3A00%3A00.000Z');
       // Required for intermediateStops on transit legs.
       expect(seenUrl).toContain('detailedLegs=true');
+      expect(seenUrl).toContain('transitModes=TRANSIT');
       expect(seenUa).toBe('RailMeet/0.0.0 (+https://example.com/contact)');
       expect(result.journeys).toHaveLength(2);
       expect(result.journeys[0]?.transfers).toBe(1);
       expect(result.journeys[0]?.durationMinutes).toBe(120);
-      expect(result.journeys[0]?.legs[1]?.mode).toBe('train');
+      expect(result.journeys[0]?.legs[1]?.mode).toBe('regional_rail');
       const logged = JSON.stringify(info.mock.calls);
       expect(logged).not.toMatch(/52\.52|13\.405|48\.8566/);
       expect(logged).not.toContain('itineraries');
       expect(logged).not.toContain('http://');
       expect(logged).not.toContain('fromPlace');
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('passes a Transitous subset as transitModes instead of TRANSIT', async () => {
+    let seenUrl = '';
+    const { server, baseUrl } = await startMockServer((req, res) => {
+      seenUrl = req.url ?? '';
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ itineraries: [] }));
+    });
+    try {
+      const planner = createTransitousJourneyPlanner({
+        baseUrl,
+        userAgent: 'RailMeet/0.0.0 (+https://example.com/contact)',
+        timeoutMs: 5_000,
+        maxResponseBytes: 1_048_576,
+      });
+      await planner.planJourney({
+        origin: { latitude: 34.983967, longitude: 135.75903 },
+        destination: { latitude: 35.68135, longitude: 139.76686 },
+        departureAt: new Date('2026-09-17T04:52:00.000Z'),
+        allowedTransportModes: ['airplane', 'tram'],
+      });
+      expect(seenUrl).toContain('transitModes=AIRPLANE%2CTRAM');
+      expect(seenUrl).not.toContain('transitModes=TRANSIT');
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
@@ -368,7 +396,7 @@ describe('Transitous MOTIS plan client', () => {
         },
       ],
     });
-    expect(journeys[0]?.legs[0]?.mode).toBe('other');
+    expect(journeys[0]?.legs[0]?.mode).toBe('unmapped');
     expect(journeys[0]?.legs[0]?.motisMode).toBe('CABLE_CAR');
     expect(journeys[0]).not.toHaveProperty('itineraries');
   });

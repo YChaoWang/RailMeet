@@ -49,7 +49,7 @@ function PromptSuggestionItems({ className, ...props }: HTMLAttributes<HTMLDivEl
 const itemClassName = (className?: string) =>
   cn(
     'prompt-suggestion__item flex min-h-11 w-full min-w-0 flex-col items-start rounded-xl border border-ink-700/10 bg-white px-3 py-2 text-left transition-colors',
-    'hover:bg-ink-950/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-950',
+    'hover:bg-ink-950/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-950 dark:border-white/10 dark:hover:bg-white/10 dark:focus-visible:ring-mist-50',
     className,
   );
 

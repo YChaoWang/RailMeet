@@ -75,6 +75,7 @@ vi.mock('maplibre-gl', () => {
     setTerrain = vi.fn();
     getTerrain = () => null;
     moveLayer = vi.fn();
+    setStyle = vi.fn();
     hasImage = vi.fn(() => false);
     addImage = vi.fn();
     isStyleLoaded = () => false;
@@ -82,9 +83,8 @@ vi.mock('maplibre-gl', () => {
     getStyle = () => ({
       sources: {},
       layers: [
-        { id: 'road_major_rail', type: 'line' },
+        { id: 'railway', type: 'line' },
         { id: 'label_city', type: 'symbol' },
-        { id: 'poi_transit', type: 'symbol' },
       ],
     });
     getContainer = () => {
@@ -267,7 +267,7 @@ describe('SearchMap pre-search transit context', () => {
 
   it('loads station overlay on an empty draft scene without search id or travelers', async () => {
     expect(SEARCH_MAP_STATION_FETCH_ZOOM_MIN).toBe(7);
-    expect(SEARCH_MAP_BASEMAP_RAIL_LAYER_IDS).toContain('road_major_rail');
+    expect(SEARCH_MAP_BASEMAP_RAIL_LAYER_IDS).toContain('railway');
     expect(SEARCH_MAP_BASEMAP_PLACE_LABEL_IDS).toContain('label_city');
 
     render(<SearchMap scene={EMPTY_MAP_SCENE} />);

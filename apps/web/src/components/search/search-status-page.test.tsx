@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -53,7 +53,7 @@ const summary = {
       origin: { placeId: 'place:paris', name: 'Paris', longitude: 2.35, latitude: 48.85 },
     },
   ],
-  allowedTransportModes: ['train' as const],
+  allowedTransportModes: ['regional_rail' as const],
   allowedCountryCodes: [],
   createdAt: '2026-06-01T12:00:00.000Z',
   updatedAt: '2026-06-01T12:00:00.000Z',
@@ -162,7 +162,8 @@ describe('SearchStatusPage map-first surfaces', () => {
     }
   });
 
-  it('keeps completed results in the panel without a New search header control', () => {
+  it('opens a new search from results and returns with Back to result', async () => {
+    const user = userEvent.setup();
     renderState({
       kind: 'completed',
       summary: {
@@ -182,9 +183,27 @@ describe('SearchStatusPage map-first surfaces', () => {
       resultsLoading: false,
     });
 
-    expect(screen.queryByTestId('new-search-toggle')).not.toBeInTheDocument();
+    const start = screen.getByTestId('new-search-toggle');
+    expect(start).toHaveTextContent('New Search');
+    expect(start.querySelector('svg')).toBeTruthy();
+    expect(screen.getByTestId('planner-panel')).toContainElement(start);
+    const panelBrand = within(screen.getByTestId('planner-panel')).getByRole('link', {
+      name: 'RailMeet',
+    });
+    expect(
+      panelBrand.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.queryByTestId('inline-new-search')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /^New search$/ })).not.toBeInTheDocument();
+
+    await user.click(start);
+
+    expect(screen.getByTestId('inline-new-search')).toBeInTheDocument();
+    expect(screen.getByTestId('search-form')).toBeInTheDocument();
+    expect(screen.getByTestId('back-to-result')).toHaveTextContent('Back to result');
+    expect(screen.queryByText(/couldn’t find a workable meeting plan/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('back-to-result'));
+    expect(screen.queryByTestId('inline-new-search')).not.toBeInTheDocument();
     expect(screen.getByText(/couldn’t find a workable meeting plan/i)).toBeInTheDocument();
     expect(screen.getByTestId('planner-map-region')).toBeInTheDocument();
   });
@@ -220,9 +239,10 @@ describe('SearchStatusPage map-first surfaces', () => {
     expect(
       await screen.findByText(/Determine route for Blake from Paris/, undefined, { timeout: 2000 }),
     ).toBeInTheDocument();
-    expect(
-      await screen.findByText('Show ranked meeting cities', undefined, { timeout: 2000 }),
-    ).toBeInTheDocument();
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 800);
+    });
+    expect(screen.queryByText('Show ranked meeting cities')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Determining routes/i }));
     expect(screen.getByRole('button', { name: /Determining routes/i })).toHaveAttribute(

@@ -37,7 +37,7 @@ const richJourney: PlannedJourney = {
   },
   legs: [
     {
-      mode: 'train',
+      mode: 'highspeed_rail',
       motisMode: 'HIGHSPEED_RAIL',
       displayName: 'ICE 148',
       agencyName: 'DB Fernverkehr AG',
@@ -56,7 +56,7 @@ const staleJourney: PlannedJourney = {
   transfers: 0,
   legs: [
     {
-      mode: 'train',
+      mode: 'regional_rail',
       motisMode: 'RAIL',
       departureAt: new Date('2026-09-15T08:00:00.000Z'),
       arrivalAt: new Date('2026-09-15T10:00:00.000Z'),

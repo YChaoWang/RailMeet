@@ -92,6 +92,20 @@
       "when": 1786275000000,
       "tag": "0012_meeting_city_eligibility_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786276000000,
+      "tag": "0013_expand_transport_modes",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786277000000,
+      "tag": "0014_transitous_transport_modes",
+      "breakpoints": true
     }
   ]
 }

@@ -18,7 +18,7 @@ describe('normalizeMotisPlanResponse service identity', () => {
     const journeys = normalizeMotisPlanResponse(TRANSITOUS_BERLIN_MUNICH_ICE_PLAN);
     const ice = journeys[0]?.legs.find((leg) => leg.motisMode === 'HIGHSPEED_RAIL');
     expect(ice).toMatchObject({
-      mode: 'train',
+      mode: 'highspeed_rail',
       motisMode: 'HIGHSPEED_RAIL',
       displayName: 'ICE 1007',
       tripShortName: 'ICE 1007',
@@ -47,14 +47,14 @@ describe('normalizeMotisPlanResponse service identity', () => {
     const suburban = journeys[0]?.legs.find((leg) => leg.motisMode === 'SUBURBAN');
     const regional = journeys[0]?.legs.find((leg) => leg.motisMode === 'REGIONAL_RAIL');
     expect(suburban).toMatchObject({
-      mode: 'train',
+      mode: 'suburban',
       motisMode: 'SUBURBAN',
       displayName: 'S3',
       agencyName: 'S-Bahn Berlin GmbH',
       headsign: 'S Spandau Bhf (Berlin)',
     });
     expect(regional).toMatchObject({
-      mode: 'train',
+      mode: 'regional_rail',
       motisMode: 'REGIONAL_RAIL',
       displayName: 'RE1',
       agencyName: 'ODEG Ostdeutsche Eisenbahn GmbH',
@@ -62,7 +62,10 @@ describe('normalizeMotisPlanResponse service identity', () => {
     });
     expect(formatJourneyOperatorLabel(regional!)).toBe('ODEG Ostdeutsche Eisenbahn GmbH');
     expect(formatJourneyOperatorLabel(regional!)).not.toMatch(/deutsche bahn/i);
-    expect(collectJourneyTransportModes(journeys[0]!.legs)).toEqual(['train']);
+    expect(collectJourneyTransportModes(journeys[0]!.legs)).toEqual([
+      'regional_rail',
+      'suburban',
+    ]);
   });
 
   it('preserves walk distance and omits operator on walking legs', () => {
@@ -180,7 +183,7 @@ describe('normalizeMotisPlanResponse additional MOTIS modes', () => {
 
   it('keeps subway, tram, bus, coach, and ferry distinct', () => {
     expect(oneLeg('SUBWAY', { displayName: 'U2', agencyName: 'Wiener Linien' })).toMatchObject({
-      mode: 'metro',
+      mode: 'subway',
       motisMode: 'SUBWAY',
       displayName: 'U2',
       agencyName: 'Wiener Linien',
@@ -194,7 +197,7 @@ describe('normalizeMotisPlanResponse additional MOTIS modes', () => {
       motisMode: 'BUS',
     });
     expect(oneLeg('COACH', { displayName: 'FlixBus 157', agencyName: 'FlixBus-eu' })).toMatchObject({
-      mode: 'bus',
+      mode: 'coach',
       motisMode: 'COACH',
     });
     expect(motisPlanModeLabel(oneLeg('COACH').motisMode)).toBe('Coach');
@@ -223,7 +226,7 @@ describe('normalizeMotisPlanResponse additional MOTIS modes', () => {
 
   it('keeps unknown future MOTIS modes as other transport, not train', () => {
     const leg = oneLeg('HYPERLOOP');
-    expect(leg.mode).toBe('other');
+    expect(leg.mode).toBe('unmapped');
     expect(leg.motisMode).toBe('HYPERLOOP');
     expect(motisPlanModeLabel(leg.motisMode)).toBe('Other transport');
     expect(mapMotisLegMode('HYPERLOOP')).not.toBe('train');
@@ -292,7 +295,7 @@ describe('normalizeMotisPlanResponse additional MOTIS modes', () => {
       'SNCF Voyageurs',
     ]);
     expect(formatJourneyServiceLabel(legs[3]!)).toBe('TGV 9576');
-    expect(collectJourneyTransportModes(legs)).toEqual(['train', 'metro']);
+    expect(collectJourneyTransportModes(legs)).toEqual(['highspeed_rail', 'subway']);
   });
 });
 

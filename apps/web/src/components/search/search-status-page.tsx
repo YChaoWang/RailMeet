@@ -1,10 +1,16 @@
 'use client';
 
+import { ArrowLeft, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { motisPlanModeLabel, type RankingMode } from '@railmeet/shared';
 import type { MeetingSearchDetailData } from '@railmeet/validation';
 
 import { usePlannerMap } from '@/components/search/planner-map-context';
+import {
+  createInitialParticipants,
+  SearchForm,
+  type ParticipantDraft,
+} from '@/components/search/search-form';
 import { SearchResultsView } from '@/components/search/search-results-view';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -13,8 +19,14 @@ import { ChainOfThought } from '@/components/ui/chain-of-thought';
 import { PromptSuggestion } from '@/components/ui/prompt-suggestion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TextShimmer } from '@/components/ui/text-shimmer';
+import { TYPED_TEXT_GAP_MS, TypedText, typedTextDurationMs } from '@/components/ui/typed-text';
 import { useSearchPolling } from '@/hooks/use-search-polling';
-import { buildMapScene, candidateSelectionKey, type MapScene } from '@/lib/map-markers';
+import {
+  buildDraftOriginScene,
+  buildMapScene,
+  candidateSelectionKey,
+  type MapScene,
+} from '@/lib/map-markers';
 import {
   failureMessage,
   formatTravelDate,
@@ -45,6 +57,7 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     setScene,
     setPanelTitle,
     setSheetExpanded,
+    setHeaderAction,
     setCandidateSelectHandler,
     setTravelerSelectHandler,
   } = usePlannerMap();
@@ -52,6 +65,9 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
   const [rankingMode, setRankingMode] = useState<RankingMode>('fairest');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [emphasizedParticipantId, setEmphasizedParticipantId] = useState<string | null>(null);
+  const [newSearchOpen, setNewSearchOpen] = useState(false);
+  const [draftParticipants, setDraftParticipants] =
+    useState<ParticipantDraft[]>(createInitialParticipants);
 
   const summary = summaryFromState(state);
   const results = state.kind === 'completed' ? state.results : null;
@@ -91,27 +107,65 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     [summary, results, rankingMode, selectedKey, emphasizedParticipantId],
   );
 
+  const draftScene = useMemo(() => buildDraftOriginScene(draftParticipants), [draftParticipants]);
+  const activeScene = newSearchOpen && draftScene.markers.length > 0 ? draftScene : scene;
+
   useEffect(() => {
-    setPanelTitle(panelTitleFor(state.kind));
-  }, [state.kind, setPanelTitle]);
+    setPanelTitle(newSearchOpen ? 'Plan a meeting point' : panelTitleFor(state.kind));
+  }, [newSearchOpen, state.kind, setPanelTitle]);
 
   useEffect(() => {
     // Keep draft traveler markers on the persistent map until the first search summary arrives.
     if (
       (state.kind === 'loading' || state.kind === 'not_found') &&
-      scene.markers.length === 0 &&
-      scene.routeLines.length === 0
+      activeScene.markers.length === 0 &&
+      activeScene.routeLines.length === 0
     ) {
       return;
     }
-    setScene(scene);
-  }, [scene, setScene, state.kind]);
+    setScene(activeScene);
+  }, [activeScene, setScene, state.kind]);
+
+  useEffect(() => {
+    if (newSearchOpen) {
+      setSheetExpanded(true);
+    }
+  }, [newSearchOpen, setSheetExpanded]);
 
   useEffect(() => {
     if (results?.searchId) {
       setSheetExpanded(true);
     }
   }, [results?.searchId, setSheetExpanded]);
+
+  useEffect(() => {
+    const headerButtonClassName =
+      'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-ink-950 hover:bg-ink-950/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-950 dark:hover:bg-white/10 dark:focus-visible:ring-mist-50';
+    setHeaderAction(
+      newSearchOpen ? (
+        <button
+          type="button"
+          className={headerButtonClassName}
+          data-testid="back-to-result"
+          onClick={() => setNewSearchOpen(false)}
+        >
+          <ArrowLeft className="size-4 shrink-0" aria-hidden />
+          Back to result
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={headerButtonClassName}
+          data-testid="new-search-toggle"
+          onClick={() => setNewSearchOpen(true)}
+        >
+          <Search className="size-4 shrink-0" aria-hidden />
+          New Search
+        </button>
+      ),
+    );
+    return () => setHeaderAction(null);
+  }, [newSearchOpen, setHeaderAction]);
 
   useEffect(() => {
     setCandidateSelectHandler(setSelectedKey);
@@ -124,6 +178,32 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     };
   }, [setCandidateSelectHandler, setTravelerSelectHandler]);
 
+  if (newSearchOpen) {
+    return (
+      <section className="min-w-0" aria-label="New search" data-testid="inline-new-search">
+        <ChatThread>
+          <ChatAssistant>
+            <ChatWaterfallItem index={0}>
+              <TypedText className="text-sm text-ink-950" text="I’ll start a new search." />
+            </ChatWaterfallItem>
+            <ChatWaterfallItem index={1}>
+              <TypedText
+                className="text-sm text-ink-700"
+                delayMs={typedTextDurationMs('I’ll start a new search.') + TYPED_TEXT_GAP_MS}
+                text="Choose each traveler’s starting place. Your last results stay on the map until you search again."
+              />
+            </ChatWaterfallItem>
+          </ChatAssistant>
+          <SearchForm
+            participants={draftParticipants}
+            onParticipantsChange={setDraftParticipants}
+            waterfallStart={2}
+          />
+        </ChatThread>
+      </section>
+    );
+  }
+
   return renderPanelBody({
     state,
     retry,
@@ -134,6 +214,7 @@ export function SearchStatusPage({ searchId }: { readonly searchId: string }) {
     scene,
     emphasizedParticipantId,
     setEmphasizedParticipantId,
+    onNewSearch: () => setNewSearchOpen(true),
   });
 }
 
@@ -323,7 +404,7 @@ function SearchRouteProgress({
   readonly summary: MeetingSearchDetailData;
 }) {
   const travelerCount = summary.participants.length;
-  const targetStep = kind === 'queued' ? 1 : 3;
+  const targetStep = kind === 'queued' ? 1 : 2;
   const targetTravelers = kind === 'queued' ? 0 : travelerCount;
   const [visibleStep, setVisibleStep] = useState(0);
   const [visibleTravelers, setVisibleTravelers] = useState(0);
@@ -383,44 +464,32 @@ function SearchRouteProgress({
         <ChainOfThought.Steps>
           {visibleStep >= 1 ? (
             <ChainOfThought.Step label="Accepted" status="complete">
-              {acceptedBody}
+              <TypedText text={acceptedBody} />
             </ChainOfThought.Step>
           ) : null}
           {visibleStep >= 2 ? (
             <ChainOfThought.Step label="Determine routes" status={compareStatus}>
-              <p>{compareBody}</p>
+              <TypedText text={compareBody} />
               {visibleTravelers > 0 ? (
                 <ul className="mt-2 space-y-1">
-                  {summary.participants.slice(0, visibleTravelers).map((participant, index) => {
-                    const loading =
-                      index === visibleTravelers - 1 && visibleTravelers < targetTravelers;
-                    const line = (
-                      <>
-                        Determine route for {participant.displayName}
-                        {participant.origin.name ? ` from ${participant.origin.name}` : ''}
-                      </>
-                    );
+                  {summary.participants.slice(0, visibleTravelers).map((participant) => {
+                    const line = `Determine route for ${participant.displayName}${
+                      participant.origin.name ? ` from ${participant.origin.name}` : ''
+                    }`;
                     return (
-                      <li
+                      <ChatWaterfallItem
                         key={participant.id}
-                        className="min-w-0 break-words motion-safe:animate-cot-in"
+                        as="li"
+                        index={0}
+                        className="min-w-0 break-words"
                         data-testid="search-progress-traveler"
                       >
-                        {loading ? (
-                          <ChainOfThought.StreamingText>{line}</ChainOfThought.StreamingText>
-                        ) : (
-                          line
-                        )}
-                      </li>
+                        <TypedText as="span" text={line} />
+                      </ChatWaterfallItem>
                     );
                   })}
                 </ul>
               ) : null}
-            </ChainOfThought.Step>
-          ) : null}
-          {visibleStep >= 3 ? (
-            <ChainOfThought.Step label="Show ranked meeting cities" status="pending">
-              Ranked cities appear when every traveler’s routes are ready.
             </ChainOfThought.Step>
           ) : null}
         </ChainOfThought.Steps>
@@ -439,6 +508,7 @@ function renderPanelBody({
   scene,
   emphasizedParticipantId,
   setEmphasizedParticipantId,
+  onNewSearch,
 }: {
   state: SearchPageViewState;
   retry: () => void;
@@ -449,6 +519,7 @@ function renderPanelBody({
   scene: MapScene;
   emphasizedParticipantId: string | null;
   setEmphasizedParticipantId: (id: string | null) => void;
+  onNewSearch: () => void;
 }) {
   switch (state.kind) {
     case 'malformed_id':
@@ -516,14 +587,19 @@ function renderPanelBody({
             <SearchSummaryCompact summary={state.summary} />
           </ChatUser>
           <ChatAssistant>
-            <p className="text-sm text-ink-950">
-              {searchProgressIntro(state.kind, state.summary.participants.length)}
-            </p>
-            <SearchRouteProgress
-              key={state.summary.searchId}
-              kind={state.kind}
-              summary={state.summary}
-            />
+            <ChatWaterfallItem index={0}>
+              <TypedText
+                className="text-sm text-ink-950"
+                text={searchProgressIntro(state.kind, state.summary.participants.length)}
+              />
+            </ChatWaterfallItem>
+            <ChatWaterfallItem index={1}>
+              <SearchRouteProgress
+                key={state.summary.searchId}
+                kind={state.kind}
+                summary={state.summary}
+              />
+            </ChatWaterfallItem>
           </ChatAssistant>
         </ChatThread>
       );
@@ -575,6 +651,7 @@ function renderPanelBody({
                 onSelect={setEmphasizedParticipantId}
               />
             }
+            onNewSearch={onNewSearch}
           />
         </div>
       );
@@ -590,10 +667,14 @@ function AssistantReply({ title, body }: { readonly title: string; readonly body
     <ChatThread>
       <ChatAssistant>
         <ChatWaterfallItem index={0}>
-          <h2 className="text-base font-semibold text-ink-950">{title}</h2>
+          <TypedText as="h2" className="text-base font-semibold text-ink-950" text={title} />
         </ChatWaterfallItem>
         <ChatWaterfallItem index={1}>
-          <p className="text-sm text-ink-700">{body}</p>
+          <TypedText
+            className="text-sm text-ink-700"
+            delayMs={typedTextDurationMs(title) + TYPED_TEXT_GAP_MS}
+            text={body}
+          />
         </ChatWaterfallItem>
         <PromptSuggestion>
           <ChatWaterfallItem index={2}>

@@ -165,6 +165,7 @@ export function createRoutingWorkProcessor(
           },
           departureAt,
           maxTransfers: search.maxTransfers,
+          allowedTransportModes: search.allowedTransportModes,
         });
       } catch (error) {
         if (error instanceof RoutingError) {
@@ -266,9 +267,7 @@ export function createRoutingWorkProcessor(
         },
         'Unexpected routing work failure',
       );
-      throw new UnrecoverableError(
-        error instanceof Error ? error.message : 'Unexpected routing work failure',
-      );
+      throw error;
     }
   };
 }

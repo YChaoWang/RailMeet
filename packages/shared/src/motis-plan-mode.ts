@@ -13,9 +13,8 @@
  * `AERIAL_LIFT`. Deprecated tokens remain in the schema and may still appear.
  * `REGIONAL_FAST_RAIL` is deprecated in favour of `REGIONAL_RAIL`.
  *
- * Coarse RailMeet `TransportMode` values are derived from these tokens for
- * search filters and ranking summaries. Precise subtype labels must be kept
- * for Journey Details.
+ * RailMeet filter modes are derived from these tokens. Precise tokens stay on
+ * the leg as `motisMode` for Journey Details.
  */
 
 import { type TransportMode } from './transport-mode.js';
@@ -108,39 +107,41 @@ export const MOTIS_PLAN_MODE_LABELS: Readonly<Record<MotisPlanMode, string>> = {
   CABLE_CAR: 'Cable car',
 };
 
-const MOTIS_TO_DOMAIN: Readonly<Record<MotisPlanMode, TransportMode | 'walk' | 'other'>> = {
+export type JourneyLegMode = TransportMode | 'walk' | 'unmapped';
+
+const MOTIS_TO_DOMAIN: Readonly<Record<MotisPlanMode, JourneyLegMode>> = {
   WALK: 'walk',
-  BIKE: 'other',
-  RENTAL: 'other',
-  CAR: 'other',
-  CAR_PARKING: 'other',
-  CAR_DROPOFF: 'other',
-  ODM: 'other',
-  RIDE_SHARING: 'other',
-  FLEX: 'other',
+  BIKE: 'unmapped',
+  RENTAL: 'unmapped',
+  CAR: 'unmapped',
+  CAR_PARKING: 'unmapped',
+  CAR_DROPOFF: 'unmapped',
+  ODM: 'odm',
+  RIDE_SHARING: 'ride_sharing',
+  FLEX: 'unmapped',
   DEBUG_BUS_ROUTE: 'bus',
-  DEBUG_RAILWAY_ROUTE: 'train',
+  DEBUG_RAILWAY_ROUTE: 'regional_rail',
   DEBUG_FERRY_ROUTE: 'ferry',
-  TRANSIT: 'other',
+  TRANSIT: 'unmapped',
   TRAM: 'tram',
-  SUBWAY: 'metro',
+  SUBWAY: 'subway',
   FERRY: 'ferry',
-  AIRPLANE: 'other',
+  AIRPLANE: 'airplane',
   BUS: 'bus',
-  COACH: 'bus',
-  RAIL: 'train',
-  HIGHSPEED_RAIL: 'train',
-  LONG_DISTANCE: 'train',
-  NIGHT_RAIL: 'train',
-  REGIONAL_FAST_RAIL: 'train',
-  REGIONAL_RAIL: 'train',
-  SUBURBAN: 'train',
-  FUNICULAR: 'other',
-  AERIAL_LIFT: 'other',
+  COACH: 'coach',
+  RAIL: 'regional_rail',
+  HIGHSPEED_RAIL: 'highspeed_rail',
+  LONG_DISTANCE: 'long_distance',
+  NIGHT_RAIL: 'night_rail',
+  REGIONAL_FAST_RAIL: 'regional_rail',
+  REGIONAL_RAIL: 'regional_rail',
+  SUBURBAN: 'suburban',
+  FUNICULAR: 'funicular',
+  AERIAL_LIFT: 'aerial_lift',
   OTHER: 'other',
-  AREAL_LIFT: 'other',
-  METRO: 'train',
-  CABLE_CAR: 'other',
+  AREAL_LIFT: 'aerial_lift',
+  METRO: 'suburban',
+  CABLE_CAR: 'unmapped',
 };
 
 export function canonicalMotisModeToken(rawMode: string): string {
@@ -170,11 +171,8 @@ export function motisPlanModeLabel(rawMode: string | undefined): string {
   return MOTIS_PLAN_MODE_LABELS[parsed];
 }
 
-export type JourneyLegMode = TransportMode | 'walk' | 'other';
-
 /**
- * Coarse RailMeet domain mode for ranking / allowed-mode filters.
- * Precise MOTIS tokens must still be stored separately for UI labels.
+ * RailMeet filter mode for ranking summaries. Precise tokens stay on `motisMode`.
  */
 export function mapMotisPlanModeToDomain(rawMode: string): JourneyLegMode {
   const parsed = parseMotisPlanMode(rawMode);
@@ -186,8 +184,14 @@ export function mapMotisPlanModeToDomain(rawMode: string): JourneyLegMode {
   if (normalized === 'foot') {
     return 'walk';
   }
-  if (normalized === 'train' || normalized === 'intercity' || normalized === 'high_speed_rail') {
-    return 'train';
+  if (normalized === 'train') {
+    return 'regional_rail';
+  }
+  if (normalized === 'intercity') {
+    return 'long_distance';
+  }
+  if (normalized === 'high_speed_rail') {
+    return 'highspeed_rail';
   }
   if (normalized === 'light_rail' || normalized === 'lightrail') {
     return 'tram';
@@ -195,7 +199,7 @@ export function mapMotisPlanModeToDomain(rawMode: string): JourneyLegMode {
   if (normalized === 'boat') {
     return 'ferry';
   }
-  return 'other';
+  return 'unmapped';
 }
 
 export type JourneyServiceIdentity = {

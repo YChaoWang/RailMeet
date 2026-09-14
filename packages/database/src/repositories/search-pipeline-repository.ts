@@ -28,6 +28,7 @@ import {
   meetingSearchCandidates,
   meetingSearchJourneys,
   meetingSearchRoutingWork,
+  meetingSearches,
   outboxEvents,
 } from '../schema/tables.js';
 import type * as schema from '../schema/index.js';
@@ -158,7 +159,22 @@ export type ExpandRoutingWaveInput = {
   readonly participantIds: readonly string[];
 };
 
+export type StalePipelineWork = {
+  readonly queuedSearchIds: readonly string[];
+  readonly candidateGenerations: readonly {
+    readonly searchId: string;
+    readonly updatedAt: Date;
+  }[];
+  readonly routingWork: readonly {
+    readonly searchId: string;
+    readonly routingWorkId: string;
+    readonly updatedAt: Date;
+  }[];
+  readonly finalizationSearchIds: readonly string[];
+};
+
 export type SearchPipelineRepository = {
+  listStalePipelineWork: (staleBefore: Date) => Promise<StalePipelineWork>;
   findCandidateGeneration: (searchId: string) => Promise<CandidateGenerationRecord | null>;
   claimCandidateGeneration: (searchId: string) => Promise<ClaimCandidateGenerationResult>;
   completeCandidateGeneration: (
@@ -315,6 +331,61 @@ async function insertRoutingWorkAndOutbox(
 
 export function createSearchPipelineRepository(db: Db): SearchPipelineRepository {
   return {
+    async listStalePipelineWork(staleBefore) {
+      const queued = await db
+        .select({ id: meetingSearches.id })
+        .from(meetingSearches)
+        .where(and(eq(meetingSearches.status, 'queued'), lte(meetingSearches.updatedAt, staleBefore)));
+
+      const generations = await db
+        .select({
+          searchId: meetingSearchCandidateGenerations.searchId,
+          updatedAt: meetingSearchCandidateGenerations.updatedAt,
+        })
+        .from(meetingSearchCandidateGenerations)
+        .where(
+          and(
+            sql`${meetingSearchCandidateGenerations.status} IN ('pending', 'running')`,
+            lte(meetingSearchCandidateGenerations.updatedAt, staleBefore),
+          ),
+        );
+
+      const routing = await db
+        .select({
+          searchId: meetingSearchRoutingWork.searchId,
+          routingWorkId: meetingSearchRoutingWork.id,
+          updatedAt: meetingSearchRoutingWork.updatedAt,
+        })
+        .from(meetingSearchRoutingWork)
+        .where(
+          and(
+            sql`${meetingSearchRoutingWork.status} IN ('pending', 'running')`,
+            lte(meetingSearchRoutingWork.updatedAt, staleBefore),
+          ),
+        );
+
+      const finalization = await db
+        .select({ id: meetingSearches.id })
+        .from(meetingSearches)
+        .innerJoin(outboxEvents, eq(outboxEvents.aggregateId, meetingSearches.id))
+        .where(
+          and(
+            eq(meetingSearches.status, 'running'),
+            lte(meetingSearches.updatedAt, staleBefore),
+            eq(outboxEvents.eventType, MEETING_SEARCH_FINALIZATION_REQUESTED_EVENT_TYPE),
+            sql`${outboxEvents.publishedAt} IS NOT NULL`,
+            sql`${outboxEvents.deadLetteredAt} IS NULL`,
+          ),
+        );
+
+      return {
+        queuedSearchIds: queued.map((row) => row.id),
+        candidateGenerations: generations,
+        routingWork: routing,
+        finalizationSearchIds: [...new Set(finalization.map((row) => row.id))],
+      };
+    },
+
     async findCandidateGeneration(searchId) {
       const [row] = await db
         .select()

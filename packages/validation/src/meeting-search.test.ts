@@ -28,7 +28,7 @@ function validMeetingSearchRequest(
     maxJourneyDurationMinutes: 480,
     maxTransfers: 2,
     minTransferDurationMinutes: 5,
-    allowedTransportModes: ['train', 'bus'],
+    allowedTransportModes: ['regional_rail', 'bus'],
     allowedCountryCodes: ['DE', 'FR', 'BE'],
     rankingMode: 'fairest',
     ...overrides,
@@ -244,7 +244,7 @@ describe('createMeetingSearchRequestSchema', () => {
   it('rejects duplicate transport modes', () => {
     const result = createMeetingSearchRequestSchema.safeParse(
       validMeetingSearchRequest({
-        allowedTransportModes: ['train', 'train'],
+        allowedTransportModes: ['regional_rail', 'regional_rail'],
       }),
     );
     expect(result.success).toBe(false);

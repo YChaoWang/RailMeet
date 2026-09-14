@@ -1,3 +1,5 @@
+import { transitousTransitModesQuery } from '@railmeet/shared';
+
 import type { PlanJourneyInput } from './types.js';
 
 /**
@@ -25,6 +27,7 @@ export function buildPlanCacheKey(input: PlanJourneyInput): string {
     input.arriveBy === true ? 'arrive' : 'depart',
     input.maxTransfers === undefined ? 'any' : String(input.maxTransfers),
     input.locale ?? '',
+    transitousTransitModesQuery(input.allowedTransportModes),
   ];
   return parts.join(':');
 }

@@ -41,7 +41,7 @@ const summary = {
       origin: { placeId: 'place:amsterdam', name: 'Amsterdam', longitude: 4.9, latitude: 52.37 },
     },
   ],
-  allowedTransportModes: ['train'],
+  allowedTransportModes: ['regional_rail'],
   allowedCountryCodes: [],
   createdAt: '2026-06-01T12:00:00.000Z',
   updatedAt: '2026-06-01T12:00:00.000Z',

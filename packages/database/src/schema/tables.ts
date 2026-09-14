@@ -14,7 +14,7 @@ import {
   RANKING_MODES,
   SEARCH_COMPLETION_OUTCOMES,
   SEARCH_STATUSES,
-  TRANSPORT_MODES,
+  PERSISTED_TRANSPORT_MODES,
 } from '@railmeet/shared';
 import { sql } from 'drizzle-orm';
 import {
@@ -92,7 +92,7 @@ const placeKindSqlList = PLACE_KINDS.map((value) => `'${value}'`).join(', ');
 const placeOwnershipSqlList = PLACE_OWNERSHIPS.map((value) => `'${value}'`).join(', ');
 const rankingModeSqlList = RANKING_MODES.map((value) => `'${value}'`).join(', ');
 const searchStatusSqlList = SEARCH_STATUSES.map((value) => `'${value}'`).join(', ');
-const transportModeSqlList = TRANSPORT_MODES.map((value) => `'${value}'`).join(', ');
+const transportModeSqlList = PERSISTED_TRANSPORT_MODES.map((value) => `'${value}'`).join(', ');
 
 /**
  * Canonical RailMeet places.
