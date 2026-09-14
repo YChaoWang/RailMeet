@@ -46,6 +46,9 @@ describe('PlannerWorkspace', () => {
       </PlannerWorkspace>,
     );
 
+    expect(screen.getAllByRole('link', { name: 'RailMeet' }).every((link) => link.getAttribute('href') === '/')).toBe(
+      true,
+    );
     expect(screen.getByTestId('planner-workspace')).toBeInTheDocument();
     expect(screen.getByTestId('planner-map-region')).toBeInTheDocument();
     expect(screen.getByTestId('planner-panel')).toHaveAttribute('data-sheet-state', 'collapsed');

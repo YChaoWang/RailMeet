@@ -154,7 +154,7 @@ export function PlannerWorkspace({
 
       <div className="pointer-events-none absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center gap-1 rounded-xl border border-ink-700/10 bg-white px-3 py-2 shadow-sm dark:border-white/10 dark:bg-[#121a26] md:hidden">
         <Link
-          href="/search"
+          href="/"
           className="pointer-events-auto font-display text-lg text-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:text-mist-50"
         >
           RailMeet
@@ -199,7 +199,7 @@ export function PlannerWorkspace({
         <div className="flex items-center justify-between gap-2 border-b border-ink-700/10 px-4 py-3 dark:border-white/10">
           <div className="min-w-0">
             <Link
-              href="/search"
+              href="/"
               className="font-display text-xl tracking-tight text-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:text-mist-50"
             >
               RailMeet
