@@ -132,6 +132,9 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      ogl:
+        specifier: ^1.0.11
+        version: 1.0.11
       react:
         specifier: ^19.1.0
         version: 19.2.8
@@ -157,6 +160,9 @@ importers:
       '@testing-library/user-event':
         specifier: ^14.6.3
         version: 14.6.3(@testing-library/dom@10.4.1)
+      '@types/geojson':
+        specifier: ^7946.0.16
+        version: 7946.0.16
       '@types/react':
         specifier: ^19.1.8
         version: 19.2.18
@@ -3785,6 +3791,9 @@ packages:
   object.values@1.2.1:
     resolution: {integrity: sha512-gXah6aZrcUxjWg2zR2MwouP2eHlCBzdV4pygudehaKXSGW4v2AsRQUK+lwwXhii6KFZcunEnmSUoYp5CXibxtA==}
     engines: {node: '>= 0.4'}
+
+  ogl@1.0.11:
+    resolution: {integrity: sha512-kUpC154AFfxi16pmZUK4jk3J+8zxwTWGPo03EoYA8QPbzikHoaC82n6pNTbd+oEaJonaE8aPWBlX7ad9zrqLsA==}
 
   on-exit-leak-free@2.1.2:
     resolution: {integrity: sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA==}
@@ -7938,6 +7947,8 @@ snapshots:
       call-bound: 1.0.4
       define-properties: 1.2.1
       es-object-atoms: 1.1.2
+
+  ogl@1.0.11: {}
 
   on-exit-leak-free@2.1.2: {}
 

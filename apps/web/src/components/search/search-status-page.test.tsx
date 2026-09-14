@@ -190,6 +190,7 @@ describe('SearchStatusPage map-first surfaces', () => {
     const panelBrand = within(screen.getByTestId('planner-panel')).getByRole('link', {
       name: 'RailMeet',
     });
+    expect(panelBrand).toHaveAttribute('href', '/');
     expect(
       panelBrand.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

@@ -143,6 +143,13 @@ export {
   type SearchFailureCode,
 } from './search-completion.js';
 export { API_ERROR_CODES, isApiErrorCode, type ApiErrorCode } from './api-error-codes.js';
+export {
+  EUROPE_ISO_COUNTRY_CODES,
+  SEARCHABLE_EUROPE_COUNTRY_COUNT,
+  isEuropeCountryCode,
+  type EuropeIsoCountryCode,
+} from './europe-scope.js';
+
 export { PLACE_KINDS, isPlaceKind, type PlaceKind } from './place-kind.js';
 export {
   PLACE_OWNERSHIPS,

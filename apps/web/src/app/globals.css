@@ -137,10 +137,126 @@ body {
   }
 }
 
-/* HTML map markers: traveler origins and meeting candidates only. Route stops use MapLibre layers (not keyboard-focusable). */
+/* HTML map markers: traveler origins, destination pin, and route-stop dots. */
 .railmeet-map-marker:focus-visible {
   outline: 2px solid #0f766e;
   outline-offset: 2px;
+}
+
+.railmeet-destination-pin {
+  display: block;
+  fill: #0b1220;
+  stroke: #ffffff;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.railmeet-destination-pin circle {
+  fill: #ffffff;
+}
+
+.dark .railmeet-destination-pin {
+  fill: #ffffff;
+}
+
+.dark .railmeet-destination-pin circle {
+  fill: #0b1220;
+}
+
+.railmeet-map-marker-stop {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.railmeet-stop-dot {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--primary);
+  border: 2px solid #ffffff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.25);
+}
+
+.railmeet-map-popup-title {
+  margin: 0;
+  font-weight: 600;
+  color: inherit;
+}
+
+.railmeet-stop-popup {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.railmeet-stop-popup-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.railmeet-stop-chip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.railmeet-stop-chip-icon {
+  flex-shrink: 0;
+}
+
+.railmeet-stop-popup-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+}
+
+.railmeet-stop-popup-times dt {
+  font-size: 11px;
+  color: #5b6b7c;
+}
+
+.railmeet-stop-popup-times dd {
+  margin: 0.1rem 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dark .railmeet-stop-popup-times dt {
+  color: #9aa8b8;
+}
+
+.railmeet-stop-popup-meta {
+  margin: 0;
+  font-size: 11px;
+  color: #5b6b7c;
+}
+
+.dark .railmeet-stop-popup-meta {
+  color: #9aa8b8;
+}
+
+.railmeet-map-popup-coords {
+  margin: 0.15rem 0 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #5b6b7c;
+}
+
+.dark .railmeet-map-popup-coords {
+  color: #9aa8b8;
 }
 
 .railmeet-map-popup.maplibregl-popup {

@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useColorScheme, type ColorScheme } from '@/hooks/use-color-scheme';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { motisPlanModeLabel } from '@railmeet/shared';
+import { getMotisModeStyle, type MotisModeIconKind } from '@railmeet/shared';
+
+import { formatMotisClock } from '@/lib/journey-leg-presentation';
 
 import type {
   MapCandidateMarker,
@@ -18,7 +20,6 @@ import {
   MAP_WALK_COLOR,
   collectSceneCoordinates,
   originsToGeoJson,
-  routeStopsToGeoJson,
 } from '@/lib/map-markers';
 import { ensureMapLibreWorker } from '@/lib/ensure-maplibre-worker';
 import {
@@ -135,8 +136,6 @@ type SearchMapProps = {
 
 type MapLibreModule = typeof import('maplibre-gl');
 type MapInstance = InstanceType<MapLibreModule['Map']>;
-type MapLibreExpression = import('maplibre-gl').ExpressionSpecification;
-
 type GeoJsonFeatureCollection = {
   type: 'FeatureCollection';
   features: Array<Record<string, unknown>>;
@@ -170,8 +169,6 @@ export function SearchMap({
   const fitPaddingRef = useRef(fitPadding);
   const lastCameraKeyRef = useRef<string | null>(null);
   const styleReadyRef = useRef(false);
-  const routeHandlersBoundRef = useRef(false);
-  const routeStopHandlersBoundRef = useRef(false);
   const stationHandlersBoundRef = useRef(false);
   const stationRequestSeqRef = useRef(0);
   const stationAbortRef = useRef<AbortController | null>(null);
@@ -240,10 +237,9 @@ export function SearchMap({
       const applyCurrentScene = (forceFit: boolean) => {
         ensureStationLayers(map);
         ensureRouteLayers(map);
-        ensureRouteStopLayers(map);
+        removeRouteStopLayers(map);
         ensureOriginLayers(map);
-        bindRouteInteractions(map, maplibregl, onTravelerSelectRef, routeHandlersBoundRef);
-        bindRouteStopInteractions(map, maplibregl, routeStopHandlersBoundRef);
+        bindRouteInteractions(map, onTravelerSelectRef);
         applyScene({
           maplibregl,
           map,
@@ -481,8 +477,6 @@ export function SearchMap({
       stationAbortRef.current?.abort();
       resizeObserver?.disconnect();
       clearMarkers(markersRef);
-      routeHandlersBoundRef.current = false;
-      routeStopHandlersBoundRef.current = false;
       stationHandlersBoundRef.current = false;
       const map = mapRef.current;
       if (map) {
@@ -519,10 +513,9 @@ export function SearchMap({
     }
     ensureStationLayers(map);
     ensureRouteLayers(map);
-    ensureRouteStopLayers(map);
+    removeRouteStopLayers(map);
     ensureOriginLayers(map);
-    bindRouteInteractions(map, maplibregl, onTravelerSelectRef, routeHandlersBoundRef);
-    bindRouteStopInteractions(map, maplibregl, routeStopHandlersBoundRef);
+    bindRouteInteractions(map, onTravelerSelectRef);
     applyScene({
       maplibregl,
       map,
@@ -706,7 +699,6 @@ function raiseTravelerLayers(map: MapInstance) {
     ROUTE_CASING_LAYER_ID,
     ROUTE_TRANSIT_LAYER_ID,
     ROUTE_WALK_LAYER_ID,
-    ...ROUTE_STOP_LAYER_IDS,
     ORIGIN_CIRCLE_LAYER_ID,
     ORIGIN_LABEL_LAYER_ID,
   ]) {
@@ -932,341 +924,54 @@ function ensureRouteLayers(map: MapInstance) {
   }
 }
 
+const ROUTE_LAYER_HANDLER_KEY = '__railmeetRouteLayerHandlers';
+
+type RouteLayerHandlers = {
+  onClick: (event: { features?: Array<{ properties?: Record<string, unknown> | null }> }) => void;
+  onEnter: () => void;
+  onLeave: () => void;
+};
+
 function bindRouteInteractions(
   map: MapInstance,
-  maplibregl: MapLibreModule,
   onTravelerSelectRef: { current: ((participantId: string | null) => void) | undefined },
-  boundRef: { current: boolean },
 ) {
-  if (boundRef.current) {
-    return;
-  }
-  boundRef.current = true;
-
-  const onClick = (event: {
-    lngLat?: { lng: number; lat: number };
-    features?: Array<{ properties?: Record<string, unknown> | null }>;
-  }) => {
-    const props = event.features?.[0]?.properties;
-    const participantId =
-      (typeof props?.participantId === 'string' && props.participantId) ||
-      (typeof props?.travelerId === 'string' && props.travelerId) ||
-      null;
-    if (participantId) {
-      onTravelerSelectRef.current?.(participantId);
+  const layerIds = [ROUTE_TRANSIT_LAYER_ID, ROUTE_WALK_LAYER_ID, ORIGIN_CIRCLE_LAYER_ID];
+  const host = map as MapInstance & { [ROUTE_LAYER_HANDLER_KEY]?: RouteLayerHandlers };
+  const previous = host[ROUTE_LAYER_HANDLER_KEY];
+  if (previous) {
+    for (const layerId of layerIds) {
+      map.off('click', layerId, previous.onClick);
+      map.off('mouseenter', layerId, previous.onEnter);
+      map.off('mouseleave', layerId, previous.onLeave);
     }
-    if (props && props.style === 'transit' && event.lngLat) {
-      new maplibregl.Popup({
-        offset: 8,
-        closeButton: true,
-        maxWidth: MAP_POPUP_MAX_WIDTH,
-        className: 'railmeet-map-popup',
-      })
-        .setLngLat([event.lngLat.lng, event.lngLat.lat])
-        .setHTML(routeSegmentPopupHtml(props))
-        .addTo(map);
-    }
-  };
-  const onEnter = () => {
-    map.getCanvas().style.cursor = 'pointer';
-  };
-  const onLeave = () => {
-    map.getCanvas().style.cursor = '';
-  };
-
-  for (const layerId of [ROUTE_TRANSIT_LAYER_ID, ROUTE_WALK_LAYER_ID, ORIGIN_CIRCLE_LAYER_ID]) {
-    map.on('click', layerId, onClick as never);
-    map.on('mouseenter', layerId, onEnter);
-    map.on('mouseleave', layerId, onLeave);
   }
-}
 
-/**
- * Opacity for route-stop circles and rings when a traveler journey is de-emphasized.
- */
-function stopEmphasisOpacity(dimmed: number): MapLibreExpression {
-  return ['case', ['get', 'emphasized'], 1, dimmed];
-}
-
-function stopCircleRadius(): MapLibreExpression {
-  const emphasis: MapLibreExpression = ['case', ['get', 'emphasized'], 1, 0.35];
-  return [
-    'interpolate',
-    ['linear'],
-    ['zoom'],
-    10,
-    [
-      '*',
-      [
-        'match',
-        ['get', 'role'],
-        'meeting',
-        10,
-        'origin-station',
-        8,
-        'transfer',
-        8,
-        'intermediate',
-        4,
-        5,
-      ],
-      emphasis,
-    ],
-    14,
-    [
-      '*',
-      [
-        'match',
-        ['get', 'role'],
-        'meeting',
-        14,
-        'origin-station',
-        11,
-        'transfer',
-        11,
-        'intermediate',
-        6,
-        7,
-      ],
-      emphasis,
-    ],
-  ];
-}
-
-/**
- * Intermediate names appear only when showLabel is true; important roles stay visible.
- */
-function routeStopLabelTextOpacity(): MapLibreExpression {
-  return [
-    'interpolate',
-    ['linear'],
-    ['zoom'],
-    11.5,
-    ['case', ['get', 'showLabel'], stopEmphasisOpacity(0.35), 0],
-    13,
-    stopEmphasisOpacity(0.35),
-  ];
-}
-
-function routeStopLabelHaloWidth(): MapLibreExpression {
-  return ['interpolate', ['linear'], ['zoom'], 11, 2.4, 13, 3, 16, 3.4];
-}
-
-function routeStopLabelLayout(): Record<string, unknown> {
-  return {
-    'text-field': ['get', 'name'],
-    'text-size': ['match', ['get', 'role'], 'meeting', 12, 'intermediate', 11, 11.5],
-    'text-line-height': 1.1,
-    'text-font': ['Noto Sans Bold'],
-    'text-variable-anchor': [
-      'top',
-      'bottom',
-      'left',
-      'right',
-      'top-left',
-      'top-right',
-      'bottom-left',
-      'bottom-right',
-    ],
-    'text-radial-offset': 1.05,
-    'text-justify': 'center',
-    'text-allow-overlap': true,
-    'text-ignore-placement': true,
-    'symbol-sort-key': ['*', ['get', 'labelPriority'], -1],
-  };
-}
-
-function applyRouteStopLabelStyle(map: MapInstance) {
-  if (!map.getLayer(ROUTE_STOP_LABEL_LAYER_ID)) {
-    return;
-  }
-  try {
-    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-field', ['get', 'name']);
-    map.setLayoutProperty(
-      ROUTE_STOP_LABEL_LAYER_ID,
-      'text-size',
-      ['match', ['get', 'role'], 'meeting', 12, 'intermediate', 11, 11.5],
-    );
-    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-line-height', 1.1);
-    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-font', ['Noto Sans Bold']);
-    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-variable-anchor', [
-      'top',
-      'bottom',
-      'left',
-      'right',
-      'top-left',
-      'top-right',
-      'bottom-left',
-      'bottom-right',
-    ]);
-    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-radial-offset', 1.05);
-    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-justify', 'center');
-    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-allow-overlap', true);
-    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-ignore-placement', true);
-    map.setLayoutProperty(ROUTE_STOP_LABEL_LAYER_ID, 'symbol-sort-key', [
-      '*',
-      ['get', 'labelPriority'],
-      -1,
-    ]);
-    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-color', ['get', 'textColor']);
-    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-halo-color', ['get', 'labelBackgroundColor']);
-    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-halo-width', routeStopLabelHaloWidth());
-    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-halo-blur', 0);
-    map.setPaintProperty(ROUTE_STOP_LABEL_LAYER_ID, 'text-opacity', routeStopLabelTextOpacity());
-  } catch {
-    // Keep existing style if the runtime rejects the update.
-  }
-}
-
-function routeStopLabelPaint(): Record<string, unknown> {
-  return {
-    'text-color': ['get', 'textColor'],
-    'text-halo-color': ['get', 'labelBackgroundColor'],
-    'text-halo-width': routeStopLabelHaloWidth(),
-    'text-halo-blur': 0,
-    'text-opacity': routeStopLabelTextOpacity(),
-  };
-}
-
-function applyRouteStopLabelPaint(map: MapInstance) {
-  applyRouteStopLabelStyle(map);
-}
-
-function ensureRouteStopLayers(map: MapInstance) {
-  if (!map.getSource(ROUTE_STOP_SOURCE_ID)) {
-    map.addSource(ROUTE_STOP_SOURCE_ID, {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] },
-    });
-  }
-  if (!map.getLayer(ROUTE_STOP_HIT_LAYER_ID)) {
-    map.addLayer({
-      id: ROUTE_STOP_HIT_LAYER_ID,
-      type: 'circle',
-      source: ROUTE_STOP_SOURCE_ID,
-      paint: {
-        'circle-radius': 15,
-        'circle-color': '#000000',
-        'circle-opacity': 0,
-        'circle-stroke-opacity': 0,
-      },
-    });
-  }
-  if (!map.getLayer(ROUTE_STOP_RING_LAYER_ID)) {
-    map.addLayer({
-      id: ROUTE_STOP_RING_LAYER_ID,
-      type: 'circle',
-      source: ROUTE_STOP_SOURCE_ID,
-      filter: ['all', ['==', ['get', 'role'], 'transfer'], ['!=', ['get', 'ringColor'], '']],
-      paint: {
-        'circle-radius': 11,
-        'circle-color': '#ffffff',
-        'circle-opacity': 0,
-        'circle-stroke-width': 3,
-        'circle-stroke-color': ['get', 'ringColor'],
-        'circle-stroke-opacity': stopEmphasisOpacity(0.35),
-      },
-    });
-  }
-  if (!map.getLayer(ROUTE_STOP_CIRCLE_LAYER_ID)) {
-    map.addLayer({
-      id: ROUTE_STOP_CIRCLE_LAYER_ID,
-      type: 'circle',
-      source: ROUTE_STOP_SOURCE_ID,
-      paint: {
-        'circle-radius': stopCircleRadius(),
-        'circle-color': [
-          'match',
-          ['get', 'role'],
-          'meeting',
-          '#0f766e',
-          'origin-station',
-          ['get', 'borderColor'],
-          '#ffffff',
-        ],
-        'circle-stroke-width': [
-          'match',
-          ['get', 'role'],
-          'meeting',
-          3,
-          'origin-station',
-          2.5,
-          'transfer',
-          2.5,
-          2,
-        ],
-        'circle-stroke-color': [
-          'match',
-          ['get', 'role'],
-          'meeting',
-          '#ffffff',
-          'origin-station',
-          '#ffffff',
-          ['get', 'borderColor'],
-        ],
-        'circle-opacity': stopEmphasisOpacity(0.35),
-        'circle-stroke-opacity': stopEmphasisOpacity(0.35),
-      },
-    });
-  }
-  if (!map.getLayer(ROUTE_STOP_LABEL_LAYER_ID)) {
-    try {
-      map.addLayer({
-        id: ROUTE_STOP_LABEL_LAYER_ID,
-        type: 'symbol',
-        source: ROUTE_STOP_SOURCE_ID,
-        filter: ['==', ['get', 'showLabel'], true],
-        layout: routeStopLabelLayout(),
-        paint: routeStopLabelPaint(),
-      });
-    } catch {
-      // Optional labels — circles and click popups still work without glyphs.
-    }
-    return;
-  }
-  applyRouteStopLabelPaint(map);
-}
-
-function bindRouteStopInteractions(
-  map: MapInstance,
-  maplibregl: MapLibreModule,
-  boundRef: { current: boolean },
-) {
-  if (boundRef.current) {
-    return;
-  }
-  boundRef.current = true;
-
-  const onStopClick = (event: {
-    originalEvent?: { stopPropagation?: () => void };
-    lngLat: { lng: number; lat: number };
-    features?: Array<{ properties?: Record<string, unknown> | null }>;
-  }) => {
-    event.originalEvent?.stopPropagation?.();
-    const props = event.features?.[0]?.properties;
-    if (!props) {
-      return;
-    }
-    new maplibregl.Popup({
-      offset: 14,
-      closeButton: true,
-      maxWidth: MAP_POPUP_MAX_WIDTH,
-      className: 'railmeet-map-popup',
-    })
-      .setLngLat([event.lngLat.lng, event.lngLat.lat])
-      .setHTML(stopFeaturePopupHtml(props))
-      .addTo(map);
-  };
-  const onEnter = () => {
-    map.getCanvas().style.cursor = 'pointer';
-  };
-  const onLeave = () => {
-    map.getCanvas().style.cursor = '';
+  const next: RouteLayerHandlers = {
+    onClick: (event) => {
+      const props = event.features?.[0]?.properties;
+      const participantId =
+        (typeof props?.participantId === 'string' && props.participantId) ||
+        (typeof props?.travelerId === 'string' && props.travelerId) ||
+        null;
+      if (participantId) {
+        onTravelerSelectRef.current?.(participantId);
+      }
+    },
+    onEnter: () => {
+      map.getCanvas().style.cursor = 'pointer';
+    },
+    onLeave: () => {
+      map.getCanvas().style.cursor = '';
+    },
   };
 
-  map.on('click', ROUTE_STOP_HIT_LAYER_ID, onStopClick as never);
-  map.on('mouseenter', ROUTE_STOP_HIT_LAYER_ID, onEnter);
-  map.on('mouseleave', ROUTE_STOP_HIT_LAYER_ID, onLeave);
+  for (const layerId of layerIds) {
+    map.on('click', layerId, next.onClick);
+    map.on('mouseenter', layerId, next.onEnter);
+    map.on('mouseleave', layerId, next.onLeave);
+  }
+  host[ROUTE_LAYER_HANDLER_KEY] = next;
 }
 
 function removeRouteStopLayers(map: MapInstance) {
@@ -1336,13 +1041,6 @@ function applyScene(options: {
     originSource.setData(originsToGeoJson(scene));
   }
 
-  const routeStopSource = map.getSource(ROUTE_STOP_SOURCE_ID) as
-    | { setData: (data: ReturnType<typeof routeStopsToGeoJson>) => void }
-    | undefined;
-  if (routeStopSource) {
-    routeStopSource.setData(routeStopsToGeoJson(scene));
-  }
-
   const appliedOrigins = scene.markers.filter((marker) => marker.kind === 'origin');
   const host = map.getContainer().parentElement;
   if (host) {
@@ -1396,7 +1094,7 @@ function applyScene(options: {
   }
 
   // Meeting-point candidates remain HTML so they stay keyboard-clickable.
-  // Route stops are drawn entirely by the MapLibre circle/symbol layers above.
+  // Route stops are HTML dots only — old MapLibre stop layers are removed.
   for (const item of scene.markers) {
     if (item.kind !== 'candidate') {
       continue;
@@ -1408,18 +1106,58 @@ function applyScene(options: {
       : 'railmeet-map-marker railmeet-map-marker-candidate';
     el.setAttribute('aria-label', markerAriaLabel(item));
     el.style.cssText = markerStyle(item);
-    el.textContent = item.selected ? '' : String(item.rank);
+    if (item.selected) {
+      el.innerHTML = DESTINATION_PIN_SVG;
+    } else {
+      el.textContent = String(item.rank);
+    }
 
     el.addEventListener('click', () => {
       onCandidateSelectRef.current?.(item.id.replace(/^candidate:/, ''));
     });
 
     const popup = new maplibregl.Popup({
-      offset: 14,
+      offset: item.selected ? 28 : 14,
       closeButton: true,
       maxWidth: MAP_POPUP_MAX_WIDTH,
       className: 'railmeet-map-popup',
-    }).setHTML(meetingPopupHtml(item));
+    }).setHTML(meetingPopupHtml(item, { longitude: item.longitude, latitude: item.latitude }));
+
+    const marker = new maplibregl.Marker({
+      element: el,
+      anchor: item.selected ? 'bottom' : 'center',
+      pitchAlignment: 'viewport',
+    })
+      .setLngLat([item.longitude, item.latitude])
+      .setPopup(popup)
+      .addTo(map);
+
+    markersRef.current.push(marker);
+  }
+
+  for (const item of scene.markers) {
+    if (item.kind !== 'stop') {
+      continue;
+    }
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'railmeet-map-marker railmeet-map-marker-stop';
+    el.setAttribute('aria-label', `${STOP_ROLE_LABELS[item.role]}: ${item.name}`);
+    el.style.opacity = item.emphasized ? '1' : '0.35';
+    const dot = document.createElement('span');
+    dot.className = 'railmeet-stop-dot';
+    dot.style.background = item.color;
+    if (item.ringColor) {
+      el.style.boxShadow = `0 0 0 3px ${item.ringColor}`;
+    }
+    el.append(dot);
+
+    const popup = new maplibregl.Popup({
+      offset: 10,
+      closeButton: true,
+      maxWidth: MAP_POPUP_MAX_WIDTH,
+      className: 'railmeet-map-popup',
+    }).setHTML(stopMarkerPopupHtml(item));
 
     const marker = new maplibregl.Marker({
       element: el,
@@ -1429,6 +1167,7 @@ function applyScene(options: {
       .setLngLat([item.longitude, item.latitude])
       .setPopup(popup)
       .addTo(map);
+    attachMarkerTooltip(marker, maplibregl, map, item.name);
     markersRef.current.push(marker);
   }
 
@@ -1505,93 +1244,6 @@ const STOP_ROLE_LABELS: Record<MapStopMarker['role'], string> = {
   meeting: 'Meeting point',
 };
 
-function stopFeaturePopupHtml(properties: Record<string, unknown>): string {
-  const text = (key: string): string => {
-    const value = properties[key];
-    return typeof value === 'string' ? value.trim() : '';
-  };
-  const name = text('name');
-  const role = text('role') as MapStopMarker['role'];
-  const roleLabel = STOP_ROLE_LABELS[role] ?? 'Stop';
-  const letter = text('letter');
-  const rows = [
-    `<strong>${escapeHtml(name)}</strong>`,
-    `<div>${escapeHtml(roleLabel)}${letter ? ` · Traveler ${escapeHtml(letter)}` : ''}</div>`,
-  ];
-  const arrivalAt = text('arrivalAt');
-  if (arrivalAt) {
-    rows.push(`<div>Arrives ${escapeHtml(formatPopupTime(arrivalAt))}</div>`);
-  }
-  const departureAt = text('departureAt');
-  if (departureAt) {
-    rows.push(`<div>Departs ${escapeHtml(formatPopupTime(departureAt))}</div>`);
-  }
-  const track = text('track');
-  if (track) {
-    rows.push(`<div>Track ${escapeHtml(track)}</div>`);
-  }
-  const arrivingService = text('arrivingService');
-  if (arrivingService) {
-    rows.push(`<div>Arriving service ${escapeHtml(arrivingService)}</div>`);
-  }
-  const departingService = text('departingService');
-  if (departingService) {
-    rows.push(`<div>Departing service ${escapeHtml(departingService)}</div>`);
-  }
-  return rows.join('');
-}
-
-function routeSegmentPopupHtml(properties: Record<string, unknown>): string {
-  const text = (key: string): string => {
-    const value = properties[key];
-    return typeof value === 'string' ? value.trim() : '';
-  };
-  const rows = [`<strong>${escapeHtml(text('serviceLabel') || text('mode'))}</strong>`];
-  const modeLabel = motisPlanModeLabel(text('motisMode') || text('mode'));
-  rows.push(`<div>${escapeHtml(modeLabel)}</div>`);
-  const displayName = text('displayName');
-  if (displayName && displayName !== text('serviceLabel')) {
-    rows.push(`<div>${escapeHtml(displayName)}</div>`);
-  }
-  const routeShortName = text('routeShortName');
-  if (routeShortName) {
-    rows.push(`<div>Line ${escapeHtml(routeShortName)}</div>`);
-  }
-  const tripShortName = text('tripShortName');
-  if (tripShortName) {
-    rows.push(`<div>Trip ${escapeHtml(tripShortName)}</div>`);
-  }
-  const agencyName = text('agencyName');
-  if (agencyName) {
-    rows.push(`<div>${escapeHtml(agencyName)}</div>`);
-  }
-  const headsign = text('headsign');
-  if (headsign) {
-    rows.push(`<div>Toward ${escapeHtml(headsign)}</div>`);
-  }
-  const fromName = text('fromName');
-  if (fromName) {
-    rows.push(`<div>Board ${escapeHtml(fromName)}</div>`);
-  }
-  const toName = text('toName');
-  if (toName) {
-    rows.push(`<div>Alight ${escapeHtml(toName)}</div>`);
-  }
-  const departureAt = text('departureAt');
-  if (departureAt) {
-    rows.push(`<div>Departs ${escapeHtml(formatPopupTime(departureAt))}</div>`);
-  }
-  const arrivalAt = text('arrivalAt');
-  if (arrivalAt) {
-    rows.push(`<div>Arrives ${escapeHtml(formatPopupTime(arrivalAt))}</div>`);
-  }
-  const stops = properties.intermediateStopCount;
-  if (typeof stops === 'number' && Number.isFinite(stops)) {
-    rows.push(`<div>${stops} intermediate ${stops === 1 ? 'stop' : 'stops'}</div>`);
-  }
-  return rows.join('');
-}
-
 function travelerPopupHtml(item: MapOriginMarker): string {
   const popup = item.popup;
   if (!popup) {
@@ -1610,18 +1262,181 @@ function travelerSummaryHtml(popup: MapTravelerPopup): string {
   ].join('');
 }
 
-function meetingPopupHtml(item: MapCandidateMarker): string {
+function formatMapCoord(value: number): string {
+  return value.toFixed(4);
+}
+
+function coordLineHtml(latitude: number, longitude: number): string {
+  return `<p class="railmeet-map-popup-coords">${escapeHtml(formatMapCoord(latitude))}, ${escapeHtml(formatMapCoord(longitude))}</p>`;
+}
+
+function meetingPopupHtml(
+  item: MapCandidateMarker,
+  coords: { readonly longitude: number; readonly latitude: number },
+): string {
   const popup = item.popup;
+  const title = popup?.name ?? item.label;
+  const rows = [
+    `<p class="railmeet-map-popup-title">${escapeHtml(title)}</p>`,
+    coordLineHtml(coords.latitude, coords.longitude),
+  ];
   if (!popup) {
-    return `<strong>${escapeHtml(item.label)}</strong><div>Rank ${item.rank}</div>`;
+    return rows.join('');
   }
-  return [
-    `<strong>${escapeHtml(popup.name)}</strong>`,
-    `<div>Meeting point · Rank ${popup.rank}</div>`,
+  rows.push(
     `<div>Arrivals ${escapeHtml(formatPopupTime(popup.earliestArrivalAt))} – ${escapeHtml(formatPopupTime(popup.latestArrivalAt))}</div>`,
     `<div>Spread ${escapeHtml(formatArrivalSpreadMs(popup.arrivalSpreadMs))}</div>`,
+  );
+  return rows.join('');
+}
+
+function stopMarkerPopupHtml(item: MapStopMarker): string {
+  return renderStopCardHtml({
+    name: item.name,
+    role: item.role,
+    letter: item.letter,
+    arrivalAt: item.arrivalAt ?? '',
+    departureAt: item.departureAt ?? '',
+    track: item.track ?? '',
+    arrivingService: item.arrivingService ?? '',
+    departingService: item.departingService ?? '',
+    arrivingMode: item.arrivingMode ?? '',
+    departingMode: item.departingMode ?? '',
+    color: item.color,
+    borderColor: item.borderColor,
+    ringColor: item.ringColor ?? '',
+    textColor: item.textColor,
+  });
+}
+
+export function renderStopCardHtml(input: {
+  readonly name: string;
+  readonly role: MapStopMarker['role'];
+  readonly letter: string;
+  readonly arrivalAt: string;
+  readonly departureAt: string;
+  readonly track: string;
+  readonly arrivingService: string;
+  readonly departingService: string;
+  readonly arrivingMode: string;
+  readonly departingMode: string;
+  readonly color: string;
+  readonly borderColor: string;
+  readonly ringColor: string;
+  readonly textColor: string;
+}): string {
+  const chips: string[] = [];
+  const departing = input.departingService || input.arrivingService;
+  const departingMode = input.departingMode || input.arrivingMode;
+  const arriving = input.arrivingService;
+  const showArrivingChip =
+    Boolean(arriving) && Boolean(input.departingService) && arriving !== input.departingService;
+
+  if (showArrivingChip && arriving) {
+    chips.push(
+      serviceChipHtml(
+        arriving,
+        input.arrivingMode,
+        input.ringColor || input.color,
+        input.textColor,
+      ),
+    );
+  }
+  if (departing) {
+    chips.push(
+      serviceChipHtml(departing, departingMode, input.borderColor || input.color, input.textColor),
+    );
+  }
+
+  const times: string[] = [];
+  if (input.arrivalAt) {
+    times.push(
+      `<div><dt>Arrives</dt><dd>${escapeHtml(formatMotisClock(input.arrivalAt))}</dd></div>`,
+    );
+  }
+  if (input.departureAt) {
+    times.push(
+      `<div><dt>Departs</dt><dd>${escapeHtml(formatMotisClock(input.departureAt))}</dd></div>`,
+    );
+  }
+
+  const roleLabel = STOP_ROLE_LABELS[input.role] ?? 'Stop';
+  const meta = [
+    roleLabel,
+    input.letter ? `Traveler ${input.letter}` : '',
+    input.track ? `Track ${input.track}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return [
+    `<div class="railmeet-stop-popup">`,
+    chips.length > 0 ? `<div class="railmeet-stop-popup-chips">${chips.join('')}</div>` : '',
+    `<p class="railmeet-map-popup-title">${escapeHtml(input.name)}</p>`,
+    times.length > 0 ? `<dl class="railmeet-stop-popup-times">${times.join('')}</dl>` : '',
+    meta ? `<p class="railmeet-stop-popup-meta">${escapeHtml(meta)}</p>` : '',
+    `</div>`,
   ].join('');
 }
+
+function serviceChipHtml(
+  service: string,
+  mode: string,
+  background: string,
+  foreground: string,
+): string {
+  const kind = getMotisModeStyle({ mode: mode || 'OTHER' })[0];
+  return `<span class="railmeet-stop-chip" style="background:${escapeHtml(background)};color:${escapeHtml(foreground)}">${modeIconSvg(kind, foreground)}<span>${escapeHtml(service)}</span></span>`;
+}
+
+function modeIconSvg(kind: MotisModeIconKind, stroke: string): string {
+  const attrs = `class="railmeet-stop-chip-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${escapeHtml(stroke)}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"`;
+  switch (kind) {
+    case 'bus':
+      return `<svg ${attrs}><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/></svg>`;
+    case 'tram':
+    case 'funicular':
+    case 'aerial_lift':
+      return `<svg ${attrs}><path d="M10 3h4"/><path d="M12 3v3"/><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M8 18v3"/><path d="M16 18v3"/><path d="M4 12h16"/></svg>`;
+    case 'ship':
+      return `<svg ${attrs}><path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1s1.2 1 2.5 1c2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76"/><path d="M19 13V7a2 2 0 0 0-2-2H7"/><path d="M12 10v4"/></svg>`;
+    case 'plane':
+      return `<svg ${attrs}><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>`;
+    case 'walk':
+    case 'bike':
+    case 'cargo_bike':
+    case 'scooter':
+    case 'seated_scooter':
+      return `<svg ${attrs}><path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 2.49-5 5.02-5C9.77 3 11 4.01 11 6.01"/><path d="M13 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M16 20l-4.12-6.12"/><circle cx="4" cy="20" r="1"/><path d="m13.76 7.76 2.24-2.24"/></svg>`;
+    case 'train':
+    case 'metro':
+    default:
+      return `<svg ${attrs}><path d="M4 11h16"/><path d="M4 15h16"/><path d="M8 19h8"/><rect x="4" y="3" width="16" height="16" rx="2"/><circle cx="8" cy="15" r="1"/><circle cx="16" cy="15" r="1"/></svg>`;
+  }
+}
+
+function attachMarkerTooltip(
+  marker: InstanceType<MapLibreModule['Marker']>,
+  maplibregl: MapLibreModule,
+  map: MapInstance,
+  text: string,
+) {
+  const tooltip = new maplibregl.Popup({
+    offset: 10,
+    closeButton: false,
+    closeOnClick: false,
+    className: 'railmeet-map-popup railmeet-map-tooltip',
+  }).setHTML(`<p class="railmeet-map-popup-title">${escapeHtml(text)}</p>`);
+  const el = marker.getElement();
+  el.addEventListener('mouseenter', () => {
+    tooltip.setLngLat(marker.getLngLat()).addTo(map);
+  });
+  el.addEventListener('mouseleave', () => {
+    tooltip.remove();
+  });
+}
+
+const DESTINATION_PIN_SVG = `<svg class="railmeet-destination-pin" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`;
 
 function formatPopupTime(value: string): string {
   const date = new Date(value);
@@ -1669,17 +1484,13 @@ export const SEARCH_MAP_MEETING_MARKER_COLOR = '#0f766e';
 
 /**
  * Inline styles for meeting-point candidate HTML markers.
- * Selected: largest teal circle with white stroke (stop-marker hierarchy).
- * Non-selected: compact square rank pins.
+ * Selected: MapPin. Non-selected: compact square rank pins.
  */
 export function candidateMarkerStyle(item: MapCandidateMarker): string {
   if (item.selected) {
-    const size = 40;
     return [
-      `width:${size}px;height:${size}px;border-radius:999px;border:3px solid #ffffff;z-index:4;`,
-      `background:${SEARCH_MAP_MEETING_MARKER_COLOR};color:#ffffff;`,
-      'display:grid;place-items:center;cursor:pointer;',
-      'box-shadow:0 2px 6px rgba(15,118,110,0.35);padding:0;',
+      'background:transparent;border:0;padding:0;cursor:pointer;z-index:6;',
+      'display:grid;place-items:end center;',
     ].join('');
   }
   const size = 28;
