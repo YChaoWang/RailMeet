@@ -46,15 +46,25 @@ export function PlaceSuggestionOption({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <span className={cn('font-medium leading-snug text-ink-950', compact && 'text-sm')}>
+          <span
+            className={cn(
+              'font-medium leading-snug text-ink-950 dark:text-mist-50',
+              compact && 'text-sm',
+            )}
+          >
             {suggestion.name}
           </span>
-          <span className="shrink-0 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+          <span className="shrink-0 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-500 dark:text-mist-50/50">
             {typeLabel}
           </span>
         </div>
         {locality ? (
-          <p className={cn('truncate text-ink-600', compact ? 'text-[11px]' : 'text-xs')}>
+          <p
+            className={cn(
+              'truncate text-ink-600 dark:text-mist-50/65',
+              compact ? 'text-[11px]' : 'text-xs',
+            )}
+          >
             {locality}
           </p>
         ) : null}
@@ -74,7 +84,7 @@ export function PlaceSuggestionOption({
               );
             })}
             {modeOverflow > 0 ? (
-              <span className="inline-flex items-center rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium text-ink-700">
+              <span className="inline-flex items-center rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium text-ink-700 dark:bg-white/10 dark:text-mist-50/80">
                 +{modeOverflow} more
               </span>
             ) : null}

@@ -268,7 +268,7 @@ function TravelerNameControl({
     return (
       <button
         type="button"
-        className="inline-flex min-h-11 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-1 text-left text-sm font-semibold text-ink-950 hover:bg-mist-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        className="inline-flex min-h-11 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-1 text-left text-sm font-semibold text-ink-950 hover:bg-mist-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-mist-50 dark:hover:bg-white/10 dark:focus-visible:ring-mist-50"
         disabled={disabled}
         aria-label={
           named
@@ -278,7 +278,7 @@ function TravelerNameControl({
         onClick={openEditor}
       >
         <span className="truncate">{label}</span>
-        <Pencil className="size-3.5 shrink-0 text-ink-700" aria-hidden />
+        <Pencil className="size-3.5 shrink-0 text-ink-700 dark:text-mist-50/60" aria-hidden />
       </button>
     );
   }
@@ -544,7 +544,7 @@ export function SearchForm({
           <ChatWaterfallItem
             key={participant.key}
             index={steps.traveler(participant.letter)}
-            className="grid min-w-0 gap-2 rounded-2xl border border-ink-700/10 bg-white px-3 py-3"
+            className="grid min-w-0 gap-2 rounded-2xl border border-ink-700/10 bg-white px-3 py-3 dark:border-white/10 dark:bg-[#1a2433]"
             data-testid="search-form-traveler-row"
           >
             <div className="flex items-center gap-2">

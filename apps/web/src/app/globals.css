@@ -63,6 +63,40 @@ body {
   background-color: #1a2433;
 }
 
+.dark [data-testid='planner-panel'] .bg-teal-50,
+.dark [data-testid='planner-panel'] .bg-teal-50\/30,
+.dark [data-testid='planner-panel'] .bg-teal-50\/40 {
+  background-color: rgba(45, 212, 191, 0.14);
+}
+
+.dark [data-testid='planner-panel'] .bg-teal-100 {
+  background-color: rgba(45, 212, 191, 0.16);
+  color: #99f6e4;
+}
+
+.dark [data-testid='planner-panel'] .bg-sky-100 {
+  background-color: rgba(56, 189, 248, 0.16);
+  color: #bae6fd;
+}
+
+.dark [data-testid='planner-panel'] .bg-ink-100 {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: rgba(244, 247, 251, 0.8);
+}
+
+.dark [data-testid='planner-panel'] .text-ink-500,
+.dark [data-testid='planner-panel'] .text-ink-600 {
+  color: rgba(244, 247, 251, 0.65);
+}
+
+.dark [data-testid='planner-panel'] .text-teal-800 {
+  color: #99f6e4;
+}
+
+.dark [data-testid='planner-panel'] .text-sky-800 {
+  color: #bae6fd;
+}
+
 /* HeroUI-shaped TextShimmer: readable text at 45% alpha, inert copy clips a currentColor sweep to the glyphs. */
 .text-shimmer {
   --spread: 2.4em;

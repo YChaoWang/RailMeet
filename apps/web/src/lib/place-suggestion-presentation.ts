@@ -33,9 +33,9 @@ const TYPE_ICON: Record<PlaceSuggestionType, LucideIcon> = {
 };
 
 const TYPE_BADGE_CLASS: Record<PlaceSuggestionType, string> = {
-  STOP: 'bg-teal-100 text-teal-800',
-  PLACE: 'bg-sky-100 text-sky-800',
-  ADDRESS: 'bg-ink-100 text-ink-700',
+  STOP: 'bg-teal-100 text-teal-800 dark:bg-teal-400/15 dark:text-teal-200',
+  PLACE: 'bg-sky-100 text-sky-800 dark:bg-sky-400/15 dark:text-sky-200',
+  ADDRESS: 'bg-ink-100 text-ink-700 dark:bg-white/10 dark:text-mist-50/80',
 };
 
 const MODE_ICONS: Record<MotisModeIconKind, LucideIcon> = {
