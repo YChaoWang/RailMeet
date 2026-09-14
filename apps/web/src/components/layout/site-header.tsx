@@ -1,10 +1,14 @@
 import Link from 'next/link';
 
+import { GithubButton } from '@/components/layout/github-button';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 export function SiteHeader() {
   return (
-    <header className="border-b border-ink-700/10 bg-white/80 backdrop-blur-sm dark:border-white/10 dark:bg-[#121a26]/80">
+    <header
+      data-testid="site-header"
+      className="border-b border-ink-700/10 bg-white/80 backdrop-blur-sm dark:border-white/10 dark:bg-[#121a26]/80"
+    >
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
         <Link
           href="/"
@@ -12,7 +16,10 @@ export function SiteHeader() {
         >
           RailMeet
         </Link>
-        <ThemeToggle />
+        <div className="flex items-center gap-1">
+          <GithubButton />
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

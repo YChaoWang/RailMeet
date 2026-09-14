@@ -1247,18 +1247,25 @@ const STOP_ROLE_LABELS: Record<MapStopMarker['role'], string> = {
 function travelerPopupHtml(item: MapOriginMarker): string {
   const popup = item.popup;
   if (!popup) {
-    return `<strong>${escapeHtml(item.label)}</strong><div>Origin · Traveler ${escapeHtml(item.letter)}</div>`;
+    return [
+      `<div class="railmeet-map-popup-body">`,
+      `<p class="railmeet-map-popup-title">${escapeHtml(item.label)}</p>`,
+      `<p class="railmeet-map-popup-line">Origin · Traveler ${escapeHtml(item.letter)}</p>`,
+      `</div>`,
+    ].join('');
   }
   return travelerSummaryHtml(popup);
 }
 
 function travelerSummaryHtml(popup: MapTravelerPopup): string {
   return [
-    `<strong>${escapeHtml(popup.displayName)}</strong>`,
-    `<div>Traveler ${escapeHtml(popup.letter)} · ${escapeHtml(popup.originLabel)}</div>`,
-    `<div>Departs ${escapeHtml(formatPopupTime(popup.departureAt))}</div>`,
-    `<div>Arrives ${escapeHtml(formatPopupTime(popup.arrivalAt))}</div>`,
-    `<div>${escapeHtml(formatDurationMinutes(popup.durationMinutes))} · ${popup.transfers} transfers</div>`,
+    `<div class="railmeet-map-popup-body">`,
+    `<p class="railmeet-map-popup-title">${escapeHtml(popup.displayName)}</p>`,
+    `<p class="railmeet-map-popup-line">Traveler ${escapeHtml(popup.letter)} · ${escapeHtml(popup.originLabel)}</p>`,
+    `<p class="railmeet-map-popup-line">Departs ${escapeHtml(formatPopupTime(popup.departureAt))}</p>`,
+    `<p class="railmeet-map-popup-line">Arrives ${escapeHtml(formatPopupTime(popup.arrivalAt))}</p>`,
+    `<p class="railmeet-map-popup-line">${escapeHtml(formatDurationMinutes(popup.durationMinutes))} · ${popup.transfers} transfers</p>`,
+    `</div>`,
   ].join('');
 }
 
@@ -1277,15 +1284,18 @@ function meetingPopupHtml(
   const popup = item.popup;
   const title = popup?.name ?? item.label;
   const rows = [
+    `<div class="railmeet-map-popup-body">`,
     `<p class="railmeet-map-popup-title">${escapeHtml(title)}</p>`,
     coordLineHtml(coords.latitude, coords.longitude),
   ];
   if (!popup) {
+    rows.push(`</div>`);
     return rows.join('');
   }
   rows.push(
-    `<div>Arrivals ${escapeHtml(formatPopupTime(popup.earliestArrivalAt))} – ${escapeHtml(formatPopupTime(popup.latestArrivalAt))}</div>`,
-    `<div>Spread ${escapeHtml(formatArrivalSpreadMs(popup.arrivalSpreadMs))}</div>`,
+    `<p class="railmeet-map-popup-line">Arrivals ${escapeHtml(formatPopupTime(popup.earliestArrivalAt))} – ${escapeHtml(formatPopupTime(popup.latestArrivalAt))}</p>`,
+    `<p class="railmeet-map-popup-line">Spread ${escapeHtml(formatArrivalSpreadMs(popup.arrivalSpreadMs))}</p>`,
+    `</div>`,
   );
   return rows.join('');
 }

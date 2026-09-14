@@ -230,7 +230,9 @@ export function PlaceCombobox({
           aria-invalid={invalid}
           placeholder="Search a station, city, or address"
           className={cn(
-            selected ? 'border-teal-600 bg-teal-50/40 pl-10 pr-10' : undefined,
+            selected
+              ? 'border-teal-600 bg-teal-50/40 pl-10 pr-10 dark:border-teal-400/50 dark:bg-teal-400/10'
+              : undefined,
           )}
           onChange={(event) => {
             const next = event.target.value;
@@ -259,7 +261,7 @@ export function PlaceCombobox({
             type="button"
             aria-label="Clear selected place"
             disabled={disabled}
-            className="absolute right-1 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-950 disabled:pointer-events-none disabled:opacity-50"
+            className="absolute right-1 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-950 disabled:pointer-events-none disabled:opacity-50 dark:text-mist-50/70 dark:hover:bg-white/10 dark:hover:text-mist-50"
             onMouseDown={(event) => event.preventDefault()}
             onClick={clearSelection}
           >
@@ -271,13 +273,13 @@ export function PlaceCombobox({
         <PlaceSuggestionOption
           suggestion={selected}
           compact
-          className="rounded-lg border border-teal-600/20 bg-teal-50/30 px-2 py-1.5"
+          className="rounded-lg border border-teal-600/20 bg-teal-50/30 px-2 py-1.5 dark:border-teal-400/20 dark:bg-teal-400/10"
           data-testid="place-selected-hint"
         />
       ) : null}
       {open ? (
         <div
-          className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto overflow-x-hidden rounded-lg border border-ink-700/15 bg-white shadow-lg"
+          className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto overflow-x-hidden rounded-lg border border-ink-700/15 bg-white shadow-lg dark:border-white/10 dark:bg-[#1a2433] dark:shadow-black/40"
           data-testid="place-suggestion-panel"
         >
           {loadState.kind === 'loading' ? (
@@ -343,7 +345,7 @@ export function PlaceCombobox({
                     }}
                     className={cn(
                       'cursor-pointer px-2 py-2',
-                      active ? 'bg-teal-50' : undefined,
+                      active ? 'bg-teal-50 dark:bg-teal-400/15' : 'dark:hover:bg-white/5',
                     )}
                     onMouseDown={(event) => {
                       event.preventDefault();
